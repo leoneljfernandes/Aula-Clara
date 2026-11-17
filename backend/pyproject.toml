@@ -1,0 +1,71 @@
+[project]
+name = "aula-clara-api"
+version = "0.1.0"
+description = "Backend de Aula Clara: perfiles, documentos e IA (FastAPI)"
+requires-python = ">=3.14"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic",
+  "pydantic-settings",
+  "opentelemetry-api",   # solo para current_trace_id() en logs y errores (tracing en modo mínimo)
+  "google-genai>=3.4.0",
+  "python-multipart>=0.0.34",
+  "httpx>=0.28.1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest", "pytest-asyncio", "pytest-mock", "pytest-randomly", "httpx",
+  "coverage", "ruff", "mypy", "import-linter",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+# El entorno de test se fija ANTES de importar la app (Settings valida al importarse).
+"tests/conftest.py" = ["E402"]
+# Textos largos en español (respuestas simuladas del prototipo): ruff format no parte strings.
+"app/providers/llm/mock.py" = ["E501"]
+
+# Las capas se hacen cumplir (ver docs/arquitectura.md §4.1 y la skill layering-fastapi-apps).
+# crud y providers son capas hermanas: no se importan entre sí.
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Capas: api -> services -> (crud | providers) -> models"
+type = "layers"
+layers = ["app.api", "app.services", "app.crud | app.providers", "app.models"]
+
+[[tool.importlinter.contracts]]
+name = "Services, crud y providers no conocen HTTP"
+type = "forbidden"
+source_modules = ["app.services", "app.crud", "app.providers"]
+forbidden_modules = ["fastapi"]
+allow_indirect_imports = true  # errors.py y config.py usan FastAPI; lo que se prohíbe es el import directo
+
+[[tool.importlinter.contracts]]
+name = "Solo api/deps.py compone repositorios y proveedores"
+type = "forbidden"
+source_modules = ["app.api"]
+forbidden_modules = ["app.crud", "app.providers"]
+allow_indirect_imports = true
+ignore_imports = ["app.api.deps -> app.crud.**", "app.api.deps -> app.providers.**"]

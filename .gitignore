@@ -1,0 +1,30 @@
+# Convenciones del equipo: repositorio propio, se usa solo como referencia local
+.skills/
+
+# Secretos y configuración local: solo se versiona .env.example
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Vite
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Vercel
+.vercel/
+
+# Editor / SO
+.DS_Store
+.idea/

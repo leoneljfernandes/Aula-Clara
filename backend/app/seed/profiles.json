@@ -1,0 +1,17 @@
+[
+  {"id": "dislexia", "title": "Dislexia", "icon": "Aa",
+   "description": "Fuente especializada, mayor interlineado y más espacio entre letras.",
+   "tags": ["OpenDyslexic", "Interlineado amplio", "Fondo sepia"],
+   "preset": {"font": "dyslexic", "font_size": 21, "line_height": 1.9, "theme": "sepia", "audio_focus": false}},
+  {"id": "vision", "title": "Visión reducida", "icon": "A+",
+   "description": "Alto contraste y texto grande para leer sin esfuerzo.",
+   "tags": ["Texto 28 px", "Negro y amarillo", "Tipografía legible"],
+   "preset": {"font": "atkinson", "font_size": 28, "line_height": 1.7, "theme": "contraste", "audio_focus": false}},
+  {"id": "fatiga", "title": "Fatiga visual", "icon": "☾",
+   "description": "Modo oscuro cálido y la lectura en voz alta siempre a mano.",
+   "tags": ["Modo oscuro cálido", "Audio destacado", "Verdana"],
+   "preset": {"font": "verdana", "font_size": 20, "line_height": 1.8, "theme": "oscuro", "audio_focus": true}},
+  {"id": "custom", "title": "Personalizado", "icon": "⚙",
+   "description": "Elegí vos el tamaño, los colores y la tipografía.",
+   "tags": ["Control total"], "preset": null}
+]

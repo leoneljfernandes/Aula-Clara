@@ -1,0 +1,8 @@
+# Lo que `vercel deploy` NO debe subir: secretos locales, dependencias y material de referencia.
+.env
+.env.*
+!.env.example
+.skills
+node_modules
+backend/.venv
+**/__pycache__

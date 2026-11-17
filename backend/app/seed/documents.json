@@ -1,0 +1,5 @@
+[
+  {"id": "d1", "title": "Accesibilidad digital en la educación superior", "subject": "Tecnología Educativa", "type": "PDF", "created_on": "2026-11-11", "progress": 0.42},
+  {"id": "d2", "title": "Introducción a la Epidemiología – Unidad 2", "subject": "Salud Pública", "type": "Word", "created_on": "2026-11-08", "progress": 0.85},
+  {"id": "d3", "title": "Metodología de la investigación: diseño de encuestas", "subject": "Metodología", "type": "PowerPoint", "created_on": "2026-11-02", "progress": 0.10}
+]
