@@ -5,6 +5,7 @@ import math
 import re
 from datetime import date
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, cast
 
 from app.models import Document, Preset
@@ -13,6 +14,8 @@ from app.models.preset import SettingValue
 SEED_DIR = Path(__file__).resolve().parent.parent / "seed"
 _PRESET_ID = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 _SETTING_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
+# El wizard del frontend ofrece una opción fija «Personalizado» con este id: un preset no puede usarlo.
+RESERVED_ID = "custom"
 
 
 class SeedError(ValueError):
@@ -31,7 +34,7 @@ def _text(row: dict[str, Any], field: str, who: str) -> str:
 
 
 def _setting(key: object, value: object, who: str) -> SettingValue:
-    if not isinstance(key, str) or not _SETTING_KEY.match(key):
+    if not isinstance(key, str) or not _SETTING_KEY.fullmatch(key):
         raise SeedError(f"Preset {who}: la clave de ajuste {key!r} no cumple {_SETTING_KEY.pattern}")
     if not isinstance(value, str | int | float):  # bool es subclase de int
         raise SeedError(f"Preset {who}: el ajuste '{key}' debe ser texto, número o booleano")
@@ -45,8 +48,10 @@ def _preset(row: object, position: int) -> Preset:
         raise SeedError(f"Preset #{position}: debe ser un objeto")
     raw_id = row.get("id")
     who = repr(raw_id) if isinstance(raw_id, str) else f"#{position}"
-    if not isinstance(raw_id, str) or not _PRESET_ID.match(raw_id):
+    if not isinstance(raw_id, str) or not _PRESET_ID.fullmatch(raw_id):
         raise SeedError(f"Preset {who}: el id no cumple {_PRESET_ID.pattern}")
+    if raw_id == RESERVED_ID:
+        raise SeedError(f"Preset {who}: el id está reservado para la opción fija «Personalizado»")
     tags = row.get("tags")
     if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
         raise SeedError(f"Preset {who}: 'tags' debe ser una lista de textos")
@@ -59,7 +64,7 @@ def _preset(row: object, position: int) -> Preset:
         icon=_text(row, "icon", who),
         description=_text(row, "description", who),
         tags=tuple(tags),
-        settings={key: _setting(key, value, who) for key, value in settings.items()},
+        settings=MappingProxyType({key: _setting(key, value, who) for key, value in settings.items()}),
     )
 
 

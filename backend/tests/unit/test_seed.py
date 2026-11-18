@@ -43,6 +43,29 @@ def test_rejects_an_invalid_preset_naming_it(tmp_path: Path, bad: dict[str, obje
         load_presets(write(tmp_path, [bad]))
 
 
+def test_the_id_custom_is_reserved_for_the_fixed_personalizado_option(tmp_path: Path) -> None:
+    with pytest.raises(SeedError, match="custom"):
+        load_presets(write(tmp_path, [{**VALID, "id": "custom"}]))
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {**VALID, "id": "x-1\n"},
+        {**VALID, "settings": {"font_size\n": 20}},
+    ],
+)
+def test_a_trailing_newline_does_not_pass_the_format_check(tmp_path: Path, bad: dict[str, object]) -> None:
+    with pytest.raises(SeedError, match="no cumple"):
+        load_presets(write(tmp_path, [bad]))
+
+
+def test_the_settings_of_a_loaded_preset_are_read_only(tmp_path: Path) -> None:
+    [preset] = load_presets(write(tmp_path, [VALID]))
+    with pytest.raises(TypeError):
+        preset.settings["font_size"] = 99  # type: ignore[index]
+
+
 def test_rejects_duplicate_ids(tmp_path: Path) -> None:
     with pytest.raises(SeedError, match="x-1"):
         load_presets(write(tmp_path, [VALID, VALID]))
