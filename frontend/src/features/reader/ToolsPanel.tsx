@@ -33,7 +33,15 @@ const capabilities = (
 
 const H3 = "mb-3 text-base font-bold tracking-wide text-[var(--muted)] uppercase";
 
-function AudioSection({ audio, total }: { audio: ReadAloud; total: number }): ReactNode {
+function AudioSection({
+  audio,
+  total,
+  onPlay,
+}: {
+  audio: ReadAloud;
+  total: number;
+  onPlay: () => void;
+}): ReactNode {
   const { settings, updateSettings } = usePreferences();
   const announce = useAnnounce();
   return (
@@ -52,7 +60,7 @@ function AudioSection({ audio, total }: { audio: ReadAloud; total: number }): Re
         ) : (
           <Button
             variant="primary"
-            onClick={audio.play}
+            onClick={onPlay}
             aria-label={audio.status === "paused" ? "Continuar lectura" : "Reproducir lectura"}
           >
             ▶
@@ -96,7 +104,16 @@ function AudioSection({ audio, total }: { audio: ReadAloud; total: number }): Re
   );
 }
 
-export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }): ReactNode {
+export function ToolsPanel({
+  audio,
+  total,
+  onPlay,
+}: {
+  audio: ReadAloud;
+  total: number;
+  /** ▶ de la lectura: arranca desde el bloque del cursor (lo decide `ReaderScreen`). */
+  onPlay: () => void;
+}): ReactNode {
   const { settings, updateSettings } = usePreferences();
   const announce = useAnnounce();
   const zoom = (delta: number): void => {
@@ -105,7 +122,7 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
     announce(`Tamaño ${next} píxeles`);
   };
   const hasReaderControls = controlsFor("reader").length > 0;
-  const audioSection = <AudioSection audio={audio} total={total} />;
+  const audioSection = <AudioSection audio={audio} total={total} onPlay={onPlay} />;
   const has = capabilities(settings.voiceCommands !== "off", settings.brailleTools);
   const shortcuts = KEYMAP.filter((s) => !s.requires || has[s.requires])
     .map((s) => ({

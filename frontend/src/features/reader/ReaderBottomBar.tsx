@@ -12,33 +12,81 @@ interface BlockActions {
   onClear(): void;
 }
 
+interface NavActions {
+  onPrev(): void;
+  onNext(): void;
+  playing: boolean;
+  onPlayPause(): void;
+  /** Solo si los comandos por voz están activos y el navegador sabe reconocer voz. */
+  onVoice?(): void;
+  listening: boolean;
+  onAssistant(): void;
+}
+
 /**
  * Barra fija abajo del lector con las acciones principales, para no tener que apuntar a botones chicos ni
  * esperar a que algo aparezca al pasar el mouse. No renderiza nada si no hay qué mostrar.
  */
-export function ReaderBottomBar({ block }: { block: BlockActions | null }): ReactNode {
-  if (!block) return null;
+export function ReaderBottomBar({
+  block,
+  nav,
+}: {
+  block: BlockActions | null;
+  nav: NavActions | null;
+}): ReactNode {
+  if (!block && !nav) return null;
   return (
     <nav
       aria-label="Barra simplificada"
       className="fixed inset-x-0 bottom-0 z-30 border-t-4 border-[var(--accent)] bg-[var(--panel)] px-4 py-3 shadow-2xl"
     >
-      <div className="flex flex-wrap gap-3">
-        <Button variant="primary" onClick={block.onExplain}>
-          <span aria-hidden="true">✦</span> Explicar este párrafo más simple
-        </Button>
-        {block.onReadFrom && (
-          <Button onClick={block.onReadFrom}>
-            <span aria-hidden="true">🔊</span> Leer desde este párrafo
+      {block && (
+        <div className="mb-3 flex flex-wrap gap-3">
+          <Button variant="primary" onClick={block.onExplain}>
+            <span aria-hidden="true">✦</span> Explicar este párrafo más simple
           </Button>
-        )}
-        <Button onClick={block.onAsk}>
-          <span aria-hidden="true">❓</span> Preguntar sobre este párrafo
-        </Button>
-        <Button onClick={block.onClear}>
-          <span aria-hidden="true">✕</span> Quitar selección
-        </Button>
-      </div>
+          {block.onReadFrom && (
+            <Button onClick={block.onReadFrom}>
+              <span aria-hidden="true">🔊</span> Leer desde este párrafo
+            </Button>
+          )}
+          <Button onClick={block.onAsk}>
+            <span aria-hidden="true">❓</span> Preguntar sobre este párrafo
+          </Button>
+          <Button onClick={block.onClear}>
+            <span aria-hidden="true">✕</span> Quitar selección
+          </Button>
+        </div>
+      )}
+      {nav && (
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={nav.onPrev}>
+            <span aria-hidden="true">⬆</span> Anterior
+          </Button>
+          <Button onClick={nav.onNext}>
+            <span aria-hidden="true">⬇</span> Siguiente
+          </Button>
+          <Button variant="primary" onClick={nav.onPlayPause}>
+            {nav.playing ? (
+              <>
+                <span aria-hidden="true">❚❚</span> Pausar
+              </>
+            ) : (
+              <>
+                <span aria-hidden="true">▶</span> Leer
+              </>
+            )}
+          </Button>
+          {nav.onVoice && (
+            <Button aria-pressed={nav.listening} onClick={nav.onVoice}>
+              <span aria-hidden="true">🎙</span> Voz
+            </Button>
+          )}
+          <Button onClick={nav.onAssistant}>
+            <span aria-hidden="true">✦</span> Asistente
+          </Button>
+        </div>
+      )}
     </nav>
   );
 }

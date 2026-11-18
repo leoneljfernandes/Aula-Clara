@@ -530,6 +530,61 @@ describe("lector", () => {
     },
   );
 
+  describe("barra simplificada", () => {
+    beforeEach(() =>
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { uiScale: "large" } }),
+      ),
+    );
+
+    it("la barra simplificada mueve el cursor y deja espacio para que no tape el foco", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const bar = await screen.findByRole("navigation", { name: "Barra simplificada" });
+      await user.click(within(bar).getByRole("button", { name: /Siguiente/ }));
+      expect(document.activeElement?.id).toBe("blk-0");
+      expect(document.getElementById("contenido")).toHaveClass("pb-36", "scroll-pb-36");
+    });
+
+    it("«Leer» de la barra arranca desde el bloque del cursor y pasa a «Pausar»", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const bar = await screen.findByRole("navigation", { name: "Barra simplificada" });
+      for (let i = 0; i < 3; i++) await user.click(within(bar).getByRole("button", { name: /Siguiente/ }));
+      await user.click(within(bar).getByRole("button", { name: /Leer/ }));
+      expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+      expect(within(bar).getByRole("button", { name: /Pausar/ })).toBeInTheDocument();
+    });
+
+    it("«Asistente» enfoca el chat y no hay botón de voz con los comandos apagados", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const bar = await screen.findByRole("navigation", { name: "Barra simplificada" });
+      expect(within(bar).queryByRole("button", { name: /Voz/ })).not.toBeInTheDocument();
+      await user.click(within(bar).getByRole("button", { name: /Asistente/ }));
+      expect(screen.getByLabelText("Escribí tu pregunta")).toHaveFocus();
+    });
+
+    it("sin interfaz grande no hay barra ni espacio reservado", async () => {
+      window.localStorage.clear();
+      withOnboarding();
+      renderAt("/leer/d1");
+      await h1();
+      expect(screen.queryByRole("navigation", { name: "Barra simplificada" })).not.toBeInTheDocument();
+      expect(document.getElementById("contenido")).not.toHaveClass("pb-36");
+    });
+  });
+
+  it("el botón ▶ del panel de herramientas también lee desde el bloque del cursor", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    for (let i = 0; i < 3; i++) await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await user.click(screen.getByRole("button", { name: "Reproducir lectura" }));
+    expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
   it("Alt+T cambia el tema y Alt+= agranda el texto", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");

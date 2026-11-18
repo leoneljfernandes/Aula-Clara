@@ -219,7 +219,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const assistantSelection = selectedText || selection;
   const readFrom = selectedBlock === null ? null : readableIndex(article.blocks, selectedBlock);
 
-  const barVisible = settings.clickToSelect && assistantSelection !== "";
+  const barVisible = simplified || (settings.clickToSelect && assistantSelection !== "");
 
   const explainSelection = (): void => {
     hidePopover();
@@ -294,7 +294,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           aria-label="Barra de accesibilidad"
           className={`${toolsOpen ? "block" : "hidden"} border-b-2 border-[var(--border)] bg-[var(--panel)] ${simplified ? "lg:col-span-2" : "lg:block lg:overflow-y-auto lg:border-r-2 lg:border-b-0"}`}
         >
-          <ToolsPanel audio={audio} total={readable.length} />
+          <ToolsPanel audio={audio} total={readable.length} onPlay={startReading} />
         </aside>
 
         <main
@@ -346,25 +346,40 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         />
       )}
 
-      {settings.clickToSelect && assistantSelection && (
-        <ReaderBottomBar
-          block={{
-            text: assistantSelection,
-            onExplain: () => {
-              hidePopover();
-              void chat.send(explainPrompt(assistantSelection), "simplify", {
-                selection: assistantSelection,
-              });
-            },
-            ...(readFrom !== null && selectedText ? { onReadFrom: () => audio.playFrom(readFrom) } : {}),
-            onAsk: () => chatInput.current?.focus(),
-            onClear: () => {
-              setSelectedBlock(null);
-              window.getSelection()?.removeAllRanges();
-            },
-          }}
-        />
-      )}
+      <ReaderBottomBar
+        block={
+          settings.clickToSelect && assistantSelection
+            ? {
+                text: assistantSelection,
+                onExplain: () => {
+                  hidePopover();
+                  void chat.send(explainPrompt(assistantSelection), "simplify", {
+                    selection: assistantSelection,
+                  });
+                },
+                ...(readFrom !== null && selectedText ? { onReadFrom: () => audio.playFrom(readFrom) } : {}),
+                onAsk: () => chatInput.current?.focus(),
+                onClear: () => {
+                  setSelectedBlock(null);
+                  window.getSelection()?.removeAllRanges();
+                },
+              }
+            : null
+        }
+        nav={
+          simplified
+            ? {
+                onPrev: () => nav.move("any", -1),
+                onNext: () => nav.move("any", 1),
+                playing: audio.status === "playing",
+                onPlayPause: () => (audio.status === "playing" ? audio.pause() : startReading()),
+                ...(voiceOn && voice.available ? { onVoice: voice.toggle } : {}),
+                listening: voice.listening,
+                onAssistant: () => chatInput.current?.focus(),
+              }
+            : null
+        }
+      />
 
       {!settings.clickToSelect && pos && selection && (
         <div className="fixed z-40" style={{ top: pos.top, left: pos.left }}>
