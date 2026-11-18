@@ -1,8 +1,7 @@
 import { type RefObject, useEffect, useEffectEvent, useState } from "react";
 
-import { clamp, MAX_FS, MIN_FS, THEME_ORDER, THEMES, type ReadingSettings } from "@/features/preferences";
-import { useAnnounce } from "@/lib/announcer";
-import type { ReadAloud } from "@/lib/useReadAloud";
+import { clamp } from "@/features/preferences";
+import { matchShortcut, type ShortcutId } from "@/lib/keymap";
 
 export const prefersReducedMotion = (): boolean => {
   try {
@@ -99,34 +98,20 @@ export function useReadingProgress(
 }
 
 interface HotkeyDeps {
-  audio: ReadAloud;
-  settings: ReadingSettings;
-  updateSettings: (patch: Partial<ReadingSettings>) => void;
-  focusChat: () => void;
+  /** Qué hace cada atajo. Un id sin handler no hace nada y deja la tecla al navegador. */
+  handlers: Partial<Record<ShortcutId, () => void>>;
+  singleKey: boolean;
 }
 
-/** Alt+P leer/pausar · Alt+S detener · Alt+= / Alt+− tamaño · Alt+T tema · Alt+A asistente. */
+/** Despacha las teclas según la tabla de `lib/keymap`. */
 export function useReaderHotkeys(deps: HotkeyDeps): void {
-  const announce = useAnnounce();
   const handle = useEffectEvent((e: KeyboardEvent) => {
-    if (!e.altKey) return;
-    const { audio, settings, updateSettings, focusChat } = deps;
-    const key = e.code;
-    if (key === "KeyP") {
-      if (audio.status === "playing") audio.pause();
-      else audio.play();
-    } else if (key === "KeyS") audio.stop();
-    else if (key === "Equal" || key === "NumpadAdd")
-      updateSettings({ fontSize: clamp(settings.fontSize + 2, MIN_FS, MAX_FS) });
-    else if (key === "Minus" || key === "NumpadSubtract")
-      updateSettings({ fontSize: clamp(settings.fontSize - 2, MIN_FS, MAX_FS) });
-    else if (key === "KeyT") {
-      const next = THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length] ?? "claro";
-      updateSettings({ theme: next });
-      announce(`Tema ${THEMES[next].label}`);
-    } else if (key === "KeyA") focusChat();
-    else return;
-    e.preventDefault();
+    const id = matchShortcut(e, { singleKey: deps.singleKey });
+    const run = id ? deps.handlers[id] : undefined;
+    if (!id || !run) return;
+    // Esc silencia la voz, pero también cierra diálogos y desplegables: no se le quita ese uso.
+    if (id !== "silence") e.preventDefault();
+    run();
   });
 
   useEffect(() => {

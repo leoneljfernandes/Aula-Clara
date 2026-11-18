@@ -261,6 +261,7 @@ describe("onboarding", () => {
       lineHeight: 2,
       rate: 1.5,
       audioFocus: true,
+      singleKeyShortcuts: false,
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -438,6 +439,28 @@ describe("lector", () => {
     expect(
       screen.getByText((_, el) => el?.tagName === "SPAN" && el.textContent === "22px"),
     ).toBeInTheDocument();
+  });
+
+  it("con atajos de una tecla, «1» resume pero escribir «1» en el chat no", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { singleKeyShortcuts: true } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.type(await screen.findByLabelText("Escribí tu pregunta"), "1");
+    expect(calls("/ai/chat")).toHaveLength(0);
+    await user.click(screen.getByRole("heading", { level: 1 }));
+    await user.keyboard("1");
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "summarize" }));
+  });
+
+  it("sin el ajuste, «1» no resume", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("1");
+    expect(calls("/ai/chat")).toHaveLength(0);
   });
 
   it("la lectura en voz alta resalta el párrafo actual y se puede detener", async () => {

@@ -8,6 +8,7 @@ export interface ReadingSettings {
   lineHeight: number;
   rate: number;
   audioFocus: boolean;
+  singleKeyShortcuts: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -17,6 +18,7 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   lineHeight: 1.7,
   rate: 1,
   audioFocus: false,
+  singleKeyShortcuts: false,
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -34,6 +36,7 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
     typeof v === "number" && Number.isFinite(v) && v >= LINE_HEIGHT.min && v <= LINE_HEIGHT.max,
   rate: (v): v is number => typeof v === "number" && (RATES as readonly number[]).includes(v),
   audioFocus: (v): v is boolean => typeof v === "boolean",
+  singleKeyShortcuts: (v): v is boolean => typeof v === "boolean",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);

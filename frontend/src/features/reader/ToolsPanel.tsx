@@ -16,8 +16,16 @@ import {
   usePreferences,
 } from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
+import { describeKeys, KEYMAP, type Shortcut } from "@/lib/keymap";
 import { hasTTS } from "@/lib/speech";
 import type { ReadAloud } from "@/lib/useReadAloud";
+
+/** Qué capacidades hay hoy. La lectura en voz alta siempre está (sin voz del navegador, se simula el avance). */
+const CAPABILITIES: Record<NonNullable<Shortcut["requires"]>, boolean> = {
+  audio: true,
+  voice: false,
+  braille: false,
+};
 
 const H3 = "mb-3 text-base font-bold tracking-wide text-[var(--muted)] uppercase";
 
@@ -94,6 +102,13 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
   };
   const hasReaderControls = controlsFor("reader").length > 0;
   const audioSection = <AudioSection audio={audio} total={total} />;
+  const shortcuts = KEYMAP.filter((s) => !s.requires || CAPABILITIES[s.requires])
+    .map((s) => ({
+      id: s.id,
+      label: s.label,
+      keys: describeKeys(s, { singleKey: settings.singleKeyShortcuts }),
+    }))
+    .filter((s) => s.keys !== "");
 
   return (
     <div className="space-y-8 p-5">
@@ -180,16 +195,11 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
           Atajos
         </h3>
         <ul className="space-y-1 text-[var(--muted)]">
-          <li>
-            <kbd className="font-bold text-[var(--fg)]">Alt+P</kbd> leer / pausar
-          </li>
-          <li>
-            <kbd className="font-bold text-[var(--fg)]">Alt+= / Alt+−</kbd> tamaño
-          </li>
-          <li>
-            <kbd className="font-bold text-[var(--fg)]">Alt+T</kbd> tema ·{" "}
-            <kbd className="font-bold text-[var(--fg)]">Alt+A</kbd> asistente
-          </li>
+          {shortcuts.map(({ id, label, keys }) => (
+            <li key={id}>
+              <kbd className="font-bold text-[var(--fg)]">{keys}</kbd> {label.toLowerCase()}
+            </li>
+          ))}
         </ul>
       </section>
     </div>

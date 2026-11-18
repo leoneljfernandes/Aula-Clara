@@ -9,14 +9,8 @@ import { useAICredentials } from "./credentials";
 import { LIMITS } from "./errors";
 import { providerLabel } from "./providers";
 import { ProviderBadge } from "./ProviderBadge";
-import type { ChatAction } from "./api";
+import { QUICK_ACTIONS } from "./quickActions";
 import type { Chat } from "./useChat";
-
-const SHORTCUTS: ReadonlyArray<readonly [string, ChatAction]> = [
-  ["Resumir esta página", "summarize"],
-  ["Explicar conceptos clave", "key_concepts"],
-  ["Crear 3 preguntas de repaso", "quiz"],
-];
 
 interface AssistantPanelProps {
   chat: Chat;
@@ -144,7 +138,7 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
           </div>
         )}
         <div className="flex flex-wrap gap-2" role="group" aria-label="Atajos de consulta">
-          {SHORTCUTS.map(([label, action]) => (
+          {QUICK_ACTIONS.map(([label, action]) => (
             <button
               key={action}
               type="button"

@@ -3,9 +3,17 @@ import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
-import { AssistantPanel, useChat } from "@/features/assistant";
+import { AssistantPanel, quickActionLabel, useChat } from "@/features/assistant";
 import { type Article, libraryApi, type LibraryDocument } from "@/features/library";
-import { readingStyle, usePreferences } from "@/features/preferences";
+import {
+  clamp,
+  MAX_FS,
+  MIN_FS,
+  readingStyle,
+  THEME_ORDER,
+  THEMES,
+  usePreferences,
+} from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
 import { useReadAloud } from "@/lib/useReadAloud";
 
@@ -37,7 +45,26 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     libraryApi.saveProgress(doc.id, p),
   );
 
-  useReaderHotkeys({ audio, settings, updateSettings, focusChat: () => chatInput.current?.focus() });
+  useReaderHotkeys({
+    singleKey: settings.singleKeyShortcuts,
+    handlers: {
+      playPause: () => (audio.status === "playing" ? audio.pause() : audio.play()),
+      stop: audio.stop,
+      fontUp: () => updateSettings({ fontSize: clamp(settings.fontSize + 2, MIN_FS, MAX_FS) }),
+      fontDown: () => updateSettings({ fontSize: clamp(settings.fontSize - 2, MIN_FS, MAX_FS) }),
+      nextTheme: () => {
+        const next = THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length] ?? "claro";
+        updateSettings({ theme: next });
+        announce(`Tema ${THEMES[next].label}`);
+      },
+      focusAssistant: () => chatInput.current?.focus(),
+      summarize: () => void chat.send(quickActionLabel("summarize"), "summarize"),
+      keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
+      quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
+      // La tarea 2 lo cambia por `speechBus.silence()`.
+      silence: () => window.speechSynthesis?.cancel(),
+    },
+  });
 
   useEffect(() => {
     if (activeBlock < 0) return;

@@ -53,6 +53,14 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "lectura",
     inReader: false,
   },
+  {
+    key: "singleKeyShortcuts",
+    kind: "toggle",
+    label: "Atajos de una sola tecla",
+    help: "J y K para moverte por bloques, Espacio para leer y 1 a 4 para el asistente. No funcionan mientras escribís.",
+    group: "voz",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */
