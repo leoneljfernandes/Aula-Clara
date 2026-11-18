@@ -53,7 +53,7 @@ Todos los atajos salen de una tabla única, `frontend/src/lib/keymap.ts`, que le
 | Bloque siguiente / anterior | `Alt+↓` / `Alt+↑` | `J` / `K` |
 | Título siguiente | `Alt+H` | `H` |
 | Gráfico siguiente | `Alt+G` | `G` |
-| Micrófono (comandos o dictado) | `Alt+M` | `M` |
+| Micrófono (comandos de voz; el dictado tiene su propio botón) | `Alt+M` | `M` |
 | Braille | `Alt+B` | `B` |
 | Resumir · Conceptos · Preguntas · Explicar el bloque | — | `1` · `2` · `3` · `4` |
 | Silenciar la voz | `Esc` (siempre, dentro del lector) | — |
