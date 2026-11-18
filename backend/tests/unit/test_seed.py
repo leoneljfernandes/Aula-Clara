@@ -72,4 +72,4 @@ def test_rejects_duplicate_ids(tmp_path: Path) -> None:
 
 
 def test_the_shipped_seed_is_valid() -> None:
-    assert [p.id for p in load_presets()] == ["dislexia", "vision", "fatiga", "ceguera", "motriz"]
+    assert [p.id for p in load_presets()] == ["dislexia", "vision", "fatiga", "ceguera", "motriz", "sordera"]

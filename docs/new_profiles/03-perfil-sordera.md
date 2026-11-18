@@ -1,6 +1,6 @@
 # 03 · Perfil Sordera / Hipoacusia (`id: "sordera"`)
 
-> **Estado:** documento de propuesta inicial. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+> **Estado:** construido por el [plan 05](./2026-11-18-perfiles-05-sordera.md) (niveles de lenguaje, glosario y esquema, definir término, interfaz sin audio, avisos en pantalla, subtítulos en vivo y preset), con el reconocedor de voz del [plan 02](./2026-11-18-perfiles-02-teclado-y-voz.md). Las secciones 3 y 4 describen lo construido; la 2 es la investigación original. Donde este documento contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
 
 ## 1. Motivos y objetivos del perfil
 
@@ -67,59 +67,33 @@ Una funcionalidad diferencial de **costo cero** usando la `Web Speech API (Speec
 
 ---
 
-## 3. Plan de implementación paso a paso
+## 3. Cómo quedó construido
 
-### Paso 1: Preset `sordera` en Preferencias y Backend
-- **Archivos a modificar:**
-  - [`frontend/src/features/preferences/config.ts`](../../frontend/src/features/preferences/config.ts)
-  - [`backend/app/seed/profiles.json`](../../backend/app/seed/profiles.json)
-  - [`backend/app/models/profile.py`](../../backend/app/models/profile.py) y [`backend/app/schemas/profile.py`](../../backend/app/models/profile.py)
-- **Configuración del preset:**
-  ```json
-  {
-    "id": "sordera",
-    "title": "Sordera / Hipoacusia",
-    "icon": "👁",
-    "description": "Explicaciones en Español Claro (Lectura Fácil), glosario visual, esquemas y subtítulos en vivo.",
-    "tags": ["Español Claro (L2)", "Glosario y esquemas", "Subtítulos en vivo"],
-    "preset": {
-      "font": "atkinson",
-      "font_size": 20,
-      "line_height": 1.8,
-      "theme": "claro",
-      "audio_focus": false,
-      "plain_language_ai": true,
-      "hide_audio_controls": true
-    }
-  }
-  ```
+### Paso 1: Preset `sordera` en el catálogo (hecho, plan 05)
+- En [`backend/app/seed/presets.json`](../../backend/app/seed/presets.json), con `ai_language: "plain"`, `hide_audio`, `visual_alerts` y `live_captions` en `true`. Los nombres de los ajustes del frontend son `aiLanguage`, `hideAudio`, `visualAlerts` y `liveCaptions` (no `plainLanguageAI` ni `hideAudioControls`).
 
-### Paso 2: Ampliación de Acciones y Prompts de IA en el Backend
-- **Archivos a modificar:**
-  - [`backend/app/models/chat.py`](../../backend/app/models/chat.py) y [`backend/app/schemas/ai.py`](../../backend/app/schemas/ai.py):
-    - Ampliar `ChatAction` (`Literal["free", "summarize", "key_concepts", "quiz", "simplify", "glossary", "visual_outline"]`).
-    - Agregar campo opcional `plain_language: bool = False` en `ChatRequest`.
-  - [`backend/app/services/ai_rules.py`](../../backend/app/services/ai_rules.py) y [`backend/app/prompts/study_assistant.md`](../../backend/app/prompts/study_assistant.md):
-    - Definir las instrucciones para `glossary` (tabla/fichas de vocabulario con definición simple + ejemplo concreto) y `visual_outline` (esquema jerárquico visual).
-    - Cuando `plain_language=True`, inyectar la directiva de **Lectura Fácil / Español Claro (ISO 24495-1)** aplicable a todas las respuestas.
+### Paso 2: Tres niveles de lenguaje, glosario y esquema (hecho, plan 05)
+- **Niveles** (`ChatRequest.language`): `standard` (sin cambios), `plain` (**lenguaje claro**, ISO 24495-1: una idea por oración, 20 palabras como máximo, voz activa) y `easy` (**Lectura Fácil**: 15 palabras como máximo, un ejemplo por idea difícil). Los textos exactos están en `LANGUAGE_INSTRUCTIONS` de `backend/app/services/ai_rules.py`; el nivel entra en la clave de caché.
+- **Acciones nuevas:** «Glosario fácil» (`glossary`: hasta 8 términos, tres líneas por término) y «Esquema visual» (`visual_outline`: tema, ideas con «→», causas y consecuencias con «⇒»). Ninguna exige selección y están para todas las personas en los atajos de consulta.
+- **Definir término:** con lenguaje claro o Lectura Fácil alcanza con seleccionar 3 caracteres (en estándar, 12), y una selección de 3 palabras o menos muestra «📖 Definir término», que pide un glosario de esa selección.
 
-### Paso 3: Adaptación Visual del Lector y del Panel del Asistente
-- **Archivos a modificar:**
-  - [`frontend/src/features/reader/ToolsPanel.tsx`](../../frontend/src/features/reader/ToolsPanel.tsx) y [`frontend/src/features/reader/DocumentView.tsx`](../../frontend/src/features/reader/DocumentView.tsx): respetar `settings.hideAudioControls` para ocultar los controles de voz.
-  - [`frontend/src/features/assistant/AssistantPanel.tsx`](../../frontend/src/features/assistant/AssistantPanel.tsx) y [`frontend/src/features/assistant/useChat.ts`](../../frontend/src/features/assistant/useChat.ts):
-    - Mostrar los botones rápidos **«📖 Glosario fácil»** y **«🗺 Esquema visual»**.
-    - Enviar `plain_language: settings.plainLanguageAI` en los pedidos a `/api/v1/ai/chat`.
-    - Al seleccionar una sola palabra o término corto en el texto (bajar el umbral mínimo de selección de 12 a 3 caracteres cuando `plainLanguageAI` está activo), mostrar el botón flotante **«📖 Definir término simple»**.
+### Paso 3: Interfaz sin audio y avisos visibles (hecho, plan 05)
+- **«Ocultar la lectura en voz alta»** (`hideAudio`) saca la sección de audio del panel de herramientas, «Escuchar este documento», «🔊 Escuchar respuesta», «🔊 Escuchar descripción» (el botón de las figuras que antes se ofrecía), «▶ Leer» y «🔊 Leer desde este párrafo» de la barra, y los atajos de lectura (`Alt+P`, `Espacio`, `Alt+S`). Los comandos de voz de lectura contestan «La lectura en voz alta está oculta».
+- **«Mostrar los avisos en pantalla»** (`visualAlerts`): cada anuncio (el que oiría un lector de pantalla) queda en un recuadro arriba a la derecha hasta el siguiente o hasta «Cerrar aviso». No desaparece solo (criterio 2.2.1) y no es una región `aria-live`.
 
-### Paso 4: Componente de Subtítulos en Vivo (`frontend/src/features/assistant/LiveCaptions.tsx`)
-- Panel desplegable en el lector que usa `SpeechRecognition` en modo continuo (`interimResults: true`) para mostrar subtítulos en vivo con las preferencias visuales del usuario (`readingStyle(settings)`) y botón para enviar el fragmento transcripto al asistente de IA.
+### Paso 4: Subtítulos en vivo de la clase (hecho, plan 05)
+- `features/assistant/LiveCaptions.tsx` y `useLiveCaptions.ts`, sobre `createRecognizer` (continuo, con resultados parciales, `es-AR`).
+- **Privacidad.** Las últimas 200 líneas se guardan **solo en memoria** y se borran al salir del lector o con «Borrar»: nunca van a `localStorage`, IndexedDB ni al servidor. Piden un consentimiento propio («captions»), que recuerda que hay que pedirle permiso al docente. Que alguien lo haya aceptado puede sugerir una pérdida auditiva (dato sensible, Ley 25.326): se guarda solo en este navegador y se puede retirar con «Revocar permiso del micrófono».
+- **No se callan cuando habla la app** (`pauseWhileAppSpeaks: false`): no pueden perderse lo que dice el docente. Con `hideAudio` la app casi no habla.
+- «✦ Explicar en lenguaje claro lo último» manda los últimos 1500 caracteres como selección con la acción `simplify` y el nivel de lenguaje elegido (o lenguaje claro si estaba en estándar).
+- **Alternativa recomendada:** los subtítulos del sistema operativo son más robustos que el reconocimiento del navegador: «Transcripción instantánea» en Android y los subtítulos en vivo de Windows 11. La app lo dice cuando el navegador no soporta voz.
 
 ---
 
 ## 4. Criterios de aceptación y pruebas automatizadas
 
-1. **Tests unitarios de Backend (`backend/tests/unit/test_ai_rules.py` y `backend/tests/api/test_ai.py`):**
-   - Verificar que `action="glossary"` y `action="visual_outline"` sean aceptados por `/api/v1/ai/chat`.
-   - Verificar que `plain_language=True` incluya las reglas de Español Claro / Lectura Fácil en el prompt construido y forme parte de la clave de caché (`answer_cache.py`) para no mezclar respuestas estándar con respuestas en Lectura Fácil.
-2. **Tests de Frontend (`frontend/src/app.test.tsx`):**
-   - Al elegir el perfil **Sordera / Hipoacusia**, comprobar que los botones de reproducción de voz (`Reproducir lectura`) no se renderizan, que aparecen las acciones **«Glosario fácil»** y **«Esquema visual»**, y que las llamadas a `/api/v1/ai/chat` envían `plain_language: true`.
+1. **Backend:** `tests/unit/test_ai_rules.py`, `test_ai_service.py` y `tests/api/test_ai.py` (niveles y acciones nuevas, el nivel en la caché, 422 con un lenguaje desconocido); `test_presets.py` y `test_seed.py` (preset `sordera`).
+2. **Frontend (`app.test.tsx`):** lenguaje en cada consulta, glosario y esquema, «Definir término», interfaz sin audio (botones, atajos y barra), avisos en pantalla y subtítulos (consentimiento, parciales, explicar, borrar, revocar, salir del lector sin dejar nada).
+3. **`lib/voice`, `lib/speech.bus.test.ts`:** pausa opcional del reconocedor, errores de red por sesión limpia, `stop()`/`start()` seguidos y el vigilante de fin de voz.
+
+**Pendiente de prueba manual** (ver [`docs/accesibilidad.md`](../accesibilidad.md)): comparar «Resumir» en estándar y en lenguaje claro con una key real, y medir la precisión de los subtítulos con el micrófono de una notebook a 3 m de distancia. No se hicieron en la construcción (sin navegador con micrófono), así que **no hay una precisión medida**.

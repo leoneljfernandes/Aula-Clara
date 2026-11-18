@@ -22,5 +22,10 @@
    "tags": ["Botones grandes", "Atajos de una tecla", "Párrafos con un toque"],
    "settings": {"font": "atkinson", "font_size": 22, "line_height": 1.8, "theme": "claro", "audio_focus": false,
                 "ui_scale": "large", "click_to_select": true, "click_guard": "normal",
-                "single_key_shortcuts": true, "voice_commands": "push"}}
+                "single_key_shortcuts": true, "voice_commands": "push"}},
+  {"id": "sordera", "title": "Sordera e hipoacusia", "icon": "🧏",
+   "description": "Respuestas en lenguaje claro, glosario y esquemas, avisos en pantalla y subtítulos en vivo de la clase.",
+   "tags": ["Lenguaje claro", "Glosario y esquemas", "Subtítulos en vivo"],
+   "settings": {"font": "atkinson", "font_size": 20, "line_height": 1.8, "theme": "claro", "audio_focus": false,
+                "ai_language": "plain", "hide_audio": true, "visual_alerts": true, "live_captions": true}}
 ]

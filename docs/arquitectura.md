@@ -117,14 +117,14 @@ Los repositorios en memoria y la caché viven mientras viva el proceso: `deps.py
 | GET · POST · PATCH · DELETE | `/api/v1/documents[/{id}]` | `DocumentRead`; el listado se pagina con `offset`/`limit` |
 | POST · GET · DELETE | `/api/v1/ai/session` | **Key sellada en cookie** ([ADR 0003](adr/0003-key-sellada-en-cookie.md)). `POST {provider, api_key, remember}` sella la key y la deja en la cookie `__Host-aula_ai`; `GET` comprueba que la cookie vuelve; `DELETE` la borra. Nunca devuelven la key. Todos exigen el header `X-Aula-Clara: 1`. Sin `SEALING_KEY` el `POST` responde 503 `ai_sessions_disabled` |
 | GET | `/api/v1/ai/models` | headers `X-AI-Provider` y `X-AI-Key` (o la cookie) → `{provider, key_verified, models: [{id, name, supports_images, free}]}`. Valida la key si el proveedor lo permite |
-| POST | `/api/v1/ai/chat` | headers `X-AI-Provider`, `X-AI-Model`, `X-AI-Key` + `{action, message?, document_text, selection?}` → `{answer, provider, model}` |
+| POST | `/api/v1/ai/chat` | headers `X-AI-Provider`, `X-AI-Model`, `X-AI-Key` + `{action, message?, document_text, selection?, language?}` → `{answer, provider, model}` |
 | POST | `/api/v1/ai/describe-image` | los mismos headers + multipart (`image` + `context?`) → `{description, provider, model}` |
 
 **Dos formas de recibir la key** (`api/deps.py`, `resolve_credentials`): el header `X-AI-Key` (modo de headers) o la cookie sellada (modo de cookie, con `X-AI-Model` y `X-Aula-Clara`). Si llegan las dos, gana el header. Una cookie que no se puede abrir (vencida, manipulada, de otra `SEALING_KEY`) da 401 `ai_credentials_required` con `reason: session_expired`; la interfaz borra lo guardado y pide la key de nuevo.
 
 Las rutas de IA usan **la key y el modelo de cada persona** (ver [ADR 0002](adr/0002-api-key-por-usuario.md)). `api/deps.py` valida los headers y crea el proveedor en cada pedido (una dependencia con `yield` lo cierra al terminar, para liberar sus conexiones); la key no se guarda ni se loguea.
 
-`action` es un `Literal["free", "summarize", "key_concepts", "quiz", "simplify"]`. Todo esquema de entrada usa `extra="forbid"` y límites explícitos: el tamaño de `document_text` se valida contra `MAX_INPUT_CHARS` y la imagen, contra `MAX_IMAGE_BYTES`.
+`action` es un `Literal["free", "summarize", "key_concepts", "quiz", "simplify", "glossary", "visual_outline"]` («glossary» y «visual_outline» no exigen selección). `language` es un `Literal["standard", "plain", "easy"]` (por defecto `"standard"`; cualquier otro valor da 422): las reglas puras de `ai_rules.py` (`LANGUAGE_INSTRUCTIONS`) lo suman a la instrucción de la acción y a la clave de caché, así la misma pregunta en «estándar» y en «lenguaje claro» son dos respuestas distintas. Todo esquema de entrada usa `extra="forbid"` y límites explícitos: el tamaño de `document_text` se valida contra `MAX_INPUT_CHARS` y la imagen, contra `MAX_IMAGE_BYTES`.
 
 ### 4.3 Errores (problem+json)
 

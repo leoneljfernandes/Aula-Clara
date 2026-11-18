@@ -100,3 +100,6 @@ Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles q
 - [ ] **Motriz, doble clic:** con el filtro en «Sí», un doble clic rápido en «▶ Leer» no inicia y pausa enseguida.
 - [ ] **Motriz, manos libres:** con los comandos en «Manos libres», «bajar» y «subir» mueven el cursor y la app no se oye a sí misma.
 - [ ] **Voz en Firefox:** confirmar que, al tocar «Micrófono» o «Dictar pregunta», la barra explica que el navegador no devolvió texto (Firefox no trae reconocimiento de voz) y que la lista de comandos se abre con «¿Qué puedo decir?», `Alt+V` y diciendo «ayuda».
+- [ ] **Sordera, lenguaje claro:** con una key real, pedir «Resumir» en estándar y en lenguaje claro y comparar el largo de las oraciones; «Glosario fácil» debe dar tres líneas por término.
+- [ ] **Sordera, subtítulos:** con el micrófono de la notebook a 3 m, anotar la precisión en `03-perfil-sordera.md`; comprobar que se vuelven a escuchar solos tras un silencio largo y que al salir del lector el micrófono se apaga.
+- [ ] **Sordera, voz de la app:** en Chrome, una respuesta larga leída en voz alta que se corta sola (voces remotas) no deja a la app «hablando» ni al micrófono en pausa.
