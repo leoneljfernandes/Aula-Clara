@@ -3,12 +3,15 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import { Button } from "@/components/Button";
 import { Logo } from "@/components/Logo";
+import { Stepper } from "@/components/Stepper";
 import { useAnnounce } from "@/lib/announcer";
 
-import { clamp, FONTS, MAX_FS, MIN_FS, readingStyle } from "./config";
+import { FONTS, MAX_FS, MIN_FS, readingStyle } from "./config";
 import { safeNext } from "./guards";
 import { applyPreset, matchPreset, type Preset, type PresetCatalog } from "./presets";
 import { usePreferences } from "./PreferencesProvider";
+import { LINE_HEIGHT } from "./settings";
+import { SettingsControls } from "./SettingsControls";
 import { ThemeButtons } from "./ThemeButtons";
 
 const STEPS = ["Elegí tu perfil", "Ajustá los detalles"] as const;
@@ -138,39 +141,24 @@ function DetailsStep({ onBack, onFinish }: { onBack: () => void; onFinish: () =>
       </p>
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="space-y-7">
-          <div>
-            <label htmlFor="fs" className="mb-2 flex justify-between text-lg font-bold">
-              <span>Tamaño de fuente</span>
-              <span>{settings.fontSize} px</span>
-            </label>
-            <input
-              id="fs"
-              type="range"
-              min={MIN_FS}
-              max={MAX_FS}
-              value={settings.fontSize}
-              onChange={(e) => updateSettings({ fontSize: clamp(+e.target.value, MIN_FS, MAX_FS) })}
-              className="w-full"
-              style={{ accentColor: "var(--accent)", height: 32 }}
-            />
-          </div>
-          <div>
-            <label htmlFor="lh" className="mb-2 flex justify-between text-lg font-bold">
-              <span>Interlineado</span>
-              <span>{settings.lineHeight.toFixed(1)}</span>
-            </label>
-            <input
-              id="lh"
-              type="range"
-              min="1.3"
-              max="2.4"
-              step="0.1"
-              value={settings.lineHeight}
-              onChange={(e) => updateSettings({ lineHeight: +e.target.value })}
-              className="w-full"
-              style={{ accentColor: "var(--accent)", height: 32 }}
-            />
-          </div>
+          <Stepper
+            id="fs"
+            label="Tamaño de fuente"
+            value={settings.fontSize}
+            min={MIN_FS}
+            max={MAX_FS}
+            step={1}
+            format={(v) => `${v} px`}
+            onChange={(v) => updateSettings({ fontSize: v })}
+          />
+          <Stepper
+            id="lh"
+            label="Interlineado"
+            value={settings.lineHeight}
+            {...LINE_HEIGHT}
+            format={(v) => v.toFixed(1)}
+            onChange={(v) => updateSettings({ lineHeight: v })}
+          />
           <div>
             <label htmlFor="ff" className="mb-2 block text-lg font-bold">
               Tipografía
@@ -192,16 +180,7 @@ function DetailsStep({ onBack, onFinish }: { onBack: () => void; onFinish: () =>
             <span className="mb-2 block text-lg font-bold">Colores</span>
             <ThemeButtons compact />
           </div>
-          <label className="flex min-h-12 cursor-pointer items-center gap-3 text-lg font-bold">
-            <input
-              type="checkbox"
-              className="h-6 w-6"
-              style={{ accentColor: "var(--accent)" }}
-              checked={settings.audioFocus}
-              onChange={(e) => updateSettings({ audioFocus: e.target.checked })}
-            />
-            Destacar la lectura en voz alta
-          </label>
+          <SettingsControls placement="onboarding" />
         </div>
         <div>
           <span className="mb-2 block text-lg font-bold">Vista previa</span>

@@ -11,6 +11,7 @@ export {
   THEMES,
   type ThemeId,
 } from "./config";
+export { CONTROLS, type ControlGroup, type ControlSpec } from "./controls";
 export { homeLoader, requireOnboarding, safeNext } from "./guards";
 export { OnboardingWizard } from "./OnboardingWizard";
 export { applyPreset, loadPresetCatalog, matchPreset, type Preset, type PresetCatalog } from "./presets";
@@ -25,4 +26,5 @@ export {
   snakeToCamelKeys,
 } from "./settings";
 export { isOnboarded, loadSettings, markOnboarded, saveSettings } from "./storage";
+export { SettingsControls } from "./SettingsControls";
 export { ThemeButtons } from "./ThemeButtons";

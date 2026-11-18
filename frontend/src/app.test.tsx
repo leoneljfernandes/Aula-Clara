@@ -131,7 +131,7 @@ describe("onboarding", () => {
 
     expect(await h1()).toHaveTextContent("Ajustá los detalles");
     expect(screen.getByLabelText("Tipografía")).toHaveValue("dyslexic");
-    expect(screen.getByLabelText(/Tamaño de fuente/)).toHaveValue("21");
+    expect(screen.getByRole("group", { name: "Tamaño de fuente" })).toHaveTextContent("21 px");
     expect(screen.getByRole("button", { name: /Sepia/ })).toHaveAttribute("aria-pressed", "true");
 
     await user.click(screen.getByRole("button", { name: "Guardar y continuar" }));

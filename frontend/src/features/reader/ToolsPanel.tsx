@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/Button";
+import { Stepper } from "@/components/Stepper";
 import {
   FONTS,
   type FontId,
@@ -9,6 +10,9 @@ import {
   RATES,
   ThemeButtons,
   clamp,
+  CONTROLS,
+  LINE_HEIGHT,
+  SettingsControls,
   usePreferences,
 } from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
@@ -88,6 +92,7 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
     updateSettings({ fontSize: next });
     announce(`Tamaño ${next} píxeles`);
   };
+  const hasReaderControls = CONTROLS.some((c) => c.inReader);
   const audioSection = <AudioSection audio={audio} total={total} />;
 
   return (
@@ -118,21 +123,16 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
             A+
           </Button>
         </div>
-        <label htmlFor="lh2" className="mt-4 mb-1 flex justify-between text-base font-bold">
-          <span>Interlineado</span>
-          <span>{settings.lineHeight.toFixed(1)}</span>
-        </label>
-        <input
-          id="lh2"
-          type="range"
-          min="1.3"
-          max="2.4"
-          step="0.1"
-          value={settings.lineHeight}
-          onChange={(e) => updateSettings({ lineHeight: +e.target.value })}
-          className="w-full"
-          style={{ accentColor: "var(--accent)", height: 32 }}
-        />
+        <div className="mt-4">
+          <Stepper
+            id="lh2"
+            label="Interlineado"
+            value={settings.lineHeight}
+            {...LINE_HEIGHT}
+            format={(v) => v.toFixed(1)}
+            onChange={(v) => updateSettings({ lineHeight: v })}
+          />
+        </div>
       </section>
       <section aria-labelledby="t-theme">
         <h3 id="t-theme" className={H3}>
@@ -164,6 +164,16 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
           ))}
         </select>
       </section>
+      {hasReaderControls && (
+        <section aria-labelledby="t-a11y">
+          <h3 id="t-a11y" className={H3}>
+            Ajustes de accesibilidad
+          </h3>
+          <div className="space-y-4">
+            <SettingsControls placement="reader" />
+          </div>
+        </section>
+      )}
       {!settings.audioFocus && audioSection}
       <section aria-labelledby="t-keys" className="text-base">
         <h3 id="t-keys" className={H3}>
