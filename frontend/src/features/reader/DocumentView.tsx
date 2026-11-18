@@ -9,6 +9,10 @@ interface DocumentViewProps {
   /** Índice (en article.blocks) del bloque que se está leyendo en voz alta, o -1. */
   activeBlock: number;
   showListenButton: boolean;
+  /** Guía por voz: las figuras leen su descripción al recibirla. */
+  autoSpeak: boolean;
+  /** Velocidad de la voz elegida en los ajustes. */
+  rate: number;
   onListen: () => void;
   onAskAboutFigure: () => void;
   style: React.CSSProperties;
@@ -20,6 +24,8 @@ export function DocumentView({
   article,
   activeBlock,
   showListenButton,
+  autoSpeak,
+  rate,
   onListen,
   onAskAboutFigure,
   style,
@@ -56,13 +62,17 @@ export function DocumentView({
         if (block.type === "figure") {
           const before = article.blocks[i - 1];
           return (
-            <FigureBlock
-              key={block.id}
-              dataUrl={block.dataUrl}
-              caption={`Gráfico ${figureNumberAt(i)}`}
-              context={before?.type === "p" ? before.text : ""}
-              onAskAssistant={onAskAboutFigure}
-            />
+            <div key={block.id} id={`blk-${i}`}>
+              <FigureBlock
+                dataUrl={block.dataUrl}
+                caption={`Gráfico ${figureNumberAt(i)}`}
+                context={before?.type === "p" ? before.text : ""}
+                buttonId={`fig-btn-${i}`}
+                autoSpeak={autoSpeak}
+                rate={rate}
+                onAskAssistant={onAskAboutFigure}
+              />
+            </div>
           );
         }
         const active = i === activeBlock;
@@ -72,6 +82,7 @@ export function DocumentView({
           <h2
             key={i}
             id={`blk-${i}`}
+            tabIndex={-1}
             className={`${cls} mt-10 mb-3 font-bold`}
             style={{ ...highlight, fontSize: "1.25em", lineHeight: 1.3 }}
           >
@@ -81,6 +92,7 @@ export function DocumentView({
           <p
             key={i}
             id={`blk-${i}`}
+            tabIndex={-1}
             className={`${cls} mb-5`}
             style={highlight}
             aria-current={active ? "true" : undefined}

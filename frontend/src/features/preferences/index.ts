@@ -5,17 +5,32 @@ export {
   type FontId,
   MAX_FS,
   MIN_FS,
-  PROFILES,
-  type Profile,
   RATES,
   readingStyle,
-  type ReadingSettings,
   THEME_ORDER,
   THEMES,
   type ThemeId,
 } from "./config";
-export { homeLoader, requireProfile, safeNext } from "./guards";
+export {
+  CONTROLS,
+  type ControlGroup,
+  type ControlPlacement,
+  controlsFor,
+  type ControlSpec,
+} from "./controls";
+export { homeLoader, requireOnboarding, safeNext } from "./guards";
 export { OnboardingWizard } from "./OnboardingWizard";
-export { PreferencesProvider, ThemeScope, usePreferences } from "./PreferencesProvider";
-export { loadProfileId } from "./storage";
+export { applyPreset, loadPresetCatalog, matchPreset, type Preset, type PresetCatalog } from "./presets";
+export { PreferencesProvider, ThemeScope, usePreferences, useSettingsDraft } from "./PreferencesProvider";
+export {
+  DEFAULT_SETTINGS,
+  LINE_HEIGHT,
+  type ReadingSettings,
+  sanitizePatch,
+  sanitizeSettings,
+  SETTINGS_SCHEMA_VERSION,
+  snakeToCamelKeys,
+} from "./settings";
+export { isOnboarded, loadSettings, markOnboarded, saveSettings } from "./storage";
+export { SettingsControls } from "./SettingsControls";
 export { ThemeButtons } from "./ThemeButtons";

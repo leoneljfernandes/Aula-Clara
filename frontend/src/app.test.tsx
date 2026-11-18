@@ -1,10 +1,13 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, type waitForOptions, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEFAULT_SETTINGS, type ReadingSettings } from "@/features/preferences";
 import { routes } from "@/router";
+import { ReadAloudEngine, speechBus } from "@/lib/speech";
+import { FakeRecognition, installFakeRecognition } from "@/test/fakeSpeechRecognition";
 
 // Sin backend en los tests: el cliente HTTP devuelve respuestas fijas de "Gemini".
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
@@ -14,6 +17,33 @@ vi.mock("@/lib/http", async (original) => ({
 }));
 
 const MODEL = "gemini-3.5-flash-lite";
+// Los mismos 3 presets del seed del backend.
+const PRESETS = [
+  {
+    id: "dislexia",
+    title: "Dislexia",
+    icon: "Aa",
+    description: "Fuente especializada…",
+    tags: ["OpenDyslexic"],
+    settings: { font: "dyslexic", font_size: 21, line_height: 1.9, theme: "sepia", audio_focus: false },
+  },
+  {
+    id: "vision",
+    title: "Visión reducida",
+    icon: "A+",
+    description: "Alto contraste…",
+    tags: ["Texto 28 px"],
+    settings: { font: "atkinson", font_size: 28, line_height: 1.7, theme: "contraste", audio_focus: false },
+  },
+  {
+    id: "fatiga",
+    title: "Fatiga visual",
+    icon: "☾",
+    description: "Modo oscuro…",
+    tags: ["Audio destacado"],
+    settings: { font: "verdana", font_size: 20, line_height: 1.8, theme: "oscuro", audio_focus: true },
+  },
+];
 function fakeBackend({
   url,
   method,
@@ -23,6 +53,7 @@ function fakeBackend({
   method?: string;
   data?: { action?: string; message?: string };
 }) {
+  if (url === "/presets") return Promise.resolve(PRESETS);
   if (url === "/ai/session")
     return Promise.resolve(
       method === "DELETE" ? undefined : { provider: "gemini", remember: false, expires_in_seconds: 43_200 },
@@ -76,26 +107,31 @@ vi.mock("@/lib/extractors", async (original) => ({
   svgToJpeg: vi.fn().mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" })),
 }));
 
+// En jsdom no hay voz: speakOnce se simula, y el resto del módulo (árbitro, motor) queda real.
+vi.mock("@/lib/speech", async (original) => ({
+  ...(await original<typeof import("@/lib/speech")>()),
+  speakOnce: vi.fn(() => true),
+}));
+
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   render(<RouterProvider router={router} />);
   return router;
 }
 
-const withProfile = (id = "custom"): void => {
-  window.localStorage.setItem("aulaclara.profile", JSON.stringify(id));
-};
+const withOnboarding = (): void => window.localStorage.setItem("aulaclara.onboarded", "true");
 
-const h1 = async () => screen.findByRole("heading", { level: 1 });
+const h1 = async (options?: waitForOptions) => screen.findByRole("heading", { level: 1 }, options);
 
 describe("onboarding", () => {
   it("sin perfil, la raíz lleva al wizard con el enlace «Saltar al contenido»", async () => {
     const router = renderAt("/");
-    expect(await h1()).toHaveTextContent(/Personalizá tu experiencia/);
+    // Primera carga del chunk lazy de /perfil: con toda la suite en paralelo puede pasar de 1 s.
+    expect(await h1({ timeout: 5_000 })).toHaveTextContent(/Personalizá tu experiencia/);
     expect(router.state.location.pathname).toBe("/perfil");
     expect(screen.getByRole("link", { name: "Saltar al contenido" })).toHaveAttribute("href", "#contenido");
     expect(screen.getByRole("button", { name: /Siguiente/ })).toBeDisabled();
-  });
+  }, 10_000);
 
   it("elegir un perfil aplica su preset, se ajusta en el paso 2 y se guarda", async () => {
     const user = userEvent.setup();
@@ -105,30 +141,35 @@ describe("onboarding", () => {
 
     expect(await h1()).toHaveTextContent("Ajustá los detalles");
     expect(screen.getByLabelText("Tipografía")).toHaveValue("dyslexic");
-    expect(screen.getByLabelText(/Tamaño de fuente/)).toHaveValue("21");
+    expect(screen.getByRole("group", { name: "Tamaño de fuente" })).toHaveTextContent("21 px");
     expect(screen.getByRole("button", { name: /Sepia/ })).toHaveAttribute("aria-pressed", "true");
 
     await user.click(screen.getByRole("button", { name: "Guardar y continuar" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"));
-    expect(JSON.parse(window.localStorage.getItem("aulaclara.profile") ?? "null")).toBe("dislexia");
+    // Primera carga de la ruta lazy de la biblioteca: con toda la suite en paralelo puede pasar de 1 s.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"), { timeout: 5_000 });
+    expect(window.localStorage.getItem("aulaclara.profile")).toBeNull(); // no se guarda la etiqueta (Ley 25.326)
+    expect(window.localStorage.getItem("aulaclara.onboarded")).toBe("true");
     expect(JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "{}")).toMatchObject({
-      font: "dyslexic",
-      theme: "sepia",
+      schemaVersion: 2,
+      settings: { font: "dyslexic", theme: "sepia" },
     });
-  });
+  }, 10_000);
 
   it("entrar a una ruta protegida sin perfil pasa por el wizard y vuelve a donde iba", async () => {
     const user = userEvent.setup();
     const router = renderAt("/leer/d1");
-    await h1();
+    await h1({ timeout: 5_000 });
     expect(router.state.location.pathname).toBe("/perfil");
     expect(router.state.location.search).toBe("?next=%2Fleer%2Fd1");
 
-    await user.click(await screen.findByRole("radio", { name: /Perfil Visión reducida/ }));
+    await user.click(
+      await screen.findByRole("radio", { name: /Perfil Visión reducida/ }, { timeout: 5_000 }),
+    );
     await user.click(screen.getByRole("button", { name: /Siguiente/ }));
-    await user.click(await screen.findByRole("button", { name: "Guardar y continuar" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/leer/d1"));
-  });
+    await user.click(await screen.findByRole("button", { name: "Guardar y continuar" }, { timeout: 5_000 }));
+    // Primera carga de la ruta lazy del lector (pdf.js y compañía): con toda la suite en paralelo puede pasar de 1 s.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/leer/d1"), { timeout: 5_000 });
+  }, 10_000);
 
   it("ignora un ?next= que apunta a otro sitio (open redirect)", async () => {
     const user = userEvent.setup();
@@ -138,10 +179,175 @@ describe("onboarding", () => {
     await user.click(await screen.findByRole("button", { name: "Guardar y continuar" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"));
   });
+
+  it("pasar de un preset a otro no arrastra ajustes del anterior", async () => {
+    request.mockImplementation((c: { url: string }) =>
+      c.url === "/presets"
+        ? Promise.resolve([
+            {
+              id: "a",
+              title: "A",
+              icon: "A",
+              description: "",
+              tags: [],
+              settings: { audio_focus: true, theme: "oscuro" },
+            },
+            { id: "b", title: "B", icon: "B", description: "", tags: [], settings: { font: "dyslexic" } },
+          ])
+        : fakeBackend(c),
+    );
+    const user = userEvent.setup();
+    renderAt("/perfil");
+    await user.click(await screen.findByRole("radio", { name: /Perfil A/ }));
+    await user.click(screen.getByRole("radio", { name: /Perfil B/ }));
+    await user.click(screen.getByRole("button", { name: /Siguiente/ }));
+    expect(
+      await screen.findByRole("checkbox", { name: /Destacar la lectura en voz alta/ }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /Claro/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("sin backend ni caché ofrece solo «Personalizado» y lo explica", async () => {
+    request.mockRejectedValue(new Error("caído"));
+    renderAt("/perfil");
+    // findByText y no findByRole("status"): el Announcer global también tiene role="status".
+    expect(await screen.findByText(/No pudimos cargar los perfiles sugeridos/)).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(screen.getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual(["custom"]);
+  });
+
+  it("un preset del catálogo con el id reservado «custom» se descarta", async () => {
+    request.mockImplementation((c: { url: string }) =>
+      c.url === "/presets"
+        ? Promise.resolve([
+            ...PRESETS,
+            { id: "custom", title: "Impostor", icon: "X", description: "", tags: [], settings: {} },
+          ])
+        : fakeBackend(c),
+    );
+    renderAt("/perfil");
+    await h1();
+    expect(screen.getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual([
+      "dislexia",
+      "vision",
+      "fatiga",
+      "custom",
+    ]);
+    expect(screen.getByRole("radio", { name: /Perfil Personalizado/ })).toHaveAttribute("value", "custom");
+    expect(screen.queryByText(/Impostor/)).not.toBeInTheDocument();
+  });
+
+  // Durante una redirección React Router sigue mostrando la ruta de origen: cada entrada tiene su aviso.
+  it.each([
+    ["/perfil", "Cargando tu perfil de lectura…"],
+    ["/", "Cargando…"],
+    ["/leer/d1", "Cargando…"],
+  ])(
+    "al entrar por %s, mientras llega el catálogo avisa «%s»",
+    async (path, message) => {
+      let respond: (presets: unknown) => void = () => undefined;
+      request.mockImplementation((c: { url: string }) =>
+        c.url === "/presets"
+          ? new Promise((resolve) => {
+              respond = resolve;
+            })
+          : fakeBackend(c),
+      );
+      renderAt(path);
+      expect(await screen.findByText(message, undefined, { timeout: 5_000 })).toHaveAttribute(
+        "role",
+        "status",
+      );
+      // El aviso aparece antes de que se pida el catálogo: se contesta recién cuando el pedido salió.
+      await waitFor(() => expect(calls("/presets")).toHaveLength(1), { timeout: 5_000 });
+      respond(PRESETS);
+      expect(await h1({ timeout: 5_000 })).toHaveTextContent(/Personalizá tu experiencia/);
+      expect(screen.queryByText(message)).not.toBeInTheDocument();
+    },
+    10_000,
+  );
+
+  describe("con el onboarding hecho y ajustes propios", () => {
+    // Ajustes afinados a mano: no coinciden con ningún preset, así que el wizard marca «Personalizado».
+    const TUNED: ReadingSettings = {
+      theme: "sepia",
+      font: "verdana",
+      fontSize: 26,
+      lineHeight: 2,
+      rate: 1.5,
+      audioFocus: true,
+      singleKeyShortcuts: false,
+      voiceGuide: false,
+      voiceCommands: "off",
+    };
+    const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
+
+    beforeEach(() => {
+      withOnboarding();
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: TUNED }),
+      );
+    });
+
+    it("recorrer los perfiles con las flechas y salir sin terminar no pisa los ajustes", async () => {
+      const user = userEvent.setup();
+      const router = renderAt("/perfil");
+      const custom = await screen.findByRole("radio", { name: /Perfil Personalizado/ });
+      expect(custom).toBeChecked();
+      custom.focus();
+      // Las flechas dan la vuelta: Dislexia, Visión reducida, Fatiga visual. Cada una aplica su preset en vivo.
+      await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
+      expect(screen.getByRole("radio", { name: /Perfil Fatiga visual/ })).toBeChecked();
+
+      await act(() => router.navigate("/biblioteca"));
+      expect(
+        await screen.findByRole("heading", { level: 1, name: /Hola/ }, { timeout: 5_000 }),
+      ).toBeInTheDocument();
+      expect(stored()).toEqual({ schemaVersion: 2, settings: TUNED });
+      // También en memoria: al volver al wizard, los ajustes siguen siendo los propios.
+      await act(() => router.navigate("/perfil"));
+      expect(await screen.findByRole("radio", { name: /Perfil Personalizado/ })).toBeChecked();
+    }, 10_000);
+
+    it("los ajustes del perfil elegido se guardan recién al terminar", async () => {
+      const user = userEvent.setup();
+      const router = renderAt("/perfil");
+      await user.click(await screen.findByRole("radio", { name: /Perfil Visión reducida/ }));
+      await user.click(screen.getByRole("button", { name: /Siguiente/ }));
+      expect(
+        await screen.findByRole("heading", { level: 1, name: "Ajustá los detalles" }),
+      ).toBeInTheDocument();
+      expect(stored()).toEqual({ schemaVersion: 2, settings: TUNED }); // la vista previa no guarda nada
+
+      await user.click(screen.getByRole("button", { name: "Guardar y continuar" }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"), { timeout: 5_000 });
+      expect(stored()).toEqual({
+        schemaVersion: 2,
+        settings: {
+          ...DEFAULT_SETTINGS,
+          font: "atkinson",
+          fontSize: 28,
+          lineHeight: 1.7,
+          theme: "contraste",
+        },
+      });
+    }, 10_000);
+  });
+
+  it("con el perfil guardado por la versión anterior entra directo a la biblioteca", async () => {
+    window.localStorage.setItem("aulaclara.profile", JSON.stringify("dislexia"));
+    const router = renderAt("/");
+    await h1();
+    expect(router.state.location.pathname).toBe("/biblioteca");
+    expect(window.localStorage.getItem("aulaclara.profile")).toBeNull();
+  });
 });
 
 describe("biblioteca", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   it("con perfil, la raíz muestra la biblioteca con los 3 documentos semilla y el aviso de privacidad", async () => {
     const router = renderAt("/");
@@ -183,17 +389,18 @@ describe("biblioteca", () => {
     // Se espera el título del lector por nombre: h1() podría devolver todavía el de la biblioteca
     // mientras carga la ruta lazy del lector (carrera que hacía intermitente este test).
     expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: /Accesibilidad digital en la educación superior/,
-      }),
+      await screen.findByRole(
+        "heading",
+        { level: 1, name: /Accesibilidad digital en la educación superior/ },
+        { timeout: 5_000 },
+      ),
     ).toBeInTheDocument();
   }, 10_000);
 });
 
 describe("lector", () => {
   beforeEach(() => {
-    withProfile();
+    withOnboarding();
     withAI();
   });
 
@@ -219,6 +426,28 @@ describe("lector", () => {
     const log = screen.getByRole("log");
     await waitFor(() => expect(log).toHaveTextContent("Resumen de esta página (prueba)"));
     expect(log).toHaveTextContent(`Respuesta de IA (Google Gemini · ${MODEL})`);
+  });
+
+  it("con la guía por voz, la respuesta del asistente se lee sola; sin ella, no", async () => {
+    const { speakOnce } = await import("@/lib/speech");
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceGuide: true } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(speakOnce).toHaveBeenCalledWith("Resumen de esta página (prueba)", 1));
+  });
+
+  it("sin guía por voz no se lee nada solo", async () => {
+    const { speakOnce } = await import("@/lib/speech");
+    vi.mocked(speakOnce).mockClear();
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("Resumen de esta página (prueba)"));
+    expect(speakOnce).not.toHaveBeenCalled();
   });
 
   it("una pregunta libre se envía al asistente y se muestra su respuesta", async () => {
@@ -253,6 +482,354 @@ describe("lector", () => {
     ).toBeInTheDocument();
   });
 
+  it("con atajos de una tecla, «1» resume pero escribir «1» en el chat no", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { singleKeyShortcuts: true } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.type(await screen.findByLabelText("Escribí tu pregunta"), "1");
+    expect(calls("/ai/chat")).toHaveLength(0);
+    await user.click(screen.getByRole("heading", { level: 1 }));
+    await user.keyboard("1");
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "summarize" }));
+  });
+
+  it("sin el ajuste, «1» no resume", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("1");
+    expect(calls("/ai/chat")).toHaveLength(0);
+  });
+
+  it("Alt+H salta al primer título, lo enfoca y anuncia la sección", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}h{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-0");
+    expect(await screen.findByText(/^Sección 1 de \d+: 1\. Introducción$/)).toBeInTheDocument();
+  });
+
+  it("Alt+↑ en el principio no se mueve y lo anuncia", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
+    expect(await screen.findByText("Principio del documento")).toBeInTheDocument();
+  });
+
+  it("Alt+G enfoca el botón del primer gráfico y lo anuncia", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}g{/Alt}");
+    expect(document.activeElement?.id).toMatch(/^fig-btn-\d+$/);
+    expect(await screen.findByText("Gráfico 1", { selector: "[role=status]" })).toBeInTheDocument();
+  });
+
+  it("Alt+↓ avanza de a un bloque y, pasado el último, anuncia el fin del documento", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-0");
+    const total = document.querySelectorAll("[id^='blk-']").length;
+    for (let i = 1; i < total; i++) await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe(`blk-${total - 1}`);
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(await screen.findByText("Fin del documento", { selector: "[role=status]" })).toBeInTheDocument();
+    expect(document.activeElement?.id).toBe(`blk-${total - 1}`);
+  });
+
+  it("con la lectura en marcha, moverse de bloque la continúa desde ese bloque", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
+    expect(await screen.findByText(/Leyendo · bloque 1 de/)).toBeInTheDocument();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}");
+    expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
+  it("el cursor sigue a la lectura: Alt+↓ va al bloque que sigue al que se lee, no al principio", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
+    // El título (2 palabras) termina solo y la lectura pasa al bloque 2 sin tocar el cursor.
+    expect(
+      await screen.findByText(/Leyendo · bloque 2 de/, undefined, { timeout: 3_000 }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-2");
+    expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
+  it("al enfocar un párrafo, Alt+↓ sigue desde ese párrafo", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.click(document.getElementById("blk-4") as HTMLElement);
+    expect(document.activeElement?.id).toBe("blk-4");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-5");
+  });
+
+  it("con un diálogo abierto, Alt+↓ no saca el foco hacia el documento; cerrado, sí", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}h{/Alt}{Alt>}g{/Alt}");
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-9");
+  });
+
+  it("Alt+P arranca la lectura desde el bloque donde está el cursor, no desde el principio", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-2");
+    expect(screen.getByText("Listo para leer.")).toBeInTheDocument();
+    await user.keyboard("{Alt>}p{/Alt}");
+    expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
+  it("Alt+P sin cursor lee desde el principio", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}p{/Alt}");
+    expect(await screen.findByText(/Leyendo · bloque 1 de/)).toBeInTheDocument();
+  });
+
+  it("Alt+B anuncia que el Braille todavía no está disponible", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}b{/Alt}");
+    expect(
+      await screen.findByText("El Braille todavía no está disponible", { selector: "[role=status]" }),
+    ).toBeInTheDocument();
+  });
+
+  describe("con atajos de una sola tecla", () => {
+    beforeEach(() =>
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { singleKeyShortcuts: true } }),
+      ),
+    );
+
+    it("«4» explica con palabras más simples el párrafo donde está el cursor", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      const paragraph = document.getElementById("blk-4") as HTMLElement;
+      await user.click(paragraph);
+      await user.keyboard("4");
+      await waitFor(() => expect(calls("/ai/chat")).toHaveLength(1));
+      const sent = calls("/ai/chat")[0]?.data as { action: string; message?: string; selection: string };
+      expect(sent.action).toBe("simplify");
+      expect(sent.selection).toBe(paragraph.textContent);
+    });
+
+    it("«4» sin un párrafo elegido avisa y no manda nada", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      await user.keyboard("4");
+      expect(
+        await screen.findByText("Elegí un párrafo primero (Alt+↓ o J).", { selector: "[role=status]" }),
+      ).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+
+    it("«4» sobre una figura avisa y no manda nada", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      await user.keyboard("g");
+      expect(document.activeElement?.id).toMatch(/^fig-btn-/);
+      await user.keyboard("4");
+      expect(
+        await screen.findByText("Elegí un párrafo primero (Alt+↓ o J).", { selector: "[role=status]" }),
+      ).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+  });
+
+  it("al salir del lector se silencia la voz que quedara hablando", async () => {
+    const user = userEvent.setup();
+    const router = renderAt("/leer/d1");
+    await h1();
+    const silence = vi.spyOn(speechBus, "silence");
+    try {
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      silence.mockClear();
+      await act(() => router.navigate("/biblioteca"));
+      expect(silence).toHaveBeenCalled();
+    } finally {
+      silence.mockRestore();
+    }
+  });
+
+  describe("con la guía por voz", () => {
+    beforeEach(() =>
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { voiceGuide: true } }),
+      ),
+    );
+
+    it("la respuesta del asistente se lee sola al llegar, una sola vez", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+      await waitFor(() => expect(speakOnce).toHaveBeenCalledWith("Resumen de esta página (prueba)", 1));
+      // El saludo del asistente no se lee, y volver a renderizar no relee la respuesta.
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+    });
+
+    it("la descripción de una figura se lee sola al llegar", async () => {
+      withAI();
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+      expect(speakOnce).toHaveBeenCalledWith("Un gráfico de barras de prueba.", 1);
+    });
+
+    it("un mensaje de error del asistente también se lee, para saber que el pedido falló", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      request.mockImplementation((req: Parameters<typeof fakeBackend>[0]) =>
+        req.url === "/ai/chat" ? Promise.reject(new Error("caído")) : fakeBackend(req),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+      await waitFor(() => expect(speakOnce).toHaveBeenCalledTimes(1));
+      const [spoken, rate] = vi.mocked(speakOnce).mock.calls[0] ?? [];
+      expect(rate).toBe(1);
+      expect(spoken).not.toMatch(/prueba/);
+      expect(screen.getByRole("log")).toHaveTextContent(spoken as string);
+    });
+
+    it("una respuesta cortada por el límite se lee con el aviso, en una sola lectura", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      request.mockResolvedValue({
+        answer: "1. Primera pregunta\n2. Segun",
+        provider: "gemini",
+        model: MODEL,
+        truncated: true,
+      });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Crear 3 preguntas de repaso" }));
+      await waitFor(() =>
+        expect(speakOnce).toHaveBeenCalledWith(
+          "1. Primera pregunta\n2. Segun. La respuesta se cortó porque el modelo llegó a su límite de largo.",
+          1,
+        ),
+      );
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+    });
+
+    it("una descripción cortada por el límite se lee con el aviso", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      request.mockResolvedValue({
+        description: "Un gráfico de barras que crece",
+        provider: "gemini",
+        model: MODEL,
+        truncated: true,
+      });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+      expect(speakOnce).toHaveBeenCalledWith(
+        "Un gráfico de barras que crece. La descripción se cortó porque el modelo llegó a su límite de largo.",
+        1,
+      );
+    });
+
+    it("si la descripción de la figura falla, el aviso del diálogo también se lee", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      const extractors = await import("@/lib/extractors");
+      vi.mocked(speakOnce).mockClear();
+      vi.mocked(extractors.svgToJpeg).mockRejectedValueOnce(new Error("canvas roto"));
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+      const [spoken, rate] = vi.mocked(speakOnce).mock.calls[0] ?? [];
+      expect(spoken).toContain("No pudimos preparar la imagen");
+      expect(rate).toBe(1);
+      expect(within(dialog).getByRole("alert")).toHaveTextContent(spoken as string);
+    });
+
+    it("la guía por voz usa la velocidad elegida, también en las figuras", async () => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { voiceGuide: true, rate: 1.5 } }),
+      );
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledWith("Un gráfico de barras de prueba.", 1.5);
+      await user.keyboard("{Escape}");
+      await user.click(screen.getByRole("button", { name: "Resumir esta página" }));
+      await waitFor(() => expect(speakOnce).toHaveBeenCalledWith("Resumen de esta página (prueba)", 1.5));
+    });
+
+    it("tras pasar la figura, lee desde el índice leíble correcto (la figura no cuenta)", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      // Bloques 0, 3 y 6 son títulos; 7 es un párrafo, 8 la figura y 9 el párrafo que sigue.
+      await user.keyboard("{Alt>}h{/Alt}{Alt>}h{/Alt}{Alt>}h{/Alt}");
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-7");
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("fig-btn-8");
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-9");
+      expect(await screen.findByText(/Leyendo · bloque 9 de/)).toBeInTheDocument();
+    });
+
+    it("con la lectura en pausa, moverse a un bloque la retoma desde ahí", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
+      await user.click(await screen.findByRole("button", { name: "Pausar lectura" }));
+      expect(await screen.findByRole("button", { name: "Continuar lectura" })).toBeInTheDocument();
+      await user.keyboard("{Alt>}h{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-3");
+      expect(await screen.findByText(/Leyendo · bloque 4 de/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Pausar lectura" })).toBeInTheDocument();
+    });
+  });
+
   it("la lectura en voz alta resalta el párrafo actual y se puede detener", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");
@@ -271,7 +848,7 @@ describe("lector", () => {
 });
 
 describe("IA con la key de cada persona", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   it("sin key, el panel pide configurarla y una consulta no llega al servidor", async () => {
     const user = userEvent.setup();
@@ -381,7 +958,7 @@ describe("IA con la key de cada persona", () => {
 });
 
 describe("Configurar IA: respuestas tardías y filtro de gratuitos", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   it("una respuesta que llega después de cambiar de proveedor se descarta", async () => {
     let resolveGemini: (value: unknown) => void = () => undefined;
@@ -441,7 +1018,7 @@ describe("Configurar IA: respuestas tardías y filtro de gratuitos", () => {
 });
 
 describe("key sellada en cookie: respaldo, reemplazo y borrado", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
     renderAt("/leer/d1");
@@ -588,7 +1165,7 @@ describe("key sellada en cookie: respaldo, reemplazo y borrado", () => {
 
 describe("errores y avisos de la IA en pantalla", () => {
   beforeEach(() => {
-    withProfile();
+    withOnboarding();
     withAI();
   });
 
@@ -697,5 +1274,506 @@ describe("guía de API keys", () => {
       "href",
       "https://build.nvidia.com/settings/api-keys",
     );
+  });
+});
+
+describe("comandos por voz", () => {
+  beforeEach(() => {
+    withOnboarding();
+    withAI();
+    FakeRecognition.instances = [];
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceCommands: "push" } }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("pide consentimiento la primera vez y «resumir» llama al asistente", async () => {
+    installFakeRecognition();
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+    await user.click(within(dialog).getByRole("button", { name: "Usar el micrófono" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("resumir"));
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "summarize" }));
+    expect(screen.getByText(/"resumir" ✓/)).toBeInTheDocument();
+  });
+
+  it("el consentimiento de manos libres suma el aviso del micrófono abierto; el de por botón no", async () => {
+    installFakeRecognition();
+    const aviso = /el micrófono queda abierto: también puede oír a otras personas/;
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+    expect(screen.queryByText(aviso)).not.toBeInTheDocument();
+  });
+
+  it("el consentimiento en manos libres incluye el aviso del micrófono abierto", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceCommands: "continuous" } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+    expect(
+      screen.getByText(/el micrófono queda abierto: también puede oír a otras personas/),
+    ).toBeInTheDocument();
+  });
+
+  it("sin soporte del navegador lo explica y no muestra el micrófono", async () => {
+    renderAt("/leer/d1");
+    expect(await screen.findByText(/Tu navegador no permite comandos por voz/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Micrófono/ })).not.toBeInTheDocument();
+  });
+
+  it("el dictado escribe la pregunta y «enviar» la manda", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Dictar pregunta/ }));
+    act(() => FakeRecognition.instances.at(-1)!.emitFinal("qué dice la ley"));
+    expect(screen.getByLabelText("Escribí tu pregunta")).toHaveValue("qué dice la ley");
+    await user.click(screen.getByRole("button", { name: /Dictar pregunta/ }));
+    act(() => FakeRecognition.instances.at(-1)!.emitFinal("enviar"));
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ message: "qué dice la ley" }));
+  });
+
+  describe("con el micrófono ya permitido", () => {
+    beforeEach(() => {
+      installFakeRecognition();
+      window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+    });
+
+    it("«Ahora no» en el consentimiento no enciende el micrófono", async () => {
+      window.localStorage.removeItem("aulaclara.voiceConsent");
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+      await user.click(within(dialog).getByRole("button", { name: "Ahora no" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(FakeRecognition.instances).toHaveLength(0);
+      expect(screen.getByRole("button", { name: /Micrófono/ })).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByText("Micrófono apagado")).toBeInTheDocument();
+    });
+
+    it("el estado cambia entre apagado y escuchando, y el atajo Alt+M lo alterna", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const mic = await screen.findByRole("button", { name: /Micrófono/ });
+      expect(screen.getByText("Micrófono apagado")).toBeInTheDocument();
+      await user.keyboard("{Alt>}m{/Alt}");
+      expect(mic).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByText("Escuchando…")).toBeInTheDocument();
+      expect(FakeRecognition.instances[0]!.starts).toBe(1);
+      expect(FakeRecognition.instances[0]!.continuous).toBe(false);
+      await user.click(mic);
+      expect(FakeRecognition.instances[0]!.stops).toBe(1);
+      act(() => FakeRecognition.instances[0]!.emitEnd()); // el navegador cierra la sesión tras stop()
+      expect(mic).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByText("Micrófono apagado")).toBeInTheDocument();
+    });
+
+    it("una frase que no es un comando se marca como no entendida y no llama a nadie", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("hola mundo"));
+      expect(screen.getByText(/"hola mundo" ✗ No entendí ese comando/)).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+
+    it("«preguntar …» manda la pregunta tal cual al asistente", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("Preguntar qué es la mitosis"));
+      await waitFor(() =>
+        expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "free", message: "qué es la mitosis" }),
+      );
+    });
+
+    it("«más rápido» sube la velocidad y la anuncia", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("más rápido"));
+      expect(await screen.findByText("Velocidad x1,5")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "x1,5" })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("«siguiente sección» mueve el cursor al próximo título", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("siguiente sección"));
+      expect(document.activeElement?.id).toBe("blk-0");
+    });
+
+    it("«describir imagen» usa la figura siguiente al cursor", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("describir imagen"));
+      await waitFor(() => expect(calls("/ai/describe-image")).toHaveLength(1));
+    });
+
+    it("«braille» se entiende pero todavía no hace nada ni se marca como hecho", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("braille"));
+      expect(screen.getByText(/"braille" ✗/)).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+
+    it("el permiso denegado se explica y apaga el micrófono", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const mic = await screen.findByRole("button", { name: /Micrófono/ });
+      await user.click(mic);
+      act(() => FakeRecognition.instances[0]!.emitError("not-allowed"));
+      expect(screen.getByText(/No tenemos permiso para usar el micrófono/)).toBeInTheDocument();
+      expect(mic).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("sin voz en modo manos libres no muestra ningún error", async () => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { voiceCommands: "continuous" } }),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      expect(FakeRecognition.instances[0]!.continuous).toBe(true);
+      act(() => FakeRecognition.instances[0]!.emitError("no-speech"));
+      expect(screen.getByText("Escuchando…")).toBeInTheDocument();
+    });
+
+    it("al salir del lector el reconocimiento se cierra", async () => {
+      const user = userEvent.setup();
+      const router = renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      await act(() => router.navigate("/biblioteca"));
+      expect(FakeRecognition.instances[0]!.aborts).toBeGreaterThan(0);
+    });
+  });
+
+  it("el panel de atajos muestra el micrófono solo si hay comandos por voz y soporte", async () => {
+    installFakeRecognition();
+    renderAt("/leer/d1");
+    const keys = await screen.findByRole("heading", { name: "Atajos" });
+    expect(keys.parentElement).toHaveTextContent(/activar o apagar el micrófono/);
+  });
+
+  it("sin soporte del navegador el panel de atajos no ofrece el micrófono", async () => {
+    renderAt("/leer/d1");
+    const keys = await screen.findByRole("heading", { name: "Atajos" });
+    expect(keys.parentElement).not.toHaveTextContent(/micrófono/);
+  });
+
+  it("con los comandos por voz apagados no hay micrófono ni barra, aunque el navegador pueda", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.settings", JSON.stringify({ schemaVersion: 2, settings: {} }));
+    renderAt("/leer/d1");
+    await h1();
+    expect(screen.queryByRole("button", { name: /Micrófono/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Dictar pregunta/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Micrófono apagado/)).not.toBeInTheDocument();
+    expect(FakeRecognition.instances).toHaveLength(0);
+  });
+});
+
+describe("micrófono: un solo reconocedor a la vez y avisos honestos", () => {
+  const busOf = async () => (await import("@/lib/speech")).speechBus;
+
+  beforeEach(() => {
+    withOnboarding();
+    withAI();
+    FakeRecognition.instances = [];
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const withMode = (voiceCommands: "push" | "continuous"): void =>
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceCommands } }),
+    );
+
+  /** La región anunciada de la barra de comandos: solo resultados y errores, nunca el estado del micrófono. */
+  const voiceStatus = (): HTMLElement =>
+    screen
+      .getByText(/Micrófono apagado|Escuchando…/)
+      .parentElement!.querySelector<HTMLElement>('[role="status"]')!;
+
+  it("dictar en manos libres frena los comandos, escribe lo dicho sin ejecutarlo y los retoma", async () => {
+    withMode("continuous");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    const commands = FakeRecognition.instances[0]!;
+    expect(commands.continuous).toBe(true);
+    expect(commands.starts).toBe(1);
+
+    await user.click(screen.getByRole("button", { name: "Dictar pregunta" }));
+    const dictation = FakeRecognition.instances[1]!;
+    expect(dictation.starts).toBe(1);
+    expect(commands.aborts).toBe(1); // uno solo escucha a la vez
+    expect(screen.getByRole("button", { name: "Micrófono" })).toHaveAttribute("aria-pressed", "false");
+
+    act(() => dictation.emitFinal("resumir"));
+    expect(screen.getByLabelText("Escribí tu pregunta")).toHaveValue("resumir");
+    expect(calls("/ai/chat")).toHaveLength(0);
+
+    const resumed = FakeRecognition.instances[2]!; // los comandos vuelven solos
+    expect(resumed.continuous).toBe(true);
+    expect(resumed.starts).toBe(1);
+    expect(screen.getByRole("button", { name: "Micrófono" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("dictar «preguntar …» solo lo escribe y en modo por botón los comandos no se retoman", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    await user.click(screen.getByRole("button", { name: "Dictar pregunta" }));
+    expect(FakeRecognition.instances[0]!.aborts).toBe(1);
+    act(() => FakeRecognition.instances[1]!.emitFinal("preguntar qué es la mitosis"));
+    expect(screen.getByLabelText("Escribí tu pregunta")).toHaveValue("preguntar qué es la mitosis");
+    expect(calls("/ai/chat")).toHaveLength(0);
+    expect(FakeRecognition.instances).toHaveLength(2);
+  });
+
+  it("encender los comandos mientras se dicta corta el dictado", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Dictar pregunta" }));
+    await user.click(screen.getByRole("button", { name: "Micrófono" }));
+    expect(FakeRecognition.instances[0]!.aborts).toBe(1);
+    expect(FakeRecognition.instances[1]!.starts).toBe(1);
+  });
+
+  it("«Dictar pregunta» con el dictado en curso lo detiene en vez de reiniciarlo", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const dictate = await screen.findByRole("button", { name: "Dictar pregunta" });
+    await user.click(dictate);
+    expect(dictate).toHaveAttribute("aria-pressed", "true");
+    await user.click(dictate);
+    expect(FakeRecognition.instances).toHaveLength(1);
+    expect(FakeRecognition.instances[0]!.stops).toBe(1);
+    act(() => FakeRecognition.instances[0]!.emitEnd());
+    expect(dictate).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("en modo por botón la app se calla antes de abrir el micrófono (comandos y dictado)", async () => {
+    withMode("push");
+    const bus = await busOf();
+    const silence = vi.spyOn(bus, "silence");
+    const start = vi.spyOn(FakeRecognition.prototype, "start");
+    try {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+      expect(silence).toHaveBeenCalled();
+      expect(silence.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[0]!);
+
+      silence.mockClear();
+      start.mockClear();
+      await user.click(screen.getByRole("button", { name: "Dictar pregunta" }));
+      expect(silence).toHaveBeenCalled();
+      expect(silence.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[0]!);
+    } finally {
+      silence.mockRestore();
+      start.mockRestore();
+    }
+  });
+
+  it("manos libres: las acciones de IA sueltas se ignoran y con «asistente» funcionan", async () => {
+    withMode("continuous");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    const rec = FakeRecognition.instances[0]!;
+    act(() => rec.emitFinal("Resumen"));
+    expect(calls("/ai/chat")).toHaveLength(0);
+    act(() => rec.emitFinal("asistente resumir"));
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "summarize" }));
+  });
+
+  it("manos libres: una frase que no es un comando nunca se escribe en la región anunciada", async () => {
+    withMode("continuous");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    const rec = FakeRecognition.instances[0]!;
+    act(() => rec.emitFinal("hola mundo esto lo dice otra persona"));
+    act(() => rec.emitFinal("Resumen"));
+    expect(screen.queryByText(/hola mundo/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No entendí/)).not.toBeInTheDocument();
+    expect(voiceStatus()).toBeEmptyDOMElement();
+    // Lo entendido sí se anuncia.
+    act(() => rec.emitFinal("siguiente"));
+    expect(voiceStatus()).toHaveTextContent('"siguiente" ✓');
+  });
+
+  it("modo por botón: lo no entendido sí se muestra", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("hola mundo"));
+    expect(voiceStatus()).toHaveTextContent('"hola mundo" ✗ No entendí ese comando');
+  });
+
+  it("«Escuchando…» y «Micrófono apagado» son solo visuales: no están en la región anunciada", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const mic = await screen.findByRole("button", { name: "Micrófono" });
+    const off = screen.getByText("Micrófono apagado");
+    expect(off.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(voiceStatus()).not.toHaveTextContent(/Micrófono apagado/);
+    await user.click(mic);
+    const on = screen.getByText("Escuchando…");
+    expect(on.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(voiceStatus()).not.toHaveTextContent(/Escuchando/);
+  });
+
+  it("el dictado anuncia lo escrito para quien no ve la pantalla", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Dictar pregunta" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("qué dice la ley"));
+    expect(
+      await screen.findByText("Escribiste: qué dice la ley", { selector: "[role=status]" }),
+    ).toBeInTheDocument();
+  });
+
+  it("con un diálogo abierto, «siguiente» por voz no saca el foco del diálogo", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    const rec = FakeRecognition.instances[0]!;
+    act(() => rec.emitFinal("siguiente"));
+    act(() => rec.emitFinal("siguiente sección"));
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(voiceStatus()).toHaveTextContent('"siguiente sección" ✗');
+    // «detener» sigue valiendo con un diálogo abierto.
+    act(() => rec.emitFinal("detener"));
+    expect(voiceStatus()).toHaveTextContent('"detener" ✓');
+  });
+
+  it("«leer» y «continuar» arrancan desde el cursor; con la lectura en marcha no la reinician", async () => {
+    withMode("push");
+    const playFrom = vi.spyOn(ReadAloudEngine.prototype, "playFrom");
+    const play = vi.spyOn(ReadAloudEngine.prototype, "play");
+    try {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-2");
+      const rec = FakeRecognition.instances[0]!;
+      act(() => rec.emitFinal("continuar"));
+      expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+      expect(playFrom).toHaveBeenCalledTimes(1);
+      expect(playFrom).toHaveBeenCalledWith(2);
+      // Ya está leyendo: otro «continuar» no vuelve a empezar el párrafo.
+      act(() => rec.emitFinal("continuar"));
+      expect(playFrom).toHaveBeenCalledTimes(1);
+      expect(play).not.toHaveBeenCalled();
+    } finally {
+      playFrom.mockRestore();
+      play.mockRestore();
+    }
+  });
+
+  it("la barra no cambia su texto anunciado cuando la app empieza o termina de hablar", async () => {
+    withMode("continuous");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    const live = voiceStatus();
+    const before = live.textContent;
+    const bus = await busOf();
+    const owner = { onInterrupted: () => {} };
+    act(() => bus.claim(owner));
+    expect(live.textContent).toBe(before);
+    expect(screen.getByText(/En pausa mientras habla la app/).closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(live).not.toHaveTextContent(/En pausa/);
+    act(() => bus.release(owner));
+    expect(live.textContent).toBe(before);
+    expect(screen.queryByText(/En pausa mientras habla la app/)).not.toBeInTheDocument();
+  });
+
+  it("«braille» no muestra un ✓ falso: avisa que todavía no está disponible", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("braille"));
+    expect(screen.getByText(/"braille" ✗ El Braille todavía no está disponible/)).toBeInTheDocument();
+    expect(screen.queryByText(/"braille" ✓/)).not.toBeInTheDocument();
+  });
+
+  it("una pregunta mientras el asistente responde no se marca como enviada", async () => {
+    withMode("push");
+    let finish: () => void = () => {};
+    request.mockImplementation((c: Parameters<typeof fakeBackend>[0]) =>
+      c.url === "/ai/chat"
+        ? new Promise((resolve) => {
+            finish = () => resolve({ answer: "listo", provider: "gemini", model: MODEL });
+          })
+        : fakeBackend(c),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    const rec = FakeRecognition.instances[0]!;
+    act(() => rec.emitFinal("resumir"));
+    await waitFor(() => expect(calls("/ai/chat")).toHaveLength(1));
+    act(() => rec.emitFinal("preguntar qué es la mitosis"));
+    expect(
+      screen.getByText(/"preguntar qué es la mitosis" ✗ Esperá a que termine la respuesta/),
+    ).toBeInTheDocument();
+    expect(calls("/ai/chat")).toHaveLength(1);
+    await act(async () => finish());
+  });
+
+  it("en modo por botón, no oír nada se dice", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    act(() => FakeRecognition.instances[0]!.emitError("no-speech"));
+    expect(screen.getByText("No te escuché")).toBeInTheDocument();
+  });
+
+  it("el dictado avisa «No te escuché» en una región de estado que ya existe vacía", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const panel = await screen.findByRole("complementary", { name: "Panel de asistencia IA" });
+    const status = within(panel).getByRole("status");
+    expect(status).toBeEmptyDOMElement();
+    await user.click(within(panel).getByRole("button", { name: "Dictar pregunta" }));
+    act(() => FakeRecognition.instances[0]!.emitError("no-speech"));
+    expect(status).toHaveTextContent("No te escuché");
   });
 });

@@ -27,7 +27,7 @@ Qué protegemos, de qué, con qué, y qué queda sin resolver. Las decisiones es
 
 **Que, aun con una inyección, no se pueda hacer daño** (`vercel.json`)
 - CSP: `script-src 'self'` (sin scripts en línea ni inyectados), `connect-src 'self'` (sin enviar datos a otros sitios), `img-src 'self' data: blob:`, `form-action 'self'`, `frame-ancestors 'none'`, `object-src 'none'`.
-- `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` sin cámara, micrófono ni ubicación.
+- `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()`: sin cámara, ubicación ni pagos, y el micrófono solo para el propio sitio (comandos y dictado por voz; el audio lo procesa el servicio de reconocimiento del navegador, con consentimiento previo).
 - **Límite conocido de la CSP:** no impide que un script redirija la página a otro sitio con datos en la dirección.
 
 **Que la key no esté al alcance de la página** (ADR 0003)

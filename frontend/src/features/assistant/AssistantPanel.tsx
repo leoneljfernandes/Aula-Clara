@@ -2,43 +2,85 @@ import { type ReactNode, type RefObject, useEffect, useRef, useState } from "rea
 import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
-import { hasTTS, speakOnce } from "@/lib/speech";
+import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
+import { useAnnounce } from "@/lib/announcer";
+import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { AISettingsDialog } from "./AISettingsDialog";
 import { useAICredentials } from "./credentials";
 import { LIMITS } from "./errors";
 import { providerLabel } from "./providers";
 import { ProviderBadge } from "./ProviderBadge";
-import type { ChatAction } from "./api";
+import { explainPrompt, QUICK_ACTIONS } from "./quickActions";
 import type { Chat } from "./useChat";
+import { useDictation } from "./useDictation";
 
-const SHORTCUTS: ReadonlyArray<readonly [string, ChatAction]> = [
-  ["Resumir esta página", "summarize"],
-  ["Explicar conceptos clave", "key_concepts"],
-  ["Crear 3 preguntas de repaso", "quiz"],
-];
+const TRUNCATED_NOTICE = "La respuesta se cortó porque el modelo llegó a su límite de largo.";
 
 interface AssistantPanelProps {
   chat: Chat;
   inputRef: RefObject<HTMLInputElement | null>;
   selection: string;
   rate: number;
+  /** Guía por voz: lee en voz alta cada respuesta nueva de la IA al llegar. */
+  autoSpeak: boolean;
+  /** Con los comandos por voz activos, se ofrece dictar la pregunta (si el navegador sabe reconocer voz). */
+  dictation: boolean;
+  /** Los comandos por voz están en manos libres: el aviso de consentimiento suma que el micrófono queda abierto. */
+  handsFree?: boolean;
 }
 
-export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPanelProps): ReactNode {
+export function AssistantPanel({
+  chat,
+  inputRef,
+  selection,
+  rate,
+  autoSpeak,
+  dictation,
+  handsFree = false,
+}: AssistantPanelProps): ReactNode {
   const [draft, setDraft] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const credentials = useAICredentials();
   const logRef = useRef<HTMLDivElement>(null);
+  const announce = useAnnounce();
   const { messages, typing, send } = chat;
+
+  const submit = (): void => {
+    const text = draft.trim();
+    if (!text || typing) return;
+    void send(text, "free");
+    setDraft("");
+  };
+  const dictate = useDictation({
+    onText: (text) => {
+      setDraft((d) => (d.trim() ? `${d.trim()} ${text}` : text));
+      // Quien no ve la pantalla se entera de qué quedó escrito.
+      announce(`Escribiste: ${text}`);
+    },
+    onSend: submit,
+  });
 
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, typing]);
 
-  const explain = (): void =>
-    void send(`Explicame este párrafo con palabras más simples: «${selection}»`, "simplify", { selection });
+  // «Respuesta nueva» = la lista creció desde el render anterior. Así volver a renderizar no relee, y
+  // el saludo (que ya está en la lista al montar) no cuenta. La referencia se actualiza siempre, también
+  // con la guía apagada: si se prende después, no se lee lo que ya estaba.
+  const seenCount = useRef(messages.length);
+  useEffect(() => {
+    const grew = messages.length > seenCount.current;
+    seenCount.current = messages.length;
+    const last = messages[messages.length - 1];
+    // También los errores: quien se guía por voz tiene que enterarse de que el pedido falló.
+    if (autoSpeak && grew && last?.role === "ai") {
+      speakOnce(last.truncated ? withNotice(last.text, TRUNCATED_NOTICE) : last.text, rate);
+    }
+  }, [messages, autoSpeak, rate]);
+
+  const explain = (): void => void send(explainPrompt(selection), "simplify", { selection });
 
   return (
     <section aria-labelledby="asist-title" className="flex h-full min-h-[560px] flex-col lg:min-h-0">
@@ -97,8 +139,7 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
               )}
               {m.truncated && (
                 <p className="mt-2 text-sm text-[var(--muted)]">
-                  ⚠️ La respuesta se cortó porque el modelo llegó a su límite de largo. Pedí algo más acotado,
-                  por ejemplo un fragmento más corto.
+                  ⚠️ {TRUNCATED_NOTICE} Pedí algo más acotado, por ejemplo un fragmento más corto.
                 </p>
               )}
               {m.needsSetup && (
@@ -144,7 +185,7 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
           </div>
         )}
         <div className="flex flex-wrap gap-2" role="group" aria-label="Atajos de consulta">
-          {SHORTCUTS.map(([label, action]) => (
+          {QUICK_ACTIONS.map(([label, action]) => (
             <button
               key={action}
               type="button"
@@ -159,12 +200,9 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            const text = draft.trim();
-            if (!text) return;
-            void send(text, "free");
-            setDraft("");
+            submit();
           }}
-          className="flex gap-2"
+          className="flex flex-wrap gap-2"
         >
           <label htmlFor="chat-input" className="sr-only">
             Escribí tu pregunta
@@ -188,7 +226,31 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
           >
             Enviar
           </Button>
+          {dictation && dictate.available && (
+            <Button
+              type="button"
+              className="min-h-[52px] aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
+              aria-pressed={dictate.listening}
+              onClick={dictate.listening ? dictate.stop : dictate.start}
+            >
+              <span aria-hidden="true">🎙</span> Dictar pregunta
+            </Button>
+          )}
         </form>
+        {dictation && dictate.available && (
+          // Siempre montada: un aviso que aparece junto con su región de estado a veces no se anuncia.
+          <p role="status" className="text-base">
+            {dictate.error}
+          </p>
+        )}
+        {dictate.consentOpen && (
+          <VoiceConsentDialog
+            kind="commands"
+            continuous={handsFree}
+            onAccept={dictate.acceptConsent}
+            onCancel={dictate.cancelConsent}
+          />
+        )}
       </div>
     </section>
   );

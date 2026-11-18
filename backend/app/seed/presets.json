@@ -1,0 +1,19 @@
+[
+  {"id": "dislexia", "title": "Dislexia", "icon": "Aa",
+   "description": "Fuente especializada, mayor interlineado y más espacio entre letras.",
+   "tags": ["OpenDyslexic", "Interlineado amplio", "Fondo sepia"],
+   "settings": {"font": "dyslexic", "font_size": 21, "line_height": 1.9, "theme": "sepia", "audio_focus": false}},
+  {"id": "vision", "title": "Visión reducida", "icon": "A+",
+   "description": "Alto contraste y texto grande para leer sin esfuerzo.",
+   "tags": ["Texto 28 px", "Negro y amarillo", "Tipografía legible"],
+   "settings": {"font": "atkinson", "font_size": 28, "line_height": 1.7, "theme": "contraste", "audio_focus": false}},
+  {"id": "fatiga", "title": "Fatiga visual", "icon": "☾",
+   "description": "Modo oscuro cálido y la lectura en voz alta siempre a mano.",
+   "tags": ["Modo oscuro cálido", "Audio destacado", "Verdana"],
+   "settings": {"font": "verdana", "font_size": 20, "line_height": 1.8, "theme": "oscuro", "audio_focus": true}},
+  {"id": "ceguera", "title": "Ceguera", "icon": "⠿",
+   "description": "Navegación por teclado y por voz, y lectura en voz alta del documento y de las respuestas.",
+   "tags": ["Teclado y voz", "Lectura en voz alta", "Guía por voz opcional"],
+   "settings": {"font": "atkinson", "font_size": 24, "line_height": 1.8, "theme": "contraste", "audio_focus": true,
+                "voice_guide": false, "voice_commands": "push", "single_key_shortcuts": false}}
+]

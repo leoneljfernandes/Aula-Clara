@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/Button";
+import { Stepper } from "@/components/Stepper";
 import {
   FONTS,
   type FontId,
@@ -9,11 +10,23 @@ import {
   RATES,
   ThemeButtons,
   clamp,
+  controlsFor,
+  LINE_HEIGHT,
+  SettingsControls,
   usePreferences,
 } from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
+import { describeKeys, KEYMAP, type Shortcut } from "@/lib/keymap";
 import { hasTTS } from "@/lib/speech";
+import { speechRecognitionAvailable } from "@/lib/voice/recognizer";
 import type { ReadAloud } from "@/lib/useReadAloud";
+
+/** Qué capacidades hay hoy. La lectura en voz alta siempre está (sin voz del navegador, se simula el avance). */
+const capabilities = (voiceCommands: boolean): Record<NonNullable<Shortcut["requires"]>, boolean> => ({
+  audio: true,
+  voice: voiceCommands && speechRecognitionAvailable(),
+  braille: false,
+});
 
 const H3 = "mb-3 text-base font-bold tracking-wide text-[var(--muted)] uppercase";
 
@@ -88,7 +101,16 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
     updateSettings({ fontSize: next });
     announce(`Tamaño ${next} píxeles`);
   };
+  const hasReaderControls = controlsFor("reader").length > 0;
   const audioSection = <AudioSection audio={audio} total={total} />;
+  const has = capabilities(settings.voiceCommands !== "off");
+  const shortcuts = KEYMAP.filter((s) => !s.requires || has[s.requires])
+    .map((s) => ({
+      id: s.id,
+      label: s.label,
+      keys: describeKeys(s, { singleKey: settings.singleKeyShortcuts }),
+    }))
+    .filter((s) => s.keys !== "");
 
   return (
     <div className="space-y-8 p-5">
@@ -118,21 +140,16 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
             A+
           </Button>
         </div>
-        <label htmlFor="lh2" className="mt-4 mb-1 flex justify-between text-base font-bold">
-          <span>Interlineado</span>
-          <span>{settings.lineHeight.toFixed(1)}</span>
-        </label>
-        <input
-          id="lh2"
-          type="range"
-          min="1.3"
-          max="2.4"
-          step="0.1"
-          value={settings.lineHeight}
-          onChange={(e) => updateSettings({ lineHeight: +e.target.value })}
-          className="w-full"
-          style={{ accentColor: "var(--accent)", height: 32 }}
-        />
+        <div className="mt-4">
+          <Stepper
+            id="lh2"
+            label="Interlineado"
+            value={settings.lineHeight}
+            {...LINE_HEIGHT}
+            format={(v) => v.toFixed(1)}
+            onChange={(v) => updateSettings({ lineHeight: v })}
+          />
+        </div>
       </section>
       <section aria-labelledby="t-theme">
         <h3 id="t-theme" className={H3}>
@@ -164,22 +181,27 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
           ))}
         </select>
       </section>
+      {hasReaderControls && (
+        <section aria-labelledby="t-a11y">
+          <h3 id="t-a11y" className={H3}>
+            Ajustes de accesibilidad
+          </h3>
+          <div className="space-y-4">
+            <SettingsControls placement="reader" />
+          </div>
+        </section>
+      )}
       {!settings.audioFocus && audioSection}
       <section aria-labelledby="t-keys" className="text-base">
         <h3 id="t-keys" className={H3}>
           Atajos
         </h3>
         <ul className="space-y-1 text-[var(--muted)]">
-          <li>
-            <kbd className="font-bold text-[var(--fg)]">Alt+P</kbd> leer / pausar
-          </li>
-          <li>
-            <kbd className="font-bold text-[var(--fg)]">Alt+= / Alt+−</kbd> tamaño
-          </li>
-          <li>
-            <kbd className="font-bold text-[var(--fg)]">Alt+T</kbd> tema ·{" "}
-            <kbd className="font-bold text-[var(--fg)]">Alt+A</kbd> asistente
-          </li>
+          {shortcuts.map(({ id, label, keys }) => (
+            <li key={id}>
+              <kbd className="font-bold text-[var(--fg)]">{keys}</kbd> {label.toLowerCase()}
+            </li>
+          ))}
         </ul>
       </section>
     </div>

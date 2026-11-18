@@ -3,24 +3,90 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import { Button } from "@/components/Button";
 import { Logo } from "@/components/Logo";
+import { Stepper } from "@/components/Stepper";
 import { useAnnounce } from "@/lib/announcer";
 
-import { clamp, FONTS, MAX_FS, MIN_FS, PROFILES, type Profile, readingStyle } from "./config";
+import { FONTS, MAX_FS, MIN_FS, readingStyle } from "./config";
 import { safeNext } from "./guards";
-import { usePreferences } from "./PreferencesProvider";
+import { applyPreset, matchPreset, type Preset, type PresetCatalog } from "./presets";
+import { usePreferences, useSettingsDraft } from "./PreferencesProvider";
+import { LINE_HEIGHT } from "./settings";
+import { SettingsControls } from "./SettingsControls";
 import { ThemeButtons } from "./ThemeButtons";
 
 const STEPS = ["Elegí tu perfil", "Ajustá los detalles"] as const;
 const FIELD =
   "w-full min-h-[52px] px-3 rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] text-lg font-bold";
 
+type ProfileOption = Pick<Preset, "id" | "title" | "icon" | "description" | "tags">;
+
+/**
+ * «Personalizado» no es un preset del backend: es una opción fija que no cambia los ajustes.
+ * Su id `custom` está reservado: un preset del catálogo con ese id se descarta.
+ */
+const CUSTOM: ProfileOption = {
+  id: "custom",
+  title: "Personalizado",
+  icon: "⚙",
+  description: "Elegí vos el tamaño, los colores y la tipografía.",
+  tags: ["Control total"],
+};
+
+function ProfileCard({
+  option,
+  active,
+  onChoose,
+}: {
+  option: ProfileOption;
+  active: boolean;
+  onChoose: () => void;
+}): ReactNode {
+  return (
+    <label
+      className={`relative block cursor-pointer rounded-2xl border-2 p-5 ${active ? "border-[var(--accent)] bg-[var(--soft)]" : "border-[var(--border)] hover:bg-[var(--soft)]"}`}
+      style={active ? { boxShadow: "inset 0 0 0 2px var(--accent)" } : undefined}
+    >
+      <input
+        type="radio"
+        name="perfil"
+        value={option.id}
+        checked={active}
+        onChange={onChoose}
+        className="absolute top-5 right-5 h-6 w-6"
+        style={{ accentColor: "var(--accent)" }}
+      />
+      <span
+        aria-hidden="true"
+        className="mb-4 grid h-14 w-14 place-items-center rounded-xl bg-[var(--accent)] text-2xl font-bold text-[var(--onAccent)]"
+      >
+        {option.icon}
+      </span>
+      <span className="mb-1 block text-2xl font-bold">Perfil {option.title}</span>
+      <span className="mb-3 block text-lg text-[var(--muted)]">{option.description}</span>
+      <span className="flex flex-wrap gap-2">
+        {option.tags.map((t) => (
+          <span key={t} className="rounded-full border-2 border-[var(--border)] px-3 py-1 text-sm font-bold">
+            {t}
+          </span>
+        ))}
+      </span>
+    </label>
+  );
+}
+
 function ProfileStep({
+  presets,
+  unavailable,
   selected,
   onChoose,
   onNext,
 }: {
-  selected: Profile["id"] | null;
-  onChoose: (p: Profile) => void;
+  presets: readonly Preset[];
+  /** Sin catálogo ni caché: solo queda «Personalizado» y se explica por qué. */
+  unavailable: boolean;
+  selected: string | null;
+  /** `preset` es `null` para «Personalizado». */
+  onChoose: (id: string, preset: Preset | null) => void;
   onNext: () => void;
 }): ReactNode {
   return (
@@ -31,47 +97,27 @@ function ProfileStep({
       <p className="mb-8 text-xl text-[var(--muted)]">
         Lo configurás una sola vez. Cada documento que subas se va a abrir con estas preferencias.
       </p>
+      {unavailable && (
+        <p role="status" className="mb-6 rounded-xl border-2 border-[var(--border)] p-4 text-lg">
+          No pudimos cargar los perfiles sugeridos. Podés seguir con «Personalizado» y ajustar todo a mano.
+        </p>
+      )}
       <fieldset>
         <legend className="sr-only">Perfil de accesibilidad</legend>
         <div className="grid gap-4 sm:grid-cols-2">
-          {PROFILES.map((p) => {
-            const active = selected === p.id;
-            return (
-              <label
-                key={p.id}
-                className={`relative block cursor-pointer rounded-2xl border-2 p-5 ${active ? "border-[var(--accent)] bg-[var(--soft)]" : "border-[var(--border)] hover:bg-[var(--soft)]"}`}
-                style={active ? { boxShadow: "inset 0 0 0 2px var(--accent)" } : undefined}
-              >
-                <input
-                  type="radio"
-                  name="perfil"
-                  value={p.id}
-                  checked={active}
-                  onChange={() => onChoose(p)}
-                  className="absolute top-5 right-5 h-6 w-6"
-                  style={{ accentColor: "var(--accent)" }}
-                />
-                <span
-                  aria-hidden="true"
-                  className="mb-4 grid h-14 w-14 place-items-center rounded-xl bg-[var(--accent)] text-2xl font-bold text-[var(--onAccent)]"
-                >
-                  {p.icon}
-                </span>
-                <span className="mb-1 block text-2xl font-bold">Perfil {p.title}</span>
-                <span className="mb-3 block text-lg text-[var(--muted)]">{p.desc}</span>
-                <span className="flex flex-wrap gap-2">
-                  {p.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-full border-2 border-[var(--border)] px-3 py-1 text-sm font-bold"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </span>
-              </label>
-            );
-          })}
+          {presets.map((p) => (
+            <ProfileCard
+              key={p.id}
+              option={p}
+              active={selected === p.id}
+              onChoose={() => onChoose(p.id, p)}
+            />
+          ))}
+          <ProfileCard
+            option={CUSTOM}
+            active={selected === CUSTOM.id}
+            onChoose={() => onChoose(CUSTOM.id, null)}
+          />
         </div>
       </fieldset>
       <div className="mt-8 flex justify-end">
@@ -95,39 +141,24 @@ function DetailsStep({ onBack, onFinish }: { onBack: () => void; onFinish: () =>
       </p>
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="space-y-7">
-          <div>
-            <label htmlFor="fs" className="mb-2 flex justify-between text-lg font-bold">
-              <span>Tamaño de fuente</span>
-              <span>{settings.fontSize} px</span>
-            </label>
-            <input
-              id="fs"
-              type="range"
-              min={MIN_FS}
-              max={MAX_FS}
-              value={settings.fontSize}
-              onChange={(e) => updateSettings({ fontSize: clamp(+e.target.value, MIN_FS, MAX_FS) })}
-              className="w-full"
-              style={{ accentColor: "var(--accent)", height: 32 }}
-            />
-          </div>
-          <div>
-            <label htmlFor="lh" className="mb-2 flex justify-between text-lg font-bold">
-              <span>Interlineado</span>
-              <span>{settings.lineHeight.toFixed(1)}</span>
-            </label>
-            <input
-              id="lh"
-              type="range"
-              min="1.3"
-              max="2.4"
-              step="0.1"
-              value={settings.lineHeight}
-              onChange={(e) => updateSettings({ lineHeight: +e.target.value })}
-              className="w-full"
-              style={{ accentColor: "var(--accent)", height: 32 }}
-            />
-          </div>
+          <Stepper
+            id="fs"
+            label="Tamaño de fuente"
+            value={settings.fontSize}
+            min={MIN_FS}
+            max={MAX_FS}
+            step={1}
+            format={(v) => `${v} px`}
+            onChange={(v) => updateSettings({ fontSize: v })}
+          />
+          <Stepper
+            id="lh"
+            label="Interlineado"
+            value={settings.lineHeight}
+            {...LINE_HEIGHT}
+            format={(v) => v.toFixed(1)}
+            onChange={(v) => updateSettings({ lineHeight: v })}
+          />
           <div>
             <label htmlFor="ff" className="mb-2 block text-lg font-bold">
               Tipografía
@@ -149,16 +180,7 @@ function DetailsStep({ onBack, onFinish }: { onBack: () => void; onFinish: () =>
             <span className="mb-2 block text-lg font-bold">Colores</span>
             <ThemeButtons compact />
           </div>
-          <label className="flex min-h-12 cursor-pointer items-center gap-3 text-lg font-bold">
-            <input
-              type="checkbox"
-              className="h-6 w-6"
-              style={{ accentColor: "var(--accent)" }}
-              checked={settings.audioFocus}
-              onChange={(e) => updateSettings({ audioFocus: e.target.checked })}
-            />
-            Destacar la lectura en voz alta
-          </label>
+          <SettingsControls placement="onboarding" />
         </div>
         <div>
           <span className="mb-2 block text-lg font-bold">Vista previa</span>
@@ -186,24 +208,37 @@ function DetailsStep({ onBack, onFinish }: { onBack: () => void; onFinish: () =>
   );
 }
 
-/** Wizard de 2 pasos: elegir perfil y ajustar detalles con vista previa en vivo. */
-export function OnboardingWizard(): ReactNode {
-  const { profile, updateSettings, saveProfile } = usePreferences();
+/**
+ * Wizard de 2 pasos: elegir perfil (presets del catálogo del backend o «Personalizado») y ajustar
+ * detalles con vista previa en vivo. Qué perfil se eligió no se guarda: solo los ajustes.
+ *
+ * Todo lo que se cambia acá es un borrador: recorrer los perfiles no pisa los ajustes guardados de
+ * quien vuelve a /perfil. Se guarda solo con «Guardar y continuar»; salir sin terminar los restaura.
+ */
+export function OnboardingWizard({ catalog }: { catalog: PresetCatalog }): ReactNode {
+  useSettingsDraft();
+  const { settings, onboarded, replaceSettings, completeOnboarding } = usePreferences();
   const announce = useAnnounce();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [step, setStep] = useState<1 | 2>(1);
-  const [selected, setSelected] = useState<Profile["id"] | null>(profile);
-  const choose = (p: Profile): void => {
-    setSelected(p.id);
-    if (p.preset) {
-      updateSettings(p.preset);
-      announce(`Perfil ${p.title} aplicado`);
+  // El id `custom` es de «Personalizado»: un preset que lo use chocaría con la opción fija.
+  const presets = catalog.presets.filter((p) => p.id !== CUSTOM.id);
+  // Al volver a /perfil se marca el preset que coincide con los ajustes actuales, o «Personalizado».
+  const [selected, setSelected] = useState<string | null>(() =>
+    onboarded ? (matchPreset(presets, settings) ?? CUSTOM.id) : null,
+  );
+  // «Personalizado» (`preset` null) no cambia nada: deja aplicado lo que haya.
+  const choose = (id: string, preset: Preset | null): void => {
+    setSelected(id);
+    if (preset) {
+      replaceSettings(applyPreset(preset));
+      announce(`Perfil ${preset.title} aplicado`);
     }
   };
   const finish = (): void => {
     if (!selected) return;
-    saveProfile(selected);
+    completeOnboarding();
     announce("Preferencias guardadas");
     void navigate(safeNext(params.get("next")) ?? "/biblioteca");
   };
@@ -230,7 +265,13 @@ export function OnboardingWizard(): ReactNode {
           ))}
         </ol>
         {step === 1 ? (
-          <ProfileStep selected={selected} onChoose={choose} onNext={() => setStep(2)} />
+          <ProfileStep
+            presets={presets}
+            unavailable={catalog.source === "unavailable"}
+            selected={selected}
+            onChoose={choose}
+            onNext={() => setStep(2)}
+          />
         ) : (
           <DetailsStep onBack={() => setStep(1)} onFinish={finish} />
         )}

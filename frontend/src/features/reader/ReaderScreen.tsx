@@ -3,15 +3,31 @@ import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
-import { AssistantPanel, useChat } from "@/features/assistant";
+import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
+import { AssistantPanel, explainPrompt, quickActionLabel, useChat } from "@/features/assistant";
 import { type Article, libraryApi, type LibraryDocument } from "@/features/library";
-import { readingStyle, usePreferences } from "@/features/preferences";
+import {
+  clamp,
+  MAX_FS,
+  MIN_FS,
+  RATES,
+  readingStyle,
+  THEME_ORDER,
+  THEMES,
+  usePreferences,
+} from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
+import { speechBus } from "@/lib/speech";
 import { useReadAloud } from "@/lib/useReadAloud";
+import type { VoiceCommand } from "@/lib/voice/commands";
 
+import { findBlock, readableIndex } from "./blockNav";
 import { DocumentView } from "./DocumentView";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
+import { useReaderNavigation } from "./useReaderNavigation";
 import { ToolsPanel } from "./ToolsPanel";
+import { useVoiceCommands } from "./useVoiceCommands";
+import { VoiceCommandBar } from "./VoiceCommandBar";
 
 export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: Article }): ReactNode {
   const { settings, updateSettings } = usePreferences();
@@ -37,7 +53,135 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     libraryApi.saveProgress(doc.id, p),
   );
 
-  useReaderHotkeys({ audio, settings, updateSettings, focusChat: () => chatInput.current?.focus() });
+  const nav = useReaderNavigation({
+    blocks: article.blocks,
+    audio,
+    voiceGuide: settings.voiceGuide,
+    activeBlock,
+    announce,
+  });
+
+  // Salir del lector no deja una voz pendiente hablando en otra pantalla.
+  useEffect(() => () => speechBus.silence(), []);
+
+  // Leer: desde el bloque del cursor si la lectura está detenida; en pausa se reanuda donde quedó.
+  const startReading = (): void => {
+    if (audio.status === "stopped") {
+      const from = readableIndex(article.blocks, nav.cursor);
+      if (from !== null) return audio.playFrom(from);
+    }
+    audio.play();
+  };
+
+  // Un único punto de entrada para el Braille (teclado y voz): el plan 03 reemplaza su cuerpo.
+  const openBraille = (): string => {
+    const notice = "El Braille todavía no está disponible";
+    announce(notice);
+    return notice;
+  };
+
+  // Explica más simple el bloque del cursor (el plan 04 lo extiende a un bloque elegido).
+  const simplifyBlock = (): void => {
+    const block = article.blocks[nav.cursor];
+    if (block === undefined || block.type === "figure") {
+      announce("Elegí un párrafo primero (Alt+↓ o J).");
+      return;
+    }
+    void chat.send(explainPrompt(block.text), "simplify", { selection: block.text });
+  };
+
+  const runVoiceCommand = (command: VoiceCommand): string | void => {
+    // Con un diálogo abierto el documento de atrás no se navega: solo se puede cortar la voz.
+    if (
+      document.querySelector('[aria-modal="true"]') &&
+      command.kind !== "stop" &&
+      command.kind !== "pause"
+    ) {
+      return "Hay un diálogo abierto";
+    }
+    // Una consulta a la IA con otra en curso se descartaría: se avisa en vez de marcarla como hecha.
+    const askAI = (...args: Parameters<typeof chat.send>): string | void => {
+      if (chat.typing) return "Esperá a que termine la respuesta";
+      void chat.send(...args);
+    };
+    switch (command.kind) {
+      case "play":
+        // Ya leyendo no se reinicia el párrafo.
+        if (audio.status !== "playing") startReading();
+        return;
+      case "pause":
+        return audio.pause();
+      case "stop":
+        return audio.stop();
+      case "nextBlock":
+        return nav.move("any", 1);
+      case "prevBlock":
+        return nav.move("any", -1);
+      case "nextHeading":
+        return nav.move("h2", 1);
+      case "nextFigure":
+        return nav.move("figure", 1);
+      case "faster":
+      case "slower": {
+        const at = RATES.findIndex((r) => r === settings.rate);
+        const next =
+          RATES[Math.min(RATES.length - 1, Math.max(0, at + (command.kind === "faster" ? 1 : -1)))];
+        if (next === undefined) return;
+        updateSettings({ rate: next });
+        announce(`Velocidad x${String(next).replace(".", ",")}`);
+        return;
+      }
+      case "summarize":
+        return askAI(quickActionLabel("summarize"), "summarize");
+      case "keyConcepts":
+        return askAI(quickActionLabel("key_concepts"), "key_concepts");
+      case "quiz":
+        return askAI(quickActionLabel("quiz"), "quiz");
+      case "describeFigure": {
+        // La figura donde está el cursor o, si está en otro bloque, la que sigue.
+        const here = article.blocks[nav.cursor]?.type === "figure" ? nav.cursor : null;
+        const index = here ?? findBlock(article.blocks, nav.cursor, "figure", 1);
+        if (index === null) {
+          announce("No hay más gráficos");
+          return "No hay más gráficos";
+        }
+        document.getElementById(`fig-btn-${index}`)?.click();
+        return;
+      }
+      case "ask":
+        return askAI(command.question, "free");
+      case "openBraille":
+        return openBraille();
+    }
+  };
+  const voiceOn = settings.voiceCommands !== "off";
+  const voice = useVoiceCommands({ mode: settings.voiceCommands, onCommand: runVoiceCommand });
+  useReaderHotkeys({
+    singleKey: settings.singleKeyShortcuts,
+    handlers: {
+      playPause: () => (audio.status === "playing" ? audio.pause() : startReading()),
+      stop: audio.stop,
+      fontUp: () => updateSettings({ fontSize: clamp(settings.fontSize + 2, MIN_FS, MAX_FS) }),
+      fontDown: () => updateSettings({ fontSize: clamp(settings.fontSize - 2, MIN_FS, MAX_FS) }),
+      nextTheme: () => {
+        const next = THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length] ?? "claro";
+        updateSettings({ theme: next });
+        announce(`Tema ${THEMES[next].label}`);
+      },
+      focusAssistant: () => chatInput.current?.focus(),
+      summarize: () => void chat.send(quickActionLabel("summarize"), "summarize"),
+      keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
+      quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
+      simplifyBlock,
+      openBraille: () => void openBraille(),
+      silence: () => speechBus.silence(),
+      ...(voiceOn && voice.available ? { toggleMic: voice.toggle } : {}),
+      nextBlock: () => nav.move("any", 1),
+      prevBlock: () => nav.move("any", -1),
+      nextHeading: () => nav.move("h2", 1),
+      nextFigure: () => nav.move("figure", 1),
+    },
+  });
 
   useEffect(() => {
     if (activeBlock < 0) return;
@@ -48,9 +192,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
 
   const explainSelection = (): void => {
     hidePopover();
-    void chat.send(`Explicame este párrafo con palabras más simples: «${selection}»`, "simplify", {
-      selection,
-    });
+    void chat.send(explainPrompt(selection), "simplify", { selection });
   };
 
   return (
@@ -81,6 +223,15 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         <Button className="lg:hidden" onClick={() => document.getElementById("asistente")?.scrollIntoView()}>
           ✦ Asistente
         </Button>
+        {voiceOn && voice.available && (
+          <Button
+            aria-pressed={voice.listening}
+            onClick={voice.toggle}
+            className="aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
+          >
+            <span aria-hidden="true">🎙</span> Micrófono
+          </Button>
+        )}
         <Link
           to="/perfil"
           onClick={audio.stop}
@@ -89,6 +240,15 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           👤 Perfil
         </Link>
       </header>
+      {voiceOn && <VoiceCommandBar {...voice} />}
+      {voice.consentOpen && (
+        <VoiceConsentDialog
+          kind="commands"
+          continuous={settings.voiceCommands === "continuous"}
+          onAccept={voice.acceptConsent}
+          onCancel={voice.cancelConsent}
+        />
+      )}
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[290px_minmax(0,1fr)_390px]">
         <aside
@@ -104,6 +264,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             article={article}
             activeBlock={activeBlock}
             showListenButton={settings.audioFocus && audio.status === "stopped"}
+            autoSpeak={settings.voiceGuide}
+            rate={settings.rate}
             onListen={audio.play}
             onAskAboutFigure={() => void chat.send("¿Qué muestra el Gráfico 1?", "free")}
             style={readingStyle(settings)}
@@ -117,7 +279,15 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           aria-label="Panel de asistencia IA"
           className="flex flex-col border-t-2 border-[var(--border)] bg-[var(--panel)] lg:overflow-hidden lg:border-t-0 lg:border-l-2"
         >
-          <AssistantPanel chat={chat} inputRef={chatInput} selection={selection} rate={settings.rate} />
+          <AssistantPanel
+            chat={chat}
+            inputRef={chatInput}
+            selection={selection}
+            rate={settings.rate}
+            autoSpeak={settings.voiceGuide}
+            dictation={voiceOn}
+            handsFree={settings.voiceCommands === "continuous"}
+          />
         </aside>
       </div>
 

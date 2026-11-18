@@ -12,7 +12,7 @@ import {
   type Provider,
 } from "@/features/assistant";
 import { dataUrlToBlob, svgToJpeg } from "@/lib/extractors";
-import { hasTTS, speakOnce } from "@/lib/speech";
+import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { BarChart } from "./BarChart";
 
@@ -21,8 +21,16 @@ interface FigureBlockProps {
   caption: string;
   /** Párrafo que rodea a la figura: le da contexto a la IA. */
   context: string;
+  /** id del botón «Interpretar con IA»: el cursor de bloque lo enfoca al llegar a la figura. */
+  buttonId?: string;
+  /** Guía por voz: lee la descripción en voz alta apenas llega. */
+  autoSpeak: boolean;
+  /** Velocidad de la voz elegida en los ajustes. */
+  rate: number;
   onAskAssistant: () => void;
 }
+
+const TRUNCATED_NOTICE = "La descripción se cortó porque el modelo llegó a su límite de largo.";
 
 interface Result {
   text: string;
@@ -31,7 +39,15 @@ interface Result {
   truncated: boolean;
 }
 
-export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: FigureBlockProps): ReactNode {
+export function FigureBlock({
+  dataUrl,
+  caption,
+  context,
+  buttonId,
+  autoSpeak,
+  rate,
+  onAskAssistant,
+}: FigureBlockProps): ReactNode {
   const svgRef = useRef<SVGSVGElement>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -50,15 +66,23 @@ export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: Figur
   };
 
   const analyze = async (): Promise<void> => {
+    if (loading) return;
     if (result) return setOpen(true);
     setLoading(true);
     setFailure(null);
     try {
       const blob = await prepareImage();
       if (!blob) throw new ImageUnavailableError();
-      setResult(await describeImage(blob, context));
+      const described = await describeImage(blob, context);
+      setResult(described);
+      if (autoSpeak) {
+        speakOnce(described.truncated ? withNotice(described.text, TRUNCATED_NOTICE) : described.text, rate);
+      }
     } catch (error) {
-      setFailure({ message: describeApiError(error), needsSetup: needsAISetup(error) });
+      const message = describeApiError(error);
+      setFailure({ message, needsSetup: needsAISetup(error) });
+      // Quien se guía por voz tiene que enterarse de que falló, no esperar una descripción que no llega.
+      if (autoSpeak) speakOnce(message, rate);
     } finally {
       setLoading(false);
       setOpen(true);
@@ -78,12 +102,15 @@ export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: Figur
           <BarChart svgRef={svgRef} />
         )}
         <div className="absolute top-3 right-3">
+          {/* aria-disabled y no disabled: un botón deshabilitado pierde el foco (va a <body>) y el
+              diálogo no podría devolverlo al cerrarse. */}
           <button
+            id={buttonId}
             type="button"
             onClick={() => void analyze()}
-            disabled={loading}
+            aria-disabled={loading}
             aria-busy={loading}
-            className="inline-flex min-h-[52px] items-center gap-2 rounded-xl border-2 border-[var(--onAccent)] bg-[var(--accent)] px-5 text-[17px] font-bold text-[var(--onAccent)] shadow-lg disabled:cursor-wait"
+            className="inline-flex min-h-[52px] items-center gap-2 rounded-xl border-2 border-[var(--onAccent)] bg-[var(--accent)] px-5 text-[17px] font-bold text-[var(--onAccent)] shadow-lg aria-disabled:cursor-wait"
             style={{ fontFamily: "'Atkinson Hyperlegible', sans-serif", letterSpacing: 0, wordSpacing: 0 }}
           >
             {loading ? (
@@ -119,16 +146,14 @@ export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: Figur
               <div className="mb-6">
                 <ProviderBadge provider={result.provider} model={result.model} />
                 {result.truncated && (
-                  <p className="mt-2 text-sm text-[var(--muted)]">
-                    ⚠️ La descripción se cortó porque el modelo llegó a su límite de largo.
-                  </p>
+                  <p className="mt-2 text-sm text-[var(--muted)]">⚠️ {TRUNCATED_NOTICE}</p>
                 )}
               </div>
             </>
           )}
           <div className="flex flex-wrap gap-3">
             {result && hasTTS && (
-              <Button variant="primary" onClick={() => speakOnce(result.text)}>
+              <Button variant="primary" onClick={() => speakOnce(result.text, rate)}>
                 🔊 Escuchar descripción
               </Button>
             )}

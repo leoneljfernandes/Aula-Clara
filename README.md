@@ -99,7 +99,7 @@ Aula Clara **no trae una key de IA propia**: cada persona usa la suya, de alguno
 
 Si no sabés cuál elegir, empezá por **Google Gemini**: con una cuenta de Google se resuelve en dos minutos y también describe imágenes.
 
-**Cómo conseguir la key.** La app trae una **guía paso a paso** para cada proveedor: crear la cuenta, iniciar sesión, generar la key y qué hacer si algo falla. Se abre desde «Configurar IA» y también está en **`/ayuda/ia`** (<http://localhost:5173/ayuda/ia> en local), sin necesidad de tener un perfil. Los textos viven en [`frontend/src/features/assistant/providers.ts`](frontend/src/features/assistant/providers.ts).
+**Cómo conseguir la key.** La app trae una **guía paso a paso** para cada proveedor: crear la cuenta, iniciar sesión, generar la key y qué hacer si algo falla. Se abre desde «Configurar IA» y también está en **`/ayuda/ia`** (<http://localhost:5173/ayuda/ia> en local), sin necesidad de haber hecho el onboarding. Los textos viven en [`frontend/src/features/assistant/providers.ts`](frontend/src/features/assistant/providers.ts).
 
 **Cómo configurarla en la app:**
 
@@ -170,7 +170,7 @@ cd backend  && uv export --no-dev --no-hashes --no-emit-project | uvx pip-audit 
 
 - **Los documentos se procesan en el navegador.** pdf.js y mammoth extraen el texto; el servidor solo recibe fragmentos de texto o una imagen.
 - **El frontend nunca llama directo a un proveedor de IA.** Manda la key de la persona al backend en cada consulta; el backend hace el pedido y no la guarda.
-- **Sin cuentas:** perfil, preferencias, documentos y progreso viven en el navegador (localStorage e IndexedDB).
+- **Sin cuentas:** preferencias, documentos y progreso viven en el navegador (localStorage e IndexedDB).
 
 ### Backend
 
@@ -187,14 +187,14 @@ cd backend  && uv export --no-dev --no-hashes --no-emit-project | uvx pip-audit 
 
 Capas (`api → services → crud | providers → models`), verificadas con import-linter.
 
-Endpoints principales: `GET /api/health/live`, `GET /api/health/ready`, `/api/v1/profiles`, `/api/v1/documents`, `POST /api/v1/ai/chat`, `POST /api/v1/ai/describe-image`.
+Endpoints principales: `GET /api/health/live`, `GET /api/health/ready`, `GET /api/v1/presets`, `/api/v1/documents`, `POST /api/v1/ai/chat`, `POST /api/v1/ai/describe-image`.
 
 ### Frontend
 
 | Tema | Detalle |
 |---|---|
 | Base | React 19, TypeScript (estricto), Vite, React Compiler |
-| Rutas | React Router (modo datos): rutas lazy y middleware que exige perfil configurado |
+| Rutas | React Router (modo datos): rutas lazy y middleware (`requireOnboarding`) que exige haber hecho el onboarding |
 | Estilos | Tailwind CSS 4 |
 | Extracción de documentos | pdf.js (PDF) y mammoth (Word), en el navegador |
 | Voz | Web Speech API |
@@ -231,7 +231,7 @@ Aula-Clara/
 └─ README.md
 ```
 
-Más detalle de las decisiones en [docs/arquitectura.md](docs/arquitectura.md), [ADR 0001 (SPA)](docs/adr/0001-spa.md) y [ADR 0002 (API key por persona)](docs/adr/0002-api-key-por-usuario.md), [ADR 0003 (key sellada en cookie)](docs/adr/0003-key-sellada-en-cookie.md). El modelo de seguridad, qué queda sin resolver y las dependencias están en [docs/seguridad.md](docs/seguridad.md). Lo que viene (cuentas, base de datos, archivos y RAG) está planificado en [docs/mejoras-pendientes.md](docs/mejoras-pendientes.md).
+Más detalle de las decisiones en [docs/arquitectura.md](docs/arquitectura.md), [ADR 0001 (SPA)](docs/adr/0001-spa.md) y [ADR 0002 (API key por persona)](docs/adr/0002-api-key-por-usuario.md), [ADR 0003 (key sellada en cookie)](docs/adr/0003-key-sellada-en-cookie.md) y [ADR 0004 (catálogo de presets)](docs/adr/0004-catalogo-de-presets.md). El modelo de seguridad, qué queda sin resolver y las dependencias están en [docs/seguridad.md](docs/seguridad.md). Lo que viene (cuentas, base de datos, archivos y RAG) está planificado en [docs/mejoras-pendientes.md](docs/mejoras-pendientes.md).
 
 ## Límites del MVP
 

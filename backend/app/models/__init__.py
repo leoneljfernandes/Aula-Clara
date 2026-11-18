@@ -2,7 +2,7 @@
 
 from app.models.chat import AIAnswer, AIProviderName, ChatAction, ChatMessage, Completion, ModelInfo
 from app.models.document import Document, DocumentType
-from app.models.profile import Profile, ProfilePreset
+from app.models.preset import Preset, SettingValue
 
 __all__ = [
     "AIAnswer",
@@ -13,6 +13,6 @@ __all__ = [
     "Document",
     "DocumentType",
     "ModelInfo",
-    "Profile",
-    "ProfilePreset",
+    "Preset",
+    "SettingValue",
 ]
