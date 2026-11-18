@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { contrastRatio, deltaE2000, hexToRgb, rgbToLab } from "@/lib/color/convert";
+import { simulate } from "@/lib/color/cvd";
+
 import { THEME_ORDER, THEMES } from "./config";
 
 /** Contraste WCAG 2.1 entre dos colores hex. */
@@ -28,5 +31,17 @@ describe("contraste AA (4.5:1 texto, 3:1 foco y bordes) en los 4 temas", () => {
     expect(contrast(v.accent, v.bg)).toBeGreaterThanOrEqual(3);
     expect(contrast(v.border, v.bg)).toBeGreaterThanOrEqual(3);
     expect(contrast(v.focus, v.bg)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe.each(["protan", "deutan", "tritan"] as const)("los temas con %s", (kind) => {
+  it.each(THEME_ORDER)("%s se sigue leyendo y el resaltado se distingue del fondo", (id) => {
+    const v = THEMES[id].vars;
+    const s = (hex: string) => simulate(hexToRgb(hex), kind);
+    expect(contrastRatio(s(v.fg), s(v.bg))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(s(v.onAccent), s(v.accent))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(s(v.hlFg), s(v.hl))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(s(v.focus), s(v.bg))).toBeGreaterThanOrEqual(3);
+    expect(deltaE2000(rgbToLab(s(v.hl)), rgbToLab(s(v.bg)))).toBeGreaterThanOrEqual(10);
   });
 });
