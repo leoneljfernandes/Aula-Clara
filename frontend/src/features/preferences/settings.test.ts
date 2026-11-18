@@ -19,6 +19,16 @@ describe("sanitizeSettings", () => {
   });
 });
 
+describe("voiceCommands", () => {
+  it("por defecto está apagado y solo acepta sus tres modos", () => {
+    expect(DEFAULT_SETTINGS.voiceCommands).toBe("off");
+    expect(sanitizeSettings({ voiceCommands: "continuous" }).voiceCommands).toBe("continuous");
+    expect(sanitizeSettings({ voiceCommands: "push" }).voiceCommands).toBe("push");
+    expect(sanitizeSettings({ voiceCommands: "siempre" }).voiceCommands).toBe("off");
+    expect(sanitizeSettings({ voiceCommands: true }).voiceCommands).toBe("off");
+  });
+});
+
 describe("sanitizePatch", () => {
   it("devuelve solo los campos conocidos y válidos, y nombra los rechazados", () => {
     expect(sanitizePatch({ font: "dyslexic", voiceOver: true, theme: "neon" })).toEqual({

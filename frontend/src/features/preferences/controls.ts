@@ -69,6 +69,19 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "voz",
     inReader: true,
   },
+  {
+    key: "voiceCommands",
+    kind: "choice",
+    label: "Comandos por voz",
+    options: [
+      { value: "off", label: "Apagados" },
+      { value: "push", label: "Al tocar el micrófono" },
+      { value: "continuous", label: "Manos libres (escucha siempre)" },
+    ],
+    help: "Necesita Chrome, Edge o Safari.",
+    group: "voz",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

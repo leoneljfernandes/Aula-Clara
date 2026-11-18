@@ -278,6 +278,7 @@ describe("onboarding", () => {
       audioFocus: true,
       singleKeyShortcuts: false,
       voiceGuide: false,
+      voiceCommands: "off",
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
