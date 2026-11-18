@@ -281,6 +281,7 @@ describe("onboarding", () => {
       singleKeyShortcuts: false,
       voiceGuide: false,
       voiceCommands: "off",
+      brailleTools: false,
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -1788,5 +1789,95 @@ describe("micrófono: un solo reconocedor a la vez y avisos honestos", () => {
     await user.click(within(panel).getByRole("button", { name: "Dictar pregunta" }));
     act(() => FakeRecognition.instances[0]!.emitError("no-speech"));
     expect(status).toHaveTextContent("No te escuché");
+  });
+});
+
+describe("Braille", () => {
+  beforeEach(() => {
+    withOnboarding();
+    withAI();
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { brailleTools: true } }),
+    );
+  });
+
+  it("Alt+B abre el diálogo; la vista está oculta para lectores de pantalla y se descarga un .BRF en ASCII", async () => {
+    const created: Blob[] = [];
+    vi.stubGlobal(
+      "URL",
+      Object.assign(URL, {
+        createObjectURL: (b: Blob) => (created.push(b), "blob:x"),
+        revokeObjectURL: vi.fn(),
+      }),
+    );
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      expect(this.download).toBe("accesibilidad-digital-en-la-educacion-superior-barreras-y-op.brf");
+    });
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}b{/Alt}");
+    const dialog = await screen.findByRole("dialog", { name: "Braille" });
+    expect(dialog).toHaveTextContent("La vista en Braille es para quien ve la pantalla");
+    expect(dialog.querySelector("[aria-hidden='true']")).toHaveTextContent("⠨");
+    await user.click(within(dialog).getByRole("button", { name: "Descargar archivo .BRF" }));
+    expect(click).toHaveBeenCalledOnce();
+    expect(await created[0]!.text()).toMatch(/^[\x20-\x5F\r\n\f]+$/);
+    click.mockRestore();
+  });
+
+  it("el botón «Braille» del encabezado abre el diálogo y Esc devuelve el foco", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    const trigger = screen.getByRole("button", { name: /Braille/ });
+    await user.click(trigger);
+    await screen.findByRole("dialog", { name: "Braille" });
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("sin la herramienta activada no hay botón y Alt+B sigue avisando que no está disponible", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { brailleTools: false } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    expect(screen.queryByRole("button", { name: /Braille/ })).not.toBeInTheDocument();
+    await user.keyboard("{Alt>}b{/Alt}");
+    expect(
+      await screen.findByText("El Braille todavía no está disponible", { selector: "[role=status]" }),
+    ).toBeInTheDocument();
+  });
+
+  it("el formato de la impresora se guarda y cambia el ancho de la plancha", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}b{/Alt}");
+    const dialog = await screen.findByRole("dialog", { name: "Braille" });
+    await user.selectOptions(within(dialog).getByLabelText("Celdas por línea"), "30");
+    expect(JSON.parse(window.localStorage.getItem("aulaclara.braille")!)).toEqual({ cols: 30, rows: 25 });
+  });
+
+  it("las figuras sin describir se ofrecen y se describen una por una, sin repetir las ya hechas", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}b{/Alt}");
+    const dialog = await screen.findByRole("dialog", { name: "Braille" });
+    expect(dialog).toHaveTextContent("Cada gráfico usa una consulta de tu cuota de IA.");
+    await user.click(within(dialog).getByRole("button", { name: "Describir 1 gráfico con IA" }));
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("button", { name: /Describir/ })).not.toBeInTheDocument(),
+    );
+    expect(calls("/ai/describe-image")).toHaveLength(1);
+    expect(dialog).not.toHaveTextContent("Cada gráfico usa una consulta");
   });
 });

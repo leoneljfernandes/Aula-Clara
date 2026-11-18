@@ -22,6 +22,7 @@ import { useReadAloud } from "@/lib/useReadAloud";
 import type { VoiceCommand } from "@/lib/voice/commands";
 
 import { findBlock, readableIndex } from "./blockNav";
+import { BrailleDialog } from "./braille/BrailleDialog";
 import { DocumentView } from "./DocumentView";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
 import { useReaderNavigation } from "./useReaderNavigation";
@@ -37,6 +38,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const chatInput = useRef<HTMLInputElement>(null);
   const [toolsOpen, setToolsOpen] = useToggle();
   // Descripciones de figuras hechas en esta sesión. Mapa aparte: cambiar `article` reiniciaría el motor de lectura.
+  const [brailleOpen, setBrailleOpen] = useState(false);
   const [figureAlts, setFigureAlts] = useState<Record<string, string>>({});
 
   // Bloques que se leen en voz alta (todo menos las figuras) y su posición en el artículo.
@@ -81,11 +83,14 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     libraryApi.saveFigureAlt(doc.id, figureId, text).catch(() => undefined);
   };
 
-  // Un único punto de entrada para el Braille (teclado y voz): el plan 03 reemplaza su cuerpo.
-  const openBraille = (): string => {
-    const notice = "El Braille todavía no está disponible";
-    announce(notice);
-    return notice;
+  // Un único punto de entrada para el Braille (botón, teclado y voz). Con las herramientas apagadas, avisa.
+  const openBraille = (): string | void => {
+    if (!settings.brailleTools) {
+      const notice = "El Braille todavía no está disponible";
+      announce(notice);
+      return notice;
+    }
+    setBrailleOpen(true);
   };
 
   // Explica más simple el bloque del cursor (el plan 04 lo extiende a un bloque elegido).
@@ -240,6 +245,11 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             <span aria-hidden="true">🎙</span> Micrófono
           </Button>
         )}
+        {settings.brailleTools && (
+          <Button onClick={() => void openBraille()}>
+            <span aria-hidden="true">⠿</span> Braille
+          </Button>
+        )}
         <Link
           to="/perfil"
           onClick={audio.stop}
@@ -300,6 +310,15 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           />
         </aside>
       </div>
+
+      {brailleOpen && (
+        <BrailleDialog
+          article={article}
+          figureAlts={figureAlts}
+          onFigureDescribed={describeFigure}
+          onClose={() => setBrailleOpen(false)}
+        />
+      )}
 
       {pos && selection && (
         <div className="fixed z-40" style={{ top: pos.top, left: pos.left }}>

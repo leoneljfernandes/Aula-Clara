@@ -11,6 +11,7 @@ export interface ReadingSettings {
   singleKeyShortcuts: boolean;
   voiceGuide: boolean;
   voiceCommands: "off" | "push" | "continuous";
+  brailleTools: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -23,6 +24,7 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   singleKeyShortcuts: false,
   voiceGuide: false,
   voiceCommands: "off",
+  brailleTools: false,
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -44,6 +46,7 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
   voiceGuide: (v): v is boolean => typeof v === "boolean",
   voiceCommands: (v): v is ReadingSettings["voiceCommands"] =>
     v === "off" || v === "push" || v === "continuous",
+  brailleTools: (v): v is boolean => typeof v === "boolean",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);

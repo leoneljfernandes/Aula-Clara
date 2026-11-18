@@ -15,7 +15,7 @@ import type { Block } from "@/lib/extractors";
 import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { BarChart } from "./BarChart";
-import { figureImageBlob } from "./figureImage";
+import { figureImageBlob } from "@/lib/figureImage";
 
 interface FigureBlockProps {
   block: Extract<Block, { type: "figure" }>;

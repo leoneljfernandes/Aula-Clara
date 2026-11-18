@@ -82,6 +82,14 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "voz",
     inReader: true,
   },
+  {
+    key: "brailleTools",
+    kind: "toggle",
+    label: "Herramientas de Braille",
+    help: "Muestra el botón «Braille» en el lector para ver el documento en Braille, descargarlo como .BRF o imprimirlo en relieve.",
+    group: "lectura",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

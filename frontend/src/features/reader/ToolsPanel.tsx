@@ -22,10 +22,13 @@ import { speechRecognitionAvailable } from "@/lib/voice/recognizer";
 import type { ReadAloud } from "@/lib/useReadAloud";
 
 /** Qué capacidades hay hoy. La lectura en voz alta siempre está (sin voz del navegador, se simula el avance). */
-const capabilities = (voiceCommands: boolean): Record<NonNullable<Shortcut["requires"]>, boolean> => ({
+const capabilities = (
+  voiceCommands: boolean,
+  brailleTools: boolean,
+): Record<NonNullable<Shortcut["requires"]>, boolean> => ({
   audio: true,
   voice: voiceCommands && speechRecognitionAvailable(),
-  braille: false,
+  braille: brailleTools,
 });
 
 const H3 = "mb-3 text-base font-bold tracking-wide text-[var(--muted)] uppercase";
@@ -103,7 +106,7 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
   };
   const hasReaderControls = controlsFor("reader").length > 0;
   const audioSection = <AudioSection audio={audio} total={total} />;
-  const has = capabilities(settings.voiceCommands !== "off");
+  const has = capabilities(settings.voiceCommands !== "off", settings.brailleTools);
   const shortcuts = KEYMAP.filter((s) => !s.requires || has[s.requires])
     .map((s) => ({
       id: s.id,
