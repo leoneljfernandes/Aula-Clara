@@ -91,15 +91,30 @@ async function doChat(input: ChatInput, signal?: AbortSignal): Promise<AIAnswer>
   };
 }
 
-export function describeImage(image: Blob, context: string, signal?: AbortSignal): Promise<AIAnswer> {
-  return withSessionCheck(() => doDescribeImage(image, context, signal));
+export interface DescribeImageOptions {
+  /** Pide que la descripción nombre cada color junto a su posición o su forma (para quien no los distingue). */
+  colorGuide?: boolean;
+  signal?: AbortSignal;
 }
 
-async function doDescribeImage(image: Blob, context: string, signal?: AbortSignal): Promise<AIAnswer> {
+export function describeImage(
+  image: Blob,
+  context: string,
+  options: DescribeImageOptions = {},
+): Promise<AIAnswer> {
+  return withSessionCheck(() => doDescribeImage(image, context, options));
+}
+
+async function doDescribeImage(
+  image: Blob,
+  context: string,
+  { colorGuide = false, signal }: DescribeImageOptions,
+): Promise<AIAnswer> {
   const headers = credentialHeaders();
   const form = new FormData();
   form.append("image", image, "imagen.jpg");
   form.append("context", context);
+  if (colorGuide) form.append("color_guide", "true");
   const data = await request<{
     description: string;
     provider: Provider;

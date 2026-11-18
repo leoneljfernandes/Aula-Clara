@@ -38,7 +38,7 @@ from app.providers.llm.base import (
     ProviderUnavailable,
 )
 from app.services import ai_rules
-from app.services.prompts import IMAGE_PROMPT, STUDY_PROMPT
+from app.services.prompts import COLOR_GUIDE_PROMPT, IMAGE_PROMPT, STUDY_PROMPT
 
 logger = logging.getLogger(__name__)
 Sleep = Callable[[float], Awaitable[None]]
@@ -120,14 +120,24 @@ class AIService:
         return answer
 
     async def describe_image(
-        self, *, provider: LLMProvider, image: bytes, mime: str, context: str
+        self,
+        *,
+        provider: LLMProvider,
+        image: bytes,
+        mime: str,
+        context: str,
+        color_guide: bool = False,
     ) -> AIAnswer:
         context = ai_rules.trim_text(context.strip(), 500)
-        key = ai_rules.cache_key("image", provider.scope, mime, image, context)
+        # Con guía de color la misma imagen da otra respuesta: tiene su propia entrada de caché.
+        system = f"{IMAGE_PROMPT}\n\n{COLOR_GUIDE_PROMPT}" if color_guide else IMAGE_PROMPT
+        key = ai_rules.cache_key(
+            "image", provider.scope, mime, image, context, "color" if color_guide else "plain"
+        )
         if (cached := self._cache.get(key)) is not None:
             return cached
         done = await self._call(
-            provider, partial(provider.describe_image, image, mime, context, system=IMAGE_PROMPT)
+            provider, partial(provider.describe_image, image, mime, context, system=system)
         )
         answer = _answer(provider, done)
         self._cache.set(key, answer)

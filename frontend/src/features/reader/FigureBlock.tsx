@@ -117,7 +117,7 @@ export function FigureBlock({
     try {
       const blob = await figureImageBlob(block, index);
       if (!blob) throw new ImageUnavailableError();
-      const described = await describeImage(blob, context);
+      const described = await describeImage(blob, context, { colorGuide: cvdType !== "none" });
       setResult(described);
       onDescribed(described.text);
       if (autoSpeak) {

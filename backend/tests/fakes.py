@@ -20,6 +20,8 @@ class FakeProvider:
         self.scope = f"{name}-{model}"
         self.verifies_key = name != "nvidia"
         self.closed = False
+        # Los `system` con que se pidieron descripciones de imágenes: los tests miran qué prompt llegó.
+        self.image_systems: list[str] = []
         self._failure = failure
         self._truncated = truncated
 
@@ -29,6 +31,7 @@ class FakeProvider:
         return Completion("Resumen de prueba", truncated=self._truncated)
 
     async def describe_image(self, image: bytes, mime: str, context: str, *, system: str = "") -> Completion:
+        self.image_systems.append(system)
         if self._failure:
             raise self._failure
         return Completion("Un gráfico de prueba", truncated=self._truncated)

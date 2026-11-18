@@ -302,3 +302,32 @@ async def test_language_is_part_of_the_cache_key() -> None:
 async def test_glossary_does_not_require_a_selection() -> None:
     service, _ = _service()
     assert (await _ask(service, _provider(), action="glossary")).text == "respuesta"
+
+
+async def test_color_guide_extends_the_image_prompt_and_has_its_own_cache() -> None:
+    service, _ = _service()
+    provider = _provider(answer="barras")
+    await service.describe_image(provider=provider, image=b"\x89PNG", mime="image/png", context="")
+    await service.describe_image(
+        provider=provider, image=b"\x89PNG", mime="image/png", context="", color_guide=True
+    )
+    assert provider.describe_image.await_count == 2  # type: ignore[attr-defined]
+    system = provider.describe_image.await_args.kwargs["system"]  # type: ignore[attr-defined]
+    assert "posición" in system and "180 palabras" in system
+
+
+async def test_the_same_image_with_color_guide_is_cached_separately_but_reused() -> None:
+    service, _ = _service()
+    provider = _provider(answer="barras")
+    for _ in range(2):
+        await service.describe_image(
+            provider=provider, image=b"\x89PNG", mime="image/png", context="", color_guide=True
+        )
+    assert provider.describe_image.await_count == 1  # type: ignore[attr-defined]
+
+
+async def test_without_color_guide_the_image_prompt_is_the_plain_one() -> None:
+    service, _ = _service()
+    provider = _provider(answer="barras")
+    await service.describe_image(provider=provider, image=b"\x89PNG", mime="image/png", context="")
+    assert "180 palabras" not in provider.describe_image.await_args.kwargs["system"]  # type: ignore[attr-defined]

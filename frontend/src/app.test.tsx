@@ -2563,6 +2563,26 @@ describe("daltonismo", () => {
     expect(document.querySelector("#cvd-enhance")).toBeNull();
   });
 
+  it("con daltonismo, «Interpretar con IA» pide la guía de color", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    expect((calls("/ai/describe-image")[0]?.data as FormData).get("color_guide")).toBe("true");
+  });
+
+  it("sin daltonismo no se pide la guía de color", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { cvdType: "none" } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    expect((calls("/ai/describe-image")[0]?.data as FormData).has("color_guide")).toBe(false);
+  });
+
   it("sin daltonismo no hay botón de identificar colores", async () => {
     window.localStorage.setItem(
       "aulaclara.settings",

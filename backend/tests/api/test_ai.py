@@ -354,3 +354,23 @@ async def test_chat_rejects_an_unknown_language(client: AsyncClient, built: list
         json={"action": "summarize", "document_text": "t", "language": "klingon"},
     )
     assert response.status_code == 422
+
+
+async def test_describe_image_accepts_color_guide(client: AsyncClient, built: list[dict[str, Any]]) -> None:
+    response = await client.post(
+        "/api/v1/ai/describe-image",
+        headers=HEADERS,
+        files={"image": ("a.png", PNG, "image/png")},
+        data={"color_guide": "true"},
+    )
+    assert response.status_code == 200
+    assert "180 palabras" in built[0]["provider"].image_systems[-1]
+
+
+async def test_describe_image_without_color_guide_uses_the_plain_prompt(
+    client: AsyncClient, built: list[dict[str, Any]]
+) -> None:
+    await client.post(
+        "/api/v1/ai/describe-image", headers=HEADERS, files={"image": ("a.png", PNG, "image/png")}
+    )
+    assert "180 palabras" not in built[0]["provider"].image_systems[-1]

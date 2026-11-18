@@ -86,6 +86,22 @@ describe("asistente: cliente de IA", () => {
     expect(config.data.get("image")).toBeInstanceOf(Blob);
   });
 
+  it("la guía de color se manda solo si se pide", async () => {
+    request.mockResolvedValue({ description: "barras", provider: "gemini", model: "m" });
+    await describeImage(new Blob(["x"]), "", { colorGuide: true });
+    await describeImage(new Blob(["x"]), "");
+    const [withGuide, without] = request.mock.calls.map(([c]) => (c as { data: FormData }).data);
+    expect(withGuide?.get("color_guide")).toBe("true");
+    expect(without?.has("color_guide")).toBe(false);
+  });
+
+  it("la señal de cancelación viaja dentro de las opciones", async () => {
+    request.mockResolvedValue({ description: "barras", provider: "gemini", model: "m" });
+    const controller = new AbortController();
+    await describeImage(new Blob(["x"]), "", { signal: controller.signal });
+    expect(request.mock.calls[0]?.[0]).toMatchObject({ signal: controller.signal });
+  });
+
   it("listar modelos manda la key nueva sin modelo y adapta los nombres de campos", async () => {
     request.mockResolvedValue({
       provider: "openrouter",

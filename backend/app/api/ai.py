@@ -53,6 +53,7 @@ async def describe_image(
     settings: SettingsDep,
     image: Annotated[UploadFile, File()],
     context: Annotated[str, Form(max_length=2_000)] = "",
+    color_guide: Annotated[bool, Form()] = False,
 ) -> ImageDescriptionResponse:
     # 415 y 413 son errores de transporte: el único caso donde `api/` usa HTTPException.
     if image.content_type not in ALLOWED_IMAGE_TYPES:
@@ -63,7 +64,11 @@ async def describe_image(
     if not data:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Empty image")
     answer = await service.describe_image(
-        provider=provider, image=data, mime=image.content_type, context=context
+        provider=provider,
+        image=data,
+        mime=image.content_type,
+        context=context,
+        color_guide=color_guide,
     )
     return ImageDescriptionResponse(
         description=answer.text,

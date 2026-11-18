@@ -6,3 +6,4 @@ _DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 STUDY_PROMPT = (_DIR / "study_assistant.md").read_text(encoding="utf-8")
 IMAGE_PROMPT = (_DIR / "image_description.md").read_text(encoding="utf-8")
+COLOR_GUIDE_PROMPT = (_DIR / "image_color_guide.md").read_text(encoding="utf-8").strip()

@@ -1,0 +1,1 @@
+Además: nombrá cada color que aparezca junto a su posición (arriba, abajo, a la izquierda, primera barra…) o su forma (línea continua, punteada, barra más alta). Si hay valores, listalos uno por línea con el formato «Categoría (color, posición): valor». En este caso podés usar hasta 180 palabras.
