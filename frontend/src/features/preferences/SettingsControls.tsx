@@ -7,34 +7,39 @@ import { sanitizePatch } from "./settings";
 function Control({ spec }: { spec: ControlSpec }): ReactNode {
   const { settings, updateSettings } = usePreferences();
   const helpId = useId();
-  const help = spec.help && (
-    <span id={helpId} className="block text-base font-normal text-[var(--muted)]">
-      {spec.help}
-    </span>
-  );
+  // La ayuda va fuera del <label>/<legend> y se enlaza con aria-describedby: dentro del nombre, un
+  // lector de pantalla la leería dos veces (como nombre y como descripción).
+  const describedBy = spec.help ? helpId : undefined;
+  const help = (className: string): ReactNode =>
+    spec.help && (
+      <span id={helpId} className={`block text-base text-[var(--muted)] ${className}`}>
+        {spec.help}
+      </span>
+    );
 
   if (spec.kind === "toggle") {
     return (
-      <label className="flex min-h-12 cursor-pointer items-start gap-3 text-lg font-bold">
-        <input
-          type="checkbox"
-          className="mt-1 h-6 w-6 shrink-0"
-          style={{ accentColor: "var(--accent)" }}
-          checked={settings[spec.key]}
-          aria-describedby={spec.help ? helpId : undefined}
-          onChange={(e) => updateSettings(sanitizePatch({ [spec.key]: e.target.checked }).patch)}
-        />
-        <span>
-          {spec.label}
-          {help}
-        </span>
-      </label>
+      <div>
+        <label className="flex min-h-12 cursor-pointer items-start gap-3 text-lg font-bold">
+          <input
+            type="checkbox"
+            className="mt-1 h-6 w-6 shrink-0"
+            style={{ accentColor: "var(--accent)" }}
+            checked={settings[spec.key]}
+            aria-describedby={describedBy}
+            onChange={(e) => updateSettings(sanitizePatch({ [spec.key]: e.target.checked }).patch)}
+          />
+          <span>{spec.label}</span>
+        </label>
+        {/* Alineada con el texto del label: casilla de 24 px + 12 px de separación. */}
+        {help("pl-9")}
+      </div>
     );
   }
   return (
-    <fieldset aria-describedby={spec.help ? helpId : undefined}>
+    <fieldset aria-describedby={describedBy}>
       <legend className="mb-2 text-lg font-bold">{spec.label}</legend>
-      {help}
+      {help("mb-2")}
       <div className="flex flex-wrap gap-3">
         {spec.options.map((o) => (
           <label key={o.value} className="flex min-h-12 cursor-pointer items-center gap-2 text-lg font-bold">

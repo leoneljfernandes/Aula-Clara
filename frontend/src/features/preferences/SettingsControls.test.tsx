@@ -64,6 +64,17 @@ it("un interruptor cambia el ajuste booleano", async () => {
   expect(current()).toMatchObject({ audioFocus: true });
 });
 
+it("la ayuda se anuncia una sola vez: como descripción, no dentro del nombre del control", () => {
+  renderControls("onboarding", [
+    { ...AUDIO, help: "Muestra un botón grande para escuchar el documento." },
+    { ...THEME, help: "Cambia los colores del documento." },
+  ]);
+  const toggle = screen.getByRole("checkbox", { name: "Destacar la lectura en voz alta" });
+  expect(toggle).toHaveAccessibleDescription("Muestra un botón grande para escuchar el documento.");
+  const choice = screen.getByRole("group", { name: "Tema del documento" });
+  expect(choice).toHaveAccessibleDescription("Cambia los colores del documento.");
+});
+
 it("en el lector solo aparecen los controles inReader; en el onboarding, todos", () => {
   renderControls("reader", [THEME, AUDIO]);
   expect(screen.getByRole("radio", { name: "Claro" })).toBeInTheDocument();
