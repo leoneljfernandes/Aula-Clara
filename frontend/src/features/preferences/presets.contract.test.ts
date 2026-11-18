@@ -1,13 +1,17 @@
+// @vitest-environment node
 // el catálogo del backend solo usa capacidades que el frontend conoce
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { sanitizePatch, snakeToCamelKeys } from "./settings";
 
 const seed = JSON.parse(
-  // vitest corre desde frontend/; en jsdom import.meta.url no es un file: URL
-  readFileSync(resolve(process.cwd(), "../backend/app/seed/presets.json"), "utf8"),
+  readFileSync(fileURLToPath(new URL("../../../../backend/app/seed/presets.json", import.meta.url)), "utf8"),
 ) as Array<{ id: string; settings: Record<string, unknown> }>;
+
+it("el seed no está vacío", () => {
+  expect(seed.length).toBeGreaterThan(0);
+});
 
 it.each(seed.map((p) => [p.id, p] as const))(
   "el preset %s solo usa ajustes y valores conocidos",

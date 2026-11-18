@@ -51,6 +51,27 @@ describe("loadPresetCatalog", () => {
     expect(catalog.source).toBe("cache");
     expect(catalog.presets.map((p) => p.id)).toEqual(["dislexia"]);
   });
+  it("un catálogo en vivo vacío no pisa la caché y se usa la caché", async () => {
+    const cache = JSON.stringify({ savedAt: "2026-11-18T00:00:00Z", presets: [DTO] });
+    window.localStorage.setItem("aulaclara.presets", cache);
+    request.mockResolvedValue([]);
+    const catalog = await loadPresetCatalog();
+    expect(catalog.source).toBe("cache");
+    expect(catalog.presets.map((p) => p.id)).toEqual(["dislexia"]);
+    expect(window.localStorage.getItem("aulaclara.presets")).toBe(cache);
+  });
+  it("un catálogo en vivo sin ningún elemento válido tampoco pisa la caché", async () => {
+    const cache = JSON.stringify({ savedAt: "2026-11-18T00:00:00Z", presets: [DTO] });
+    window.localStorage.setItem("aulaclara.presets", cache);
+    request.mockResolvedValue([{ id: "roto" }]);
+    expect((await loadPresetCatalog()).source).toBe("cache");
+    expect(window.localStorage.getItem("aulaclara.presets")).toBe(cache);
+  });
+  it("un catálogo en vivo vacío sin caché no hay presets", async () => {
+    request.mockResolvedValue([]);
+    expect(await loadPresetCatalog()).toEqual({ presets: [], source: "unavailable" });
+    expect(window.localStorage.getItem("aulaclara.presets")).toBeNull();
+  });
   it("sin backend ni caché no hay presets", async () => {
     request.mockRejectedValue(new Error("caído"));
     expect(await loadPresetCatalog()).toEqual({ presets: [], source: "unavailable" });

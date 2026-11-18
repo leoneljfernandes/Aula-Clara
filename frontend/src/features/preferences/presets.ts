@@ -57,18 +57,21 @@ function toPresets(raw: unknown): Preset[] {
   });
 }
 
-/** Catálogo del backend; si falla, el último que se guardó en caché; si tampoco hay, vacío. */
+/** Catálogo del backend; si falla o no trae ningún preset válido, el último guardado en caché; si tampoco hay, vacío. */
 export async function loadPresetCatalog(): Promise<PresetCatalog> {
   try {
     const dto = await request<unknown>({ method: "GET", url: "/presets", timeout: TIMEOUT_MS, retry: false });
-    if (!Array.isArray(dto)) throw new Error("catálogo con forma inesperada");
-    storage.set(CACHE_KEY, { savedAt: new Date().toISOString(), presets: dto });
-    return { presets: toPresets(dto), source: "live" };
+    const presets = toPresets(dto);
+    // Una respuesta vacía o toda inválida no debe pisar una caché buena.
+    if (presets.length > 0) {
+      storage.set(CACHE_KEY, { savedAt: new Date().toISOString(), presets: dto });
+      return { presets, source: "live" };
+    }
   } catch {
-    const cached = storage.get<{ presets?: unknown }>(CACHE_KEY);
-    const presets = toPresets(cached?.presets);
-    return presets.length > 0 ? { presets, source: "cache" } : { presets: [], source: "unavailable" };
+    // sin backend: se cae a la caché
   }
+  const cached = toPresets(storage.get<{ presets?: unknown }>(CACHE_KEY)?.presets);
+  return cached.length > 0 ? { presets: cached, source: "cache" } : { presets: [], source: "unavailable" };
 }
 
 /** Elegir un preset reemplaza los ajustes: parte de los valores por defecto, no de los actuales. */
