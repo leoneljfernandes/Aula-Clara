@@ -15,6 +15,7 @@ export {
 } from "./config";
 export { homeLoader, requireProfile, safeNext } from "./guards";
 export { OnboardingWizard } from "./OnboardingWizard";
+export { applyPreset, loadPresetCatalog, matchPreset, type Preset, type PresetCatalog } from "./presets";
 export { PreferencesProvider, ThemeScope, usePreferences } from "./PreferencesProvider";
 export {
   DEFAULT_SETTINGS,
