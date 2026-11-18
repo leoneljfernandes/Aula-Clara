@@ -57,17 +57,23 @@ export function paginate(paragraphs: readonly BrailleParagraph[], format: PageFo
     page = [];
   };
 
-  for (const paragraph of paragraphs) {
+  paragraphs.forEach((paragraph, p) => {
     const lines = wrap(paragraph.braille, format.cols);
-    if (lines.length === 0) continue;
-    if (paragraph.heading && page.length > 0 && page.length + 1 + lines.length >= rows) newPage();
+    if (lines.length === 0) return;
+    if (paragraph.heading && page.length > 0) {
+      // Un título necesita lugar para sí mismo y, si hay algo después, para la línea en blanco y una línea del párrafo
+      // que sigue: si no, quedaría solo al final de la página.
+      const needed = page.length + 1 + lines.length;
+      const last = p === paragraphs.length - 1;
+      if (last ? needed >= rows : needed + 2 > rows) newPage();
+    }
     lines.forEach((line, i) => {
       const separated = i === 0 && page.length > 0;
       if (page.length + (separated ? 2 : 1) > rows) newPage();
       if (i === 0 && page.length > 0) page.push("");
       page.push(line);
     });
-  }
+  });
   newPage();
   return pages;
 }

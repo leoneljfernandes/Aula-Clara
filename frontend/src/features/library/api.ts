@@ -31,6 +31,9 @@ export function withFigureAlt(article: Article, figureId: string, alt: string): 
   };
 }
 
+/** Los guardados de descripciones van de a uno: cada uno lee y reescribe el artículo entero, y a la vez se pisarían. */
+let figureSaves: Promise<unknown> = Promise.resolve();
+
 export const libraryApi = {
   list(): LibraryDocument[] {
     return readAll();
@@ -50,9 +53,13 @@ export const libraryApi = {
   },
 
   /** Guarda la descripción de una figura en el contenido del documento (también en uno semilla), para no volver a pedirla. */
-  async saveFigureAlt(docId: string, figureId: string, alt: string): Promise<void> {
-    const article = await libraryApi.loadArticle(docId);
-    await idb.set(contentKey(docId), withFigureAlt(article, figureId, alt));
+  saveFigureAlt(docId: string, figureId: string, alt: string): Promise<void> {
+    const save = figureSaves.then(async () => {
+      const article = await libraryApi.loadArticle(docId);
+      await idb.set(contentKey(docId), withFigureAlt(article, figureId, alt));
+    });
+    figureSaves = save.catch(() => undefined); // un guardado que falla no frena a los siguientes
+    return save;
   },
 
   /** Guarda el avance sin pasar por una action: se llama muchas veces mientras se hace scroll. */

@@ -32,3 +32,29 @@ it("ninguna página supera las líneas pedidas", () => {
     expect(page.every((l) => len(l) <= 40)).toBe(true);
   }
 });
+
+it("un título tampoco queda solo al final de una página si el párrafo que sigue no entra", () => {
+  const pages = paginate(
+    [
+      { braille: "⠁⠁⠁⠁⠁⠀⠁⠁⠁⠁⠁", heading: false },
+      { braille: "⠃", heading: true },
+      { braille: "⠉", heading: false },
+    ],
+    { cols: 5, rows: 5 },
+  );
+  expect(pages).toEqual([
+    ["⠁⠁⠁⠁⠁", "⠁⠁⠁⠁⠁"],
+    ["⠃", "", "⠉"],
+  ]);
+});
+
+it("un título que es lo último del documento no deja una página vacía", () => {
+  const pages = paginate(
+    [
+      { braille: "⠁", heading: false },
+      { braille: "⠃", heading: true },
+    ],
+    { cols: 5, rows: 5 },
+  );
+  expect(pages).toEqual([["⠁", "", "⠃"]]);
+});

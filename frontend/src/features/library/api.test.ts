@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { idb } from "@/lib/idb";
+
 import { libraryApi, withFigureAlt } from "./api";
 import { SAMPLE_ARTICLE } from "./sample";
 
@@ -61,5 +63,25 @@ describe("libraryApi", () => {
       { type: "figure", id: "b", alt: "torta" },
     ]);
     expect(article.blocks[1]).toEqual({ type: "figure", id: "b" });
+  });
+
+  it("dos descripciones guardadas a la vez no se pisan", async () => {
+    await idb.set("article:dos", {
+      title: "t",
+      meta: "m",
+      blocks: [
+        { type: "figure", id: "a" },
+        { type: "figure", id: "b" },
+      ],
+    });
+    await Promise.all([
+      libraryApi.saveFigureAlt("dos", "a", "primera"),
+      libraryApi.saveFigureAlt("dos", "b", "segunda"),
+    ]);
+    const saved = await libraryApi.loadArticle("dos");
+    expect(saved.blocks).toEqual([
+      { type: "figure", id: "a", alt: "primera" },
+      { type: "figure", id: "b", alt: "segunda" },
+    ]);
   });
 });
