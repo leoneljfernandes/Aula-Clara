@@ -61,7 +61,12 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     announce,
   });
 
-  const runVoiceCommand = (command: VoiceCommand): void => {
+  const runVoiceCommand = (command: VoiceCommand): string | void => {
+    // Una consulta a la IA con otra en curso se descartaría: se avisa en vez de marcarla como hecha.
+    const askAI = (...args: Parameters<typeof chat.send>): string | void => {
+      if (chat.typing) return "Esperá a que termine la respuesta";
+      void chat.send(...args);
+    };
     switch (command.kind) {
       case "play":
         return audio.play();
@@ -88,23 +93,28 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         return;
       }
       case "summarize":
-        return void chat.send(quickActionLabel("summarize"), "summarize");
+        return askAI(quickActionLabel("summarize"), "summarize");
       case "keyConcepts":
-        return void chat.send(quickActionLabel("key_concepts"), "key_concepts");
+        return askAI(quickActionLabel("key_concepts"), "key_concepts");
       case "quiz":
-        return void chat.send(quickActionLabel("quiz"), "quiz");
+        return askAI(quickActionLabel("quiz"), "quiz");
       case "describeFigure": {
         // La figura donde está el cursor o, si está en otro bloque, la que sigue.
         const here = article.blocks[nav.cursor]?.type === "figure" ? nav.cursor : null;
         const index = here ?? findBlock(article.blocks, nav.cursor, "figure", 1);
-        if (index === null) return announce("No hay más gráficos");
+        if (index === null) {
+          announce("No hay más gráficos");
+          return "No hay más gráficos";
+        }
         document.getElementById(`fig-btn-${index}`)?.click();
         return;
       }
       case "ask":
-        return void chat.send(command.question, "free");
+        return askAI(command.question, "free");
       case "openBraille":
-        return; // el lector Braille llega con el plan 03
+        // El lector Braille llega con el plan 03, que reemplaza este aviso.
+        announce("El Braille todavía no está disponible");
+        return "El Braille todavía no está disponible";
     }
   };
   const voiceOn = settings.voiceCommands !== "off";
@@ -182,7 +192,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             onClick={voice.toggle}
             className="aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
           >
-            🎙 Micrófono
+            <span aria-hidden="true">🎙</span> Micrófono
           </Button>
         )}
         <Link

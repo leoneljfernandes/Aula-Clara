@@ -223,13 +223,14 @@ export function AssistantPanel({
               type="button"
               className="min-h-[52px] aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
               aria-pressed={dictate.listening}
-              onClick={dictate.start}
+              onClick={dictate.listening ? dictate.stop : dictate.start}
             >
-              🎙 Dictar pregunta
+              <span aria-hidden="true">🎙</span> Dictar pregunta
             </Button>
           )}
         </form>
-        {dictation && dictate.error && (
+        {dictation && dictate.available && (
+          // Siempre montada: un aviso que aparece junto con su región de estado a veces no se anuncia.
           <p role="status" className="text-base">
             {dictate.error}
           </p>

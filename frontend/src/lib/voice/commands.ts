@@ -30,16 +30,16 @@ export function normalizeSpeech(text: string): string {
 }
 
 const PHRASES: Record<SimpleKind, readonly string[]> = {
-  play: ["leer", "reproducir", "continuar"],
+  play: ["leer", "lee", "reproducir", "continuar"],
   pause: ["pausar", "pausa"],
-  stop: ["detener", "parar"],
-  nextBlock: ["siguiente", "siguiente parrafo", "bajar"],
-  prevBlock: ["anterior", "parrafo anterior", "subir"],
+  stop: ["detener", "detene", "parar", "para"],
+  nextBlock: ["siguiente", "siguiente parrafo", "bajar", "baja"],
+  prevBlock: ["anterior", "parrafo anterior", "subir", "subi"],
   nextHeading: ["siguiente seccion", "siguiente titulo"],
   nextFigure: ["siguiente grafico", "siguiente imagen"],
   faster: ["mas rapido"],
   slower: ["mas lento"],
-  summarize: ["resumir", "resumen"],
+  summarize: ["resumir", "resumi", "resumen"],
   keyConcepts: ["conceptos clave"],
   quiz: ["preguntas", "preguntas de repaso"],
   describeFigure: ["describir imagen", "interpretar grafico"],
@@ -54,12 +54,36 @@ const BY_PHRASE = new Map<string, SimpleKind>(
 
 /** «preguntar …» o «asistente …»: lo que sigue a la primera palabra, tal como se dijo. */
 const ASK = /^(?:preguntar|asistente)(?![\p{L}\p{N}])[\s,.:;]*(.*)$/isu;
+const ASSISTANT = /^asistente(?![\p{L}\p{N}])[\s,.:;]*(.*)$/isu;
 
-export function parseCommand(transcript: string): VoiceCommand | null {
+/** Las que gastan cuota de la IA: en manos libres, un titular leído por un lector de pantalla no debe dispararlas. */
+const AI_KINDS: ReadonlySet<SimpleKind> = new Set(["summarize", "keyConcepts", "quiz", "describeFigure"]);
+const MIN_HANDS_FREE_QUESTION_WORDS = 3;
+
+export interface ParseOptions {
+  /**
+   * Manos libres: el micrófono está siempre abierto y puede oír voces ajenas. Las acciones de IA exigen
+   * decir antes «asistente» (y la pregunta, al menos 3 palabras); la lectura y la navegación van sin prefijo.
+   */
+  continuous?: boolean;
+}
+
+export function parseCommand(
+  transcript: string,
+  { continuous = false }: ParseOptions = {},
+): VoiceCommand | null {
   const simple = BY_PHRASE.get(normalizeSpeech(transcript));
-  if (simple) return { kind: simple };
-  const question = ASK.exec(transcript.trim())?.[1]?.trim();
-  // Sin nada pronunciable después («preguntar ¿?») no hay pregunta.
-  if (question && normalizeSpeech(question) !== "") return { kind: "ask", question };
-  return null;
+  if (!continuous) {
+    if (simple) return { kind: simple };
+    const question = ASK.exec(transcript.trim())?.[1]?.trim();
+    // Sin nada pronunciable después («preguntar ¿?») no hay pregunta.
+    return question && normalizeSpeech(question) !== "" ? { kind: "ask", question } : null;
+  }
+  if (simple && !AI_KINDS.has(simple)) return { kind: simple };
+  const rest = ASSISTANT.exec(transcript.trim())?.[1]?.trim();
+  if (!rest) return null;
+  const prefixed = BY_PHRASE.get(normalizeSpeech(rest));
+  if (prefixed && AI_KINDS.has(prefixed)) return { kind: prefixed };
+  const words = normalizeSpeech(rest).split(" ").filter(Boolean).length;
+  return words >= MIN_HANDS_FREE_QUESTION_WORDS ? { kind: "ask", question: rest } : null;
 }

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { speechBus } from "@/lib/speech";
 import { parseCommand, type VoiceCommand } from "@/lib/voice/commands";
 import { grantVoiceConsent, hasVoiceConsent } from "@/lib/voice/consent";
+import { type MicOwner, micLock } from "@/lib/voice/micLock";
 import {
   createRecognizer,
   type RecognitionErrorKind,
@@ -12,7 +13,8 @@ import {
 
 interface Options {
   mode: "off" | "push" | "continuous";
-  onCommand: (command: VoiceCommand) => void;
+  /** Devuelve un texto si el comando se entendió pero no se pudo hacer: la barra lo muestra en vez de ✓. */
+  onCommand: (command: VoiceCommand) => string | void;
 }
 
 export interface VoiceCommands {
@@ -23,9 +25,9 @@ export interface VoiceCommands {
   toggle: () => void;
   /** Manos libres con el micrófono en pausa porque la app está hablando: vuelve solo al terminar. */
   paused: boolean;
-  /** La última frase oída, solo en memoria: no se guarda ni se registra. */
-  heard: { text: string; understood: boolean } | null;
-  /** Por qué se apagó el micrófono, en una frase corta. `no-speech` no cuenta como error. */
+  /** La última frase oída, solo en memoria: no se guarda ni se registra. `note`: se entendió pero no se hizo. */
+  heard: { text: string; understood: boolean; note?: string } | null;
+  /** Por qué se apagó el micrófono, en una frase corta. */
   error: string | null;
   consentOpen: boolean;
   acceptConsent: () => void;
@@ -49,53 +51,89 @@ export function useVoiceCommands({ mode, onCommand }: Options): VoiceCommands {
   const appSpeaking = useSyncExternalStore(speechBus.subscribe, speechBus.isSpeaking);
   const recognizer = useRef<Recognizer | null>(null);
   const handler = useRef(onCommand);
-  useEffect(() => {
-    handler.current = onCommand;
+  const modeRef = useRef(mode);
+  /** Un dictado nos cortó estando en manos libres: al terminar, volvemos a escuchar. */
+  const resumeAfterDictation = useRef(false);
+  const begin = useRef<() => void>(() => {});
+
+  const discard = (): void => {
+    recognizer.current?.dispose();
+    recognizer.current = null;
+    setListening(false);
+  };
+
+  const owner = useRef<MicOwner>({
+    onPreempted: () => {
+      resumeAfterDictation.current = modeRef.current === "continuous";
+      discard();
+    },
   });
 
-  // Cambiar de modo (o apagar los comandos) o salir del lector cierra el reconocimiento.
-  useEffect(
-    () => () => {
-      recognizer.current?.dispose();
-      recognizer.current = null;
-    },
-    [mode],
-  );
-
-  const begin = (): void => {
+  const start = (): void => {
     if (mode === "off") return;
+    resumeAfterDictation.current = false;
     setError(null);
     setHeard(null);
     if (!recognizer.current) {
       const created = createRecognizer({
         continuous: mode === "continuous",
         interim: false,
-        onListeningChange: setListening,
+        onListeningChange: (value) => {
+          setListening(value);
+          if (!value) micLock.release(owner.current);
+        },
         onFinal: (text) => {
-          const command = parseCommand(text);
-          setHeard({ text, understood: command !== null });
-          if (command) handler.current(command);
+          const command = parseCommand(text, { continuous: mode === "continuous" });
+          if (!command) return setHeard({ text, understood: false });
+          const note = handler.current(command);
+          setHeard(note ? { text, understood: false, note } : { text, understood: true });
         },
         onError: (kind) => {
+          if (kind === "no-speech") {
+            // En manos libres cada ciclo sin hablar termina así (el reconocedor ni avisa); acá solo llega en `push`.
+            setError("No te escuché");
+            return;
+          }
           const message = ERRORS[kind];
-          if (message === undefined) return; // `no-speech`: no es un error para quien usa la voz
+          if (message === undefined) return;
           setError(message);
           if (kind === "network" || kind === "other") {
             // El reconocedor no se apaga solo en estos casos: se descarta y el próximo intento arma otro.
-            recognizer.current?.dispose();
-            recognizer.current = null;
-            setListening(false);
+            discard();
+            micLock.release(owner.current);
           }
         },
       });
       if (!created) return;
       recognizer.current = created;
     }
+    micLock.acquire(owner.current); // corta el dictado, si lo había
     // En `push` la app se calla antes de abrir el micrófono para no oírse a sí misma. En manos libres
     // el reconocedor ya se pausa mientras la app habla.
     if (mode === "push") speechBus.silence();
     recognizer.current.start();
   };
+
+  useEffect(() => {
+    handler.current = onCommand;
+    modeRef.current = mode;
+    begin.current = start;
+  });
+
+  // Cambiar de modo (o apagar los comandos) o salir del lector cierra el reconocimiento.
+  useEffect(() => {
+    const lock = owner.current;
+    const unsubscribe = micLock.onFree(() => {
+      if (resumeAfterDictation.current) begin.current();
+    });
+    return () => {
+      unsubscribe();
+      resumeAfterDictation.current = false;
+      recognizer.current?.dispose();
+      recognizer.current = null;
+      micLock.release(lock);
+    };
+  }, [mode]);
 
   const toggle = (): void => {
     if (mode === "off" || !speechRecognitionAvailable()) return;
@@ -107,7 +145,7 @@ export function useVoiceCommands({ mode, onCommand }: Options): VoiceCommands {
       setConsentOpen(true);
       return;
     }
-    begin();
+    begin.current();
   };
 
   return {
@@ -121,7 +159,7 @@ export function useVoiceCommands({ mode, onCommand }: Options): VoiceCommands {
     acceptConsent: () => {
       grantVoiceConsent("commands");
       setConsentOpen(false);
-      begin();
+      begin.current();
     },
     cancelConsent: () => setConsentOpen(false),
   };
