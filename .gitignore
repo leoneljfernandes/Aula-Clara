@@ -32,3 +32,6 @@ coverage/
 
 # Salidas locales de herramientas
 graphify-out/
+.superpowers/
+CLAUDE.MD
+GEMINI.MD
