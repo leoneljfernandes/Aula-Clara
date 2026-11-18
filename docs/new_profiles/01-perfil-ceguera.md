@@ -21,14 +21,15 @@ Existen dos escenarios reales para un estudiante con ceguera y la app debe resol
 | Escenario | Qué usa la persona | Cómo debe comportarse Aula Clara |
 | :--- | :--- | :--- |
 | **Escenario A: Usa su propio lector de pantalla (NVDA / VoiceOver / JAWS)** | El sistema operativo ya lee cada elemento enfocado y las regiones `aria-live`. | La app **no debe superponer** su propia voz sobre la del lector al mover el foco con `Tab`. Debe ofrecer *landmarks* impecables, encabezados jerárquicos (`h1`, `h2`), `aria-live="polite"` para respuestas del asistente y botones con etiquetas explícitas. |
-| **Escenario B: Computadora sin lector de pantalla instalado (ej. biblioteca o laboratorio universitario)** | No tiene NVDA/JAWS activo; depende del sintetizador integrado del navegador (`SpeechSynthesis`). | Con la opción **«Guía de navegación por voz» (`voiceGuide: true`)**, la app lee en voz alta (`speakOnce`) el párrafo al que se salta con el teclado y las respuestas del asistente de IA apenas llegan. No lee el cambio de pantalla ni cada control que recibe el foco: eso quedó fuera. |
+| **Escenario B: Computadora sin lector de pantalla instalado (ej. biblioteca o laboratorio universitario)** | No tiene NVDA/JAWS activo; depende del sintetizador integrado del navegador (`SpeechSynthesis`). | Con la opción **«Guía de navegación por voz» (`voiceGuide: true`)**, la app lee el bloque al que se mueve el cursor con el teclado a través del **motor de lectura en voz alta** (`audio.playFrom`, el mismo de «Leer»), de modo que la lectura sigue de corrido desde ahí. `speakOnce` queda para las respuestas del asistente, las descripciones de gráficos y los errores, que se leen apenas llegan. No lee el cambio de pantalla ni cada control que recibe el foco: eso quedó fuera. |
 
 **Cómo quedó resuelto (plan 02):**
 - **Un árbitro de voz (`speechBus`, en `lib/speech.ts`).** Habla una sola voz a la vez: quien empieza a hablar interrumpe a la anterior y le avisa. Si lo interrumpido era la lectura del documento, queda **en pausa en el mismo párrafo** y «Continuar» sigue desde ahí. Una lectura en pausa cuenta como «no está hablando»: por eso el micrófono en manos libres vuelve a escuchar y «continuar» se entiende.
-- **`Esc` silencia toda voz** (`speechBus.silence()`), sin importar dónde esté el foco, y **además sigue cerrando diálogos** y desplegables: no se le quita ese uso. Con un diálogo modal abierto, es la única tecla del lector que sigue activa.
+- **`Esc` silencia toda voz** (`speechBus.silence()`), sin importar dónde esté el foco **dentro del lector** (los atajos se registran solo en `ReaderScreen`), y **además sigue cerrando diálogos** y desplegables: no se le quita ese uso. Con un diálogo modal abierto, es la única tecla del lector que sigue activa.
+- **Salir del lector silencia la voz:** al volver a la biblioteca se corta lo que haya quedado hablando (por ejemplo una respuesta pendiente de `speakOnce`).
 - **`voiceGuide` («Guía por voz») viene apagada**, también en el preset Ceguera. Quien usa NVDA, JAWS o VoiceOver tiene que dejarla apagada para no escuchar dos voces; la persona sin lector de pantalla la prende en Preferencias o en el lector. Con la guía encendida, la app lee:
-  - el bloque al que se mueve el cursor (con `Alt+↓`/`Alt+↑`, `Alt+H`, `Alt+G` o las teclas sueltas);
-  - las respuestas del asistente y las descripciones de figuras apenas llegan;
+  - el bloque al que se mueve el cursor (con `Alt+↓`/`Alt+↑`, `Alt+H`, `Alt+G` o las teclas sueltas), con el motor de lectura en voz alta (`audio.playFrom`);
+  - las respuestas del asistente y las descripciones de figuras apenas llegan (`speakOnce`);
   - **también los errores** de esos pedidos (key inválida, cuota, sin conexión), para que nadie espere una respuesta que no va a llegar;
   - **el aviso de corte** cuando la respuesta de la IA llegó truncada.
 - **`Alt+G` ya no enciende o apaga la guía:** salta al gráfico siguiente (ver §2.2). La guía se maneja desde el control «Guía por voz».
@@ -55,7 +56,7 @@ Todos los atajos salen de una tabla única, `frontend/src/lib/keymap.ts`, que le
 | Micrófono (comandos o dictado) | `Alt+M` | `M` |
 | Braille | `Alt+B` | `B` |
 | Resumir · Conceptos · Preguntas · Explicar el bloque | — | `1` · `2` · `3` · `4` |
-| Silenciar la voz | `Esc` (siempre) | — |
+| Silenciar la voz | `Esc` (siempre, dentro del lector) | — |
 
 `Alt+←` y `Alt+→` no se usan: son «Atrás» y «Adelante» en todos los navegadores. Respecto de la propuesta inicial de este documento cambiaron: `Alt+→`/`Alt+←` (ahora `Alt+↓`/`Alt+↑`), `Alt+I` (ahora `Alt+G`) y `Alt+G` como interruptor de la guía (ahora salta al gráfico).
 
@@ -63,7 +64,11 @@ Reglas de los atajos de una sola tecla (`singleKeyShortcuts`, apagado por defect
 - Solo cuentan sin `Ctrl`, `Meta`, `Alt` ni `Shift`, y con el foco **fuera de un campo de escritura** (`input` de texto, `textarea`, `select`, `[contenteditable]`, `role="textbox"` o `role="combobox"`). Escribir «j», «1» o un espacio en el chat no dispara nada.
 - `Espacio` se ignora si el foco está en un control que ya se activa con Espacio (botón, enlace, casilla, `summary`, roles `button`, `link`, `checkbox`, `radio`, `switch`, `menuitem`, `option`, `tab`).
 - `Alt+↑` y `Alt+↓` se ignoran en campos de escritura, porque abren el desplegable del `select`.
-- `Alt+B` hoy solo avisa «El Braille todavía no está disponible» (llega con el plan 03), y el atajo no aparece en la ayuda hasta que exista.
+- `Alt+B` (y `B`) hoy solo avisa «El Braille todavía no está disponible», tanto por teclado como por voz («braille»): ambos caminos llaman a la misma función `openBraille()` de `ReaderScreen`, que el plan 03 reemplaza. El atajo no aparece en la ayuda hasta que exista.
+- `4` («Explicar el bloque») pide a la IA que explique con palabras más simples el bloque donde está el cursor, con el mismo texto que el botón «Explicar con palabras más simples». Necesita un párrafo elegido: con el cursor sin mover o sobre un gráfico anuncia «Elegí un párrafo primero (Alt+↓ o J).» y no manda nada.
+- `Alt+M` (y `M`) alterna solo los **comandos** de voz, y solo si `voiceCommands` no está en `off` y el navegador sabe reconocer voz. El dictado tiene su propio botón «Dictar pregunta».
+- **La lectura arranca desde el cursor.** Con la lectura detenida y el cursor en un bloque de texto, `Alt+P` / `Espacio` y el comando de voz «leer», «reproducir» o «continuar» empiezan en ese bloque (`audio.playFrom`); con el cursor sin mover o sobre un gráfico, desde el principio. En pausa se reanuda donde quedó. Decir «continuar» con la lectura en marcha no hace nada (no reinicia el párrafo).
+- Con la guía de voz apagada pero la lectura ya en marcha, `Alt+↓` y compañía también leen el bloque nuevo (la lectura sigue desde ahí).
 - Con un lector de pantalla en modo navegación, `H` y `G` los resuelve el lector, no la app. Por eso las teclas sueltas son opcionales y los atajos con `Alt` existen siempre.
 
 #### B. Comandos y dictado por voz (`SpeechRecognition`)
@@ -82,7 +87,12 @@ Reglas de los atajos de una sola tecla (`singleKeyShortcuts`, apagado por defect
 - **Nota de privacidad:** el audio va al servicio de reconocimiento del navegador. Solo se procesa en el dispositivo si el navegador ofrece `processLocally` y el paquete de idioma `es-AR` ya está instalado; en ese caso se prefiere. Aula Clara no guarda audio ni transcripciones.
 - **Cabecera HTTP:** `vercel.json` sirve `Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()`. El micrófono queda permitido solo para el propio sitio.
 - **Earcons** (`lib/voice/earcons.ts`): dos tonos de 80 ms y ganancia 0,15, generados con `AudioContext` (sin archivos). Inicio: 440 → 660 Hz. Fin: 660 → 440 Hz, que suena cuando el micrófono se apaga de verdad (no en los reinicios automáticos). Sin `AudioContext`, no suena nada y no falla.
-- **Barra de voz** (`VoiceCommandBar`): una región `role="status"` con «Escuchando…» o «Micrófono apagado» y la última frase con ✓ o ✗. No anuncia lo que dice la app, para no duplicar voces.
+- **Barra de voz** (`VoiceCommandBar`): el estado «Escuchando…» / «Micrófono apagado» es solo visual (`aria-hidden`): no está en la región anunciada, porque un lector de pantalla con parlantes lo diría justo ante el micrófono recién abierto y esa sería la única frase que se oiría; los sonidos de encendido y apagado ya avisan del estado. La región `role="status"` anuncia únicamente resultados y errores: la frase entendida con ✓, lo entendido pero no hecho (✗ con el motivo) y los errores del micrófono. No anuncia lo que dice la app, para no duplicar voces.
+- **Feedback sin eco.** En modo `push` una frase que no es un comando se muestra con «✗ No entendí ese comando». En **manos libres nunca se escribe una frase no reconocida**: el micrófono abierto oye voces ajenas o a un lector de pantalla, y repetirlas en la región anunciada las volvería a decir ante el micrófono. Solo se anuncian los comandos entendidos y los errores.
+- **Diálogos abiertos.** Con un diálogo modal abierto (por ejemplo la descripción de una figura) los comandos de voz solo ejecutan «pausar» y «detener»; el resto se marca como no hecho, sin mover el foco.
+- **Velocidad y pedidos a la IA.** «Más rápido» y «más lento» anuncian «Velocidad x…». Si hay una respuesta de IA en curso, un comando que pide otra a la IA se marca «Esperá a que termine la respuesta» en vez de ✓.
+- **Dictado.** Lo dictado se escribe en el campo de la pregunta y se anuncia «Escribiste: …» para quien no ve la pantalla. Decir «enviar» manda lo escrito.
+- **Consentimiento en manos libres.** Si el modo es `continuous`, el diálogo suma: «En modo manos libres el micrófono queda abierto: también puede oír a otras personas que estén cerca.»
 
 **Intérprete local de comandos** (`lib/voice/commands.ts`, puro, sin llamadas a la IA). Normaliza el texto (minúsculas, sin tildes, sin puntuación) y solo entiende frases completas, salvo «preguntar …». Incluye las formas de voseo; como se normalizan sin tilde, «leé» y «lee» son la misma frase:
 
@@ -100,7 +110,7 @@ Reglas de los atajos de una sola tecla (`singleKeyShortcuts`, apagado por defect
 | Conceptos clave | «conceptos clave» |
 | Preguntas de repaso | «preguntas», «preguntas de repaso» |
 | Describir la figura | «describir imagen», «interpretar gráfico» |
-| Braille | «braille», «traducir a braille» (hoy avisa que no está disponible) |
+| Braille | «braille», «traducir a braille» (hoy anuncia «El Braille todavía no está disponible») |
 | Pregunta libre | «preguntar …» o «asistente …»: el resto de la frase va al asistente |
 
 **Regla del modo continuo.** En manos libres el micrófono está siempre abierto y puede oír voces ajenas (un titular, un video, otra persona). Por eso las acciones que **gastan cuota de la IA** (resumir, conceptos clave, preguntas, describir imagen y preguntar) exigen decir antes el prefijo **«asistente»** («asistente resumí»), y la pregunta libre además necesita **al menos 3 palabras** después del prefijo. En cambio la navegación y la lectura van sin prefijo y no gastan cuota: **«para», «lee» o «baja» sueltos sí disparan detener, leer y bloque siguiente** en manos libres. En modo `push` todo va sin prefijo.

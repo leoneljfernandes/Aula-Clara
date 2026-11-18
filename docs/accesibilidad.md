@@ -35,22 +35,28 @@ Los define `frontend/src/lib/keymap.ts`; el diálogo de atajos y el panel de her
 | Bloque siguiente / anterior | `Alt+↓` / `Alt+↑` | `J` / `K` |
 | Título siguiente | `Alt+H` | `H` |
 | Gráfico siguiente | `Alt+G` | `G` |
-| Micrófono | `Alt+M` | `M` |
-| Braille (todavía avisa que no está disponible) | `Alt+B` | `B` |
-| Resumir · Conceptos · Preguntas · Explicar el bloque | — | `1` · `2` · `3` · `4` |
-| Silenciar la voz | `Esc` (siempre) | — |
+| Micrófono (comandos de voz) | `Alt+M` | `M` |
+| Braille (todavía anuncia «El Braille todavía no está disponible», por teclado y por voz) | `Alt+B` | `B` |
+| Resumir · Conceptos · Preguntas · Explicar el bloque actual más simple | — | `1` · `2` · `3` · `4` |
+| Silenciar la voz | `Esc` (siempre, dentro del lector) | — |
 
-Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles que ya se activan con Espacio; `Alt+↑` y `Alt+↓` se ignoran en campos de escritura (abren el desplegable del `select`); `Esc` silencia y además cierra el diálogo abierto. `Alt+←` y `Alt+→` no se usan porque son «Atrás» y «Adelante» del navegador.
+Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles que ya se activan con Espacio; `Alt+↑` y `Alt+↓` se ignoran en campos de escritura (abren el desplegable del `select`); `Esc` silencia y además cierra el diálogo abierto, y vale solo dentro del lector (los atajos se registran únicamente en `ReaderScreen`). `4` necesita un párrafo elegido con el cursor: si no, anuncia «Elegí un párrafo primero (Alt+↓ o J).». `Alt+M` alterna solo los comandos de voz (con `voiceCommands` distinto de `off` y un navegador que reconozca voz); el dictado tiene su botón «Dictar pregunta». `Alt+P` / `Espacio` empiezan a leer desde el bloque del cursor (desde el principio si no hay cursor o está en un gráfico). `Alt+←` y `Alt+→` no se usan porque son «Atrás» y «Adelante» del navegador.
 
 ## Voz
 
-- **Guía por voz** (`voiceGuide`): apagada por defecto. Lee el bloque al que se mueve el cursor, las respuestas del asistente, las descripciones de figuras, **los errores** de esos pedidos y los avisos de corte. **Con un lector de pantalla (NVDA, JAWS, VoiceOver) tiene que quedar apagada**, o se escuchan dos voces.
+- **Guía por voz** (`voiceGuide`): apagada por defecto. Lee el bloque al que se mueve el cursor (con el motor de lectura en voz alta, `audio.playFrom`, no con `speakOnce`), las respuestas del asistente, las descripciones de figuras, **los errores** de esos pedidos y los avisos de corte. **Con un lector de pantalla (NVDA, JAWS, VoiceOver) tiene que quedar apagada**, o se escuchan dos voces.
+- Con la guía apagada pero la lectura ya en marcha, moverse de bloque con el teclado también lee el bloque nuevo. La lectura arranca desde el cursor. Salir del lector silencia la voz.
 - **Una sola voz a la vez:** quien empieza a hablar interrumpe a la anterior. Si interrumpe a la lectura del documento, esta queda en pausa en el mismo párrafo y «Continuar» sigue desde ahí.
 - **Comandos por voz** (`voiceCommands`): `off`, `push` (al tocar el micrófono) o `continuous` (manos libres). Necesitan Chrome, Edge o Safari; Firefox no tiene reconocimiento de voz y la app lo explica en vez de mostrar el botón.
 - **Consentimiento:** la primera vez aparece «Antes de usar el micrófono». El audio lo procesa el servicio de reconocimiento del navegador (Google en Chrome, Microsoft en Edge, Apple en Safari), salvo que el navegador pueda hacerlo en el dispositivo (solo si el paquete de idioma ya está instalado). Aula Clara no graba ni guarda el audio. La aceptación se guarda en `aulaclara.voiceConsent`.
 - **Permiso del sitio:** `vercel.json` manda `Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()`.
 - **Tonos de aviso:** un tono ascendente (440 → 660 Hz) cuando el micrófono empieza a escuchar y uno descendente (660 → 440 Hz) cuando se apaga; 80 ms cada uno. Sin `AudioContext` no suenan.
 - **Manos libres:** las acciones que gastan cuota de la IA (resumir, conceptos clave, preguntas, describir imagen, preguntar) piden decir antes «asistente», y la pregunta libre necesita al menos 3 palabras. La lectura y la navegación van sin prefijo: «para», «lee» o «baja» sueltos detienen, leen o avanzan.
+- **Estado y anuncios de los comandos:** «Escuchando…» y «Micrófono apagado» son solo visuales (`aria-hidden`), fuera de la región `role="status"`: los tonos ya avisan del estado y un lector de pantalla con parlantes no debe hablar ante el micrófono abierto. La región anuncia solo resultados (✓ entendido, ✗ con el motivo cuando no se pudo hacer, p. ej. «Esperá a que termine la respuesta» si hay una respuesta de IA en curso) y errores. En `push` también muestra «✗ No entendí ese comando»; en **manos libres nunca se escribe una frase no reconocida**, para no repetir ante el micrófono abierto lo que dijo otra persona o un lector de pantalla.
+- **Diálogos abiertos:** con un diálogo modal abierto los comandos de voz solo ejecutan «pausar» y «detener».
+- **Velocidad:** «más rápido» y «más lento» anuncian «Velocidad x…».
+- **Dictado:** lo dictado se anuncia como «Escribiste: …». «Enviar» manda la pregunta.
+- **Consentimiento en manos libres:** suma «En modo manos libres el micrófono queda abierto: también puede oír a otras personas que estén cerca.»
 - **Un micrófono a la vez:** el dictado de preguntas corta a los comandos y estos se reanudan después.
 
 ## Implementado, sin prueba automática
@@ -65,7 +71,7 @@ Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles q
 
 ## Pendiente: prueba manual
 
-- [ ] Recorrer las 3 vistas **solo con teclado** (Tab, Shift+Tab, Enter, Espacio, Esc y los atajos Alt+P/S/=/−/T/A).
+- [ ] Recorrer las 3 vistas **solo con teclado** (Tab, Shift+Tab, Enter, Espacio, Esc y los atajos de la tabla de arriba).
 - [ ] Recorrerlas con un **lector de pantalla** (NVDA o Orca en escritorio, VoiceOver o TalkBack en móvil): los anuncios, el chat, el diálogo de la imagen y la lectura resaltada.
 - [ ] Revisar el diseño con **zoom al 200 %** y en un ancho de 360 px (el lector pasa a una columna).
 - [ ] **Permiso del micrófono en un navegador real** (Chrome, Edge, Safari): que el aviso del navegador aparezca después del diálogo «Antes de usar el micrófono», una sola vez, y qué pasa si se lo deniega.
@@ -73,7 +79,8 @@ Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles q
 - [ ] **Tonos de aviso:** que se oigan en parlantes y auriculares, con el volumen habitual, y no se confundan con los sonidos del sistema.
 - [ ] **Autoplay de la guía por voz:** que una respuesta del asistente que llega después de un pedido asíncrono se lea (la política del navegador puede dejarla muda hasta que haya habido un gesto en la página).
 - [ ] **Conflictos de `Alt+tecla` en Firefox y otros navegadores:** `Alt+H`, `Alt+B`, `Alt+M`, `Alt+S` y `Alt+T` pueden abrir menús del navegador. Si alguno lo hace, anotarlo acá y proponer otra tecla.
-- [ ] **Dos reconocedores superpuestos un instante** al terminar un dictado: que los comandos en manos libres se reanuden sin oír dos veces ni quedar mudos.
+- [ ] **Dos reconocedores superpuestos un instante** al terminar un dictado: que los comandos en manos libres se reanuden sin oír dos veces ni quedar mudos. Verificarlo en Chrome real, donde el dictado acaba de cerrarse cuando el reconocedor de comandos vuelve a abrirse.
+- [ ] **Con NVDA, comandos en modo `push`:** que al tocar el micrófono el lector de pantalla ya no diga «Escuchando…» ni nada con el micrófono abierto, y que la única frase captada sea la de la persona.
 - [ ] **Con NVDA, JAWS y VoiceOver** (Windows y macOS, Chrome y Firefox): `H` y `G` los resuelve el lector, y `Alt+H`, `Alt+G`, `Alt+↓` y `Alt+↑` funcionan en la app; la guía por voz **apagada** no pisa la voz del lector; «Escuchar respuesta» deja la lectura en pausa y «Continuar» retoma.
 - [ ] **Comandos por voz en Chrome:** el consentimiento aparece una vez, los tonos suenan y «siguiente párrafo» avanza; en manos libres, que «asistente resumí» funcione y que un «resumí» suelto no gaste cuota.
 - [ ] Probar la **lectura en voz alta** en Chrome, Firefox y Safari: la calidad y la disponibilidad de la voz en español dependen del navegador y del sistema operativo.

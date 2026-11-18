@@ -46,6 +46,7 @@ Consecuencias:
 - `aulaclara.settings`: `{ "schemaVersion": 2, "settings": { …ajustes en camelCase } }`.
 - `aulaclara.onboarded`: `true` cuando se terminó el onboarding.
 - `aulaclara.presets`: la caché del catálogo.
+- `aulaclara.voiceConsent`: `{ "commands"?: true, "captions"?: true }`, el consentimiento para que el navegador mande la voz a su servicio de reconocimiento (plan 02). También es un dato personal: tener `captions` aceptado sugiere una posible pérdida auditiva, igual que elegir un perfil. El plan 05 debe agregar una forma de revocarlo (hoy solo se borra a mano desde el navegador).
 - **Ya no se guarda qué perfil se eligió.** Que alguien elija «Ceguera» o «Sordera» revela una discapacidad, que es un dato sensible según la Ley 25.326 ([mejoras-pendientes.md, Fase 2.4](../mejoras-pendientes.md)). La clave vieja `aulaclara.profile` se migra y se borra.
 
 ## 4. Ajustes nuevos (estado final)
