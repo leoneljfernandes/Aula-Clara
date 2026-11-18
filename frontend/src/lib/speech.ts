@@ -35,6 +35,30 @@ function cancelSynthesis(): void {
   }
 }
 
+const WATCH_MS = 1000;
+
+/**
+ * Chrome con voces remotas puede dejar de hablar sin disparar `onend` ni `onerror`: el árbitro quedaría «hablando»
+ * para siempre. Cada segundo se consulta `speechSynthesis`: si no está hablando (ni pendiente) dos veces seguidas y
+ * no hay una pausa del usuario, se da la locución por terminada. Devuelve la función que lo detiene.
+ */
+function watchEnd(done: () => void): () => void {
+  let idle = 0;
+  const id = setInterval(() => {
+    try {
+      const synth = window.speechSynthesis;
+      idle = synth.paused || synth.speaking || synth.pending ? 0 : idle + 1;
+    } catch {
+      idle = 0;
+    }
+    if (idle >= 2) {
+      clearInterval(id);
+      done();
+    }
+  }, WATCH_MS);
+  return () => clearInterval(id);
+}
+
 /** Quien habla (el motor de lectura o una locución suelta). Se entera cuando otra voz lo interrumpe. */
 export interface SpeechOwner {
   onInterrupted(): void;
@@ -111,10 +135,16 @@ export function speakOnce(text: string, rate = 1): boolean {
   const owner: SpeechOwner = { onInterrupted: () => {} };
   try {
     const u = utterance(text, rate);
-    u.onend = () => speechBus.release(owner);
-    u.onerror = () => speechBus.release(owner);
+    let stopWatch = (): void => {};
+    const finished = (): void => {
+      stopWatch();
+      speechBus.release(owner);
+    };
+    u.onend = finished;
+    u.onerror = finished;
     speechBus.claim(owner);
     window.speechSynthesis.speak(u);
+    stopWatch = watchEnd(finished);
     return true;
   } catch {
     speechBus.release(owner);
@@ -137,6 +167,8 @@ export const STOPPED: ReadState = { status: "stopped", idx: -1 };
 export class ReadAloudEngine {
   private token = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  /** Detiene el vigilante de fin de voz de la locución en curso. */
+  private stopWatch: (() => void) | undefined;
   private idx = -1;
   private simulated = !hasTTS;
   private state: ReadState = STOPPED;
@@ -172,6 +204,7 @@ export class ReadAloudEngine {
   private cancelSpeech(): void {
     this.token++;
     clearTimeout(this.timer);
+    this.stopWatch?.();
     if (this.holding) cancelSynthesis();
   }
 
@@ -184,6 +217,7 @@ export class ReadAloudEngine {
   private onInterrupted(): void {
     this.token++;
     clearTimeout(this.timer);
+    this.stopWatch?.();
     this.holding = false;
     this.interrupted = true;
     if (this.state.status === "stopped") return;
@@ -194,6 +228,7 @@ export class ReadAloudEngine {
     // La voz vieja la corta `claim`; acá solo se invalidan los callbacks y el temporizador.
     this.token++;
     clearTimeout(this.timer);
+    this.stopWatch?.();
     const mine = this.token;
     const text = this.items[i];
     if (text === undefined) {
@@ -216,7 +251,10 @@ export class ReadAloudEngine {
     if (!this.simulated) {
       try {
         const u = utterance(text, this.getRate());
-        u.onend = next;
+        u.onend = () => {
+          this.stopWatch?.();
+          next();
+        };
         u.onerror = (e) => {
           if (mine === this.token && e.error !== "interrupted" && e.error !== "canceled") {
             this.simulated = true; // la voz falló: se sigue en modo simulado
@@ -224,6 +262,10 @@ export class ReadAloudEngine {
           }
         };
         window.speechSynthesis.speak(u);
+        this.stopWatch = watchEnd(() => {
+          this.stopWatch?.();
+          next();
+        });
         return;
       } catch {
         this.simulated = true;

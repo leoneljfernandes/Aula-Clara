@@ -11,6 +11,8 @@ class FakeUtterance {
 const spoken: FakeUtterance[] = [];
 const synth = {
   paused: false,
+  speaking: false,
+  pending: false,
   speak: (u: FakeUtterance) => spoken.push(u),
   cancel: () => spoken.splice(0).forEach((u) => u.onerror?.({ error: "interrupted" })),
   pause: vi.fn(() => {
@@ -26,6 +28,8 @@ let speech: typeof import("./speech");
 beforeEach(async () => {
   spoken.length = 0;
   synth.paused = false;
+  synth.speaking = false;
+  synth.pending = false;
   synth.pause.mockClear();
   synth.resume.mockClear();
   vi.resetModules();
@@ -215,4 +219,54 @@ it("seguir de párrafo en párrafo cancela la voz una sola vez por párrafo", ()
   engine.play();
   expect(cancel).toHaveBeenCalledTimes(1);
   cancel.mockRestore();
+});
+
+it("si el navegador deja de hablar sin avisar (sin onend), el árbitro se libera solo", () => {
+  vi.useFakeTimers();
+  try {
+    speech.speakOnce("respuesta larga");
+    synth.speaking = true;
+    vi.advanceTimersByTime(5_000);
+    expect(speech.speechBus.isSpeaking()).toBe(true); // sigue hablando de verdad
+    synth.speaking = false; // la voz se cortó y nadie avisó
+    vi.advanceTimersByTime(2_000);
+    expect(speech.speechBus.isSpeaking()).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("la lectura del documento sigue con el párrafo siguiente si la voz se corta sin onend", () => {
+  vi.useFakeTimers();
+  try {
+    const states: { status: string; idx: number }[] = [];
+    const engine = new speech.ReadAloudEngine(
+      ["uno", "dos"],
+      () => 1,
+      (s) => states.push(s),
+      vi.fn(),
+    );
+    engine.play();
+    synth.speaking = true;
+    vi.advanceTimersByTime(3_000);
+    expect(states.at(-1)).toEqual({ status: "playing", idx: 0 });
+    synth.speaking = false;
+    vi.advanceTimersByTime(2_000);
+    expect(states.at(-1)).toEqual({ status: "playing", idx: 1 });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("una pausa del usuario no se confunde con una voz cortada", () => {
+  vi.useFakeTimers();
+  try {
+    speech.speakOnce("texto");
+    synth.paused = true;
+    synth.speaking = false;
+    vi.advanceTimersByTime(10_000);
+    expect(speech.speechBus.isSpeaking()).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
 });

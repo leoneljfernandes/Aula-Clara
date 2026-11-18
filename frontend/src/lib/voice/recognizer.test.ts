@@ -319,3 +319,46 @@ it("detener a mano o en manos libres no cuenta como «no respondió»", () => {
   vi.advanceTimersByTime(20_000);
   expect(handsFree.onError).not.toHaveBeenCalled();
 });
+
+it("con pauseWhileAppSpeaks apagado sigue escuchando mientras la app habla", () => {
+  installFakeRecognition();
+  const o = opts();
+  createRecognizer({ ...o, pauseWhileAppSpeaks: false })!.start();
+  const fake = FakeRecognition.instances[0]!;
+  const owner = { onInterrupted: vi.fn() };
+  speechBus.claim(owner);
+  expect(fake.aborts).toBe(0);
+  fake.emitFinal("dijo el docente");
+  expect(o.onFinal).toHaveBeenCalledWith("dijo el docente");
+  speechBus.release(owner);
+});
+
+it("los errores de red esporádicos no suman si entre medio hay sesiones limpias", () => {
+  installFakeRecognition();
+  const o = opts();
+  createRecognizer(o)!.start();
+  const fake = FakeRecognition.instances[0]!;
+  for (let round = 0; round < 8; round++) {
+    fake.emitError("network");
+    fake.emitEnd();
+    vi.advanceTimersByTime(5_000);
+    fake.emitEnd(); // una sesión que termina sin error: cuenta como limpia
+    vi.advanceTimersByTime(5_000);
+  }
+  expect(o.onListeningChange).not.toHaveBeenCalledWith(false);
+  expect(o.onError).not.toHaveBeenCalled();
+});
+
+it("un stop() y start() seguidos no se pierden con el cierre tardío de la sesión anterior", () => {
+  installFakeRecognition();
+  const o = opts();
+  const r = createRecognizer({ ...o, continuous: false })!;
+  r.start();
+  const fake = FakeRecognition.instances[0]!;
+  r.stop();
+  r.start();
+  fake.emitEnd(); // el cierre de la primera sesión llega tarde
+  expect(o.onListeningChange).not.toHaveBeenCalledWith(false);
+  fake.emitFinal("siguiente");
+  expect(o.onFinal).toHaveBeenCalledWith("siguiente");
+});

@@ -19,3 +19,14 @@ export function hasVoiceConsent(kind: VoiceConsentKind): boolean {
 export function grantVoiceConsent(kind: VoiceConsentKind): void {
   storage.set(KEY, { ...read(), [kind]: true });
 }
+
+/**
+ * Retira el permiso de un tipo de uso. `captions: true` sugiere una pérdida auditiva (dato sensible, Ley 25.326):
+ * vive solo en este navegador, nunca se manda al servidor, y la persona puede borrarlo cuando quiera.
+ */
+export function revokeVoiceConsent(kind: VoiceConsentKind): void {
+  const rest = { ...read() };
+  delete rest[kind];
+  if (Object.keys(rest).length === 0) storage.remove(KEY);
+  else storage.set(KEY, rest);
+}

@@ -151,6 +151,14 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "interfaz",
     inReader: true,
   },
+  {
+    key: "liveCaptions",
+    kind: "toggle",
+    label: "Subtítulos en vivo de la clase",
+    help: "Usa el micrófono para transcribir lo que se dice en el aula. Pedí permiso antes de usarlo.",
+    group: "asistente",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

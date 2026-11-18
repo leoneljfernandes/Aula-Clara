@@ -288,6 +288,7 @@ describe("onboarding", () => {
       aiLanguage: "standard",
       hideAudio: false,
       visualAlerts: false,
+      liveCaptions: false,
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -2359,5 +2360,111 @@ describe("lista de comandos de voz", () => {
     await user.click(await screen.findByRole("button", { name: /Dictar pregunta/ }));
     act(() => FakeRecognition.instances.at(-1)!.emitEnd());
     expect(await screen.findByText(/no devolvió ningún texto/)).toBeInTheDocument();
+  });
+});
+
+describe("subtítulos en vivo", () => {
+  const withCaptions = (extra: Record<string, unknown> = {}): void =>
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { liveCaptions: true, aiLanguage: "plain", ...extra } }),
+    );
+  beforeEach(() => {
+    withOnboarding();
+    withAI();
+    FakeRecognition.instances = [];
+    withCaptions();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("pide consentimiento, muestra lo que se dice y lo explica en lenguaje claro", async () => {
+    installFakeRecognition();
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Empezar subtítulos" }));
+    const dialog = await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+    expect(dialog).toHaveTextContent("Pedile permiso al docente");
+    await user.click(within(dialog).getByRole("button", { name: "Usar el micrófono" }));
+    const fake = FakeRecognition.instances[0]!;
+    expect(fake.interimResults).toBe(true);
+    act(() => fake.emitInterim("la ley veintiséis"));
+    expect(screen.getByText("la ley veintiséis")).toBeInTheDocument();
+    act(() => fake.emitFinal("la ley 26.653 obliga a las universidades"));
+    await user.click(screen.getByRole("button", { name: /Explicar en lenguaje claro lo último/ }));
+    await waitFor(() =>
+      expect(calls("/ai/chat")[0]?.data).toMatchObject({
+        action: "simplify",
+        language: "plain",
+        selection: "la ley 26.653 obliga a las universidades",
+      }),
+    );
+  });
+
+  it("con el lenguaje estándar, explicar lo último pide igual lenguaje claro", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ captions: true }));
+    withCaptions({ aiLanguage: "standard" });
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Empezar subtítulos" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("el docente habló de la ley"));
+    await user.click(screen.getByRole("button", { name: /Explicar en lenguaje claro lo último/ }));
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ language: "plain" }));
+  });
+
+  it("al salir del lector se apaga el micrófono y no queda nada guardado", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ captions: true }));
+    const user = userEvent.setup();
+    const router = renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Empezar subtítulos" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("dato privado"));
+    await act(() => router.navigate("/biblioteca"));
+    expect(FakeRecognition.instances[0]!.aborts + FakeRecognition.instances[0]!.stops).toBeGreaterThan(0);
+    expect(JSON.stringify(window.localStorage)).not.toContain("dato privado");
+  });
+
+  it("«Detener subtítulos» corta el micrófono y «Borrar» limpia la transcripción", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ captions: true }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Empezar subtítulos" }));
+    const fake = FakeRecognition.instances[0]!;
+    act(() => fake.emitFinal("una frase de la clase"));
+    expect(screen.getByText("una frase de la clase")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Detener subtítulos" }));
+    expect(fake.stops).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Borrar" }));
+    expect(screen.queryByText("una frase de la clase")).not.toBeInTheDocument();
+  });
+
+  it("no pausa los subtítulos cuando la app habla: no se pierde lo que dice el docente", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ captions: true }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Empezar subtítulos" }));
+    const fake = FakeRecognition.instances[0]!;
+    const owner = { onInterrupted: () => {} };
+    act(() => speechBus.claim(owner));
+    expect(fake.aborts).toBe(0);
+    act(() => speechBus.release(owner));
+  });
+
+  it("se puede revocar el permiso de los subtítulos", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ captions: true, commands: true }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Revocar permiso del micrófono" }));
+    expect(JSON.parse(window.localStorage.getItem("aulaclara.voiceConsent")!)).toEqual({ commands: true });
+    expect(screen.queryByRole("button", { name: "Revocar permiso del micrófono" })).not.toBeInTheDocument();
+  });
+
+  it("sin reconocimiento de voz lo explica y no ofrece empezar", async () => {
+    renderAt("/leer/d1");
+    expect(await screen.findByText(/Tu navegador no permite subtítulos en vivo/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Empezar subtítulos" })).not.toBeInTheDocument();
   });
 });

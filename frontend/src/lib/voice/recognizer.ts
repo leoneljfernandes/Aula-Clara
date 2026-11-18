@@ -8,6 +8,11 @@ export type RecognitionErrorKind =
 export interface RecognizerOptions {
   continuous: boolean;
   interim: boolean;
+  /**
+   * Por defecto, mientras la app habla el reconocedor se calla para no oírse a sí misma. Los subtítulos de una
+   * clase lo apagan: no pueden perderse lo que dice el docente.
+   */
+  pauseWhileAppSpeaks?: boolean;
   onFinal(text: string): void;
   onInterim?(text: string): void;
   onListeningChange(listening: boolean): void;
@@ -92,6 +97,7 @@ function mapError(error: string): RecognitionErrorKind {
 export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   const Ctor = recognitionCtor();
   if (!Ctor) return null;
+  const pauseWhileSpeaking = opts.pauseWhileAppSpeaks ?? true;
   const rec = new Ctor();
   rec.lang = LANG;
   rec.continuous = opts.continuous;
@@ -117,6 +123,8 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
+  let sessionError = false; // hubo un error del navegador en esta sesión
+  let closing = false; // se pidió stop() y falta el `end` de esa sesión
   let signaled = false; // el navegador mandó un resultado o un error en esta sesión
   let unsubscribe: (() => void) | undefined;
 
@@ -146,6 +154,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
     try {
       if (local) rec.processLocally = true;
       signaled = false;
+      sessionError = false;
       rec.start();
       running = true;
       if (!opts.continuous) watchdog = setTimeout(unresponsive, RESPONSE_TIMEOUT_MS);
@@ -213,6 +222,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   rec.onerror = (e) => {
     if (e.error === "aborted") return; // lo causamos nosotros al callarnos o apagar
     signaled = true;
+    sessionError = true;
     clearTimeout(watchdog);
     const kind = mapError(e.error);
     // Sin voz es normal en modo continuo (cada ciclo sin hablar termina así): se reinicia sin avisar.
@@ -229,7 +239,19 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   };
 
   rec.onend = () => {
+    // El cierre de una sesión que ya se había pedido detener: si mientras tanto la persona volvió a empezar,
+    // ese cierre es de la sesión vieja y no corta la nueva.
+    if (closing) {
+      closing = false;
+      if (!wanted) {
+        running = false;
+        finish();
+      }
+      return;
+    }
     running = false;
+    // Una sesión que termina sin error es limpia: los errores de red esporádicos de sesiones largas no se acumulan.
+    if (!sessionError) networkErrors = 0;
     if (paused) return; // nos callamos por la voz de la app: se reanuda cuando termine
     // Una sola frase que se cierra sin resultado ni error: el navegador abrió el micrófono y no hizo nada.
     if (wanted && !opts.continuous && !signaled) opts.onError("unresponsive");
@@ -246,10 +268,10 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
       wanted = true;
       networkErrors = 0;
       paused = false;
-      unsubscribe = speechBus.subscribe(onSpeakingChange);
+      if (pauseWhileSpeaking) unsubscribe = speechBus.subscribe(onSpeakingChange);
       setListening(true);
       playEarcon("start");
-      if (opts.continuous && speechBus.isSpeaking()) {
+      if (pauseWhileSpeaking && opts.continuous && speechBus.isSpeaking()) {
         paused = true; // la app está hablando: se empieza a escuchar cuando termine
         return;
       }
@@ -259,6 +281,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
       if (!wanted) return;
       if (running) {
         wanted = false;
+        closing = true;
         clearTimeout(timer);
         clearTimeout(watchdog);
         try {

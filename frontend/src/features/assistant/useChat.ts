@@ -28,7 +28,7 @@ export interface Chat {
   send: (
     shown: string,
     action: ChatAction,
-    extra?: { message?: string; selection?: string },
+    extra?: { message?: string; selection?: string; language?: AnswerLanguage },
   ) => Promise<void>;
 }
 
@@ -46,7 +46,7 @@ export function useChat(documentText: string, language: AnswerLanguage): Chat {
         message: (extra?.message ?? (action === "free" ? shown : undefined))?.slice(0, LIMITS.message),
         documentText: documentText.slice(0, MAX_CONTEXT_CHARS),
         selection: extra?.selection?.slice(0, LIMITS.selection),
-        language,
+        language: extra?.language ?? language,
       });
       setMessages((m) => [
         ...m,

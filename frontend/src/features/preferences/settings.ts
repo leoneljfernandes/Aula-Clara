@@ -18,6 +18,7 @@ export interface ReadingSettings {
   aiLanguage: "standard" | "plain" | "easy";
   hideAudio: boolean;
   visualAlerts: boolean;
+  liveCaptions: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   aiLanguage: "standard",
   hideAudio: false,
   visualAlerts: false,
+  liveCaptions: false,
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -65,6 +67,7 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
   aiLanguage: (v): v is ReadingSettings["aiLanguage"] => v === "standard" || v === "plain" || v === "easy",
   hideAudio: (v): v is boolean => typeof v === "boolean",
   visualAlerts: (v): v is boolean => typeof v === "boolean",
+  liveCaptions: (v): v is boolean => typeof v === "boolean",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);

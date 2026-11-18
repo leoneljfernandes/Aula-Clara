@@ -4,7 +4,14 @@ import { Link } from "react-router";
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
 import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
-import { AssistantPanel, definePrompt, explainPrompt, quickActionLabel, useChat } from "@/features/assistant";
+import {
+  AssistantPanel,
+  definePrompt,
+  explainPrompt,
+  LiveCaptions,
+  quickActionLabel,
+  useChat,
+} from "@/features/assistant";
 import { type Article, libraryApi, type LibraryDocument } from "@/features/library";
 import {
   clamp,
@@ -358,6 +365,17 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           aria-label="Panel de asistencia IA"
           className={`flex flex-col border-t-2 border-[var(--border)] bg-[var(--panel)] lg:overflow-hidden lg:border-t-0 lg:border-l-2 ${barVisible ? "pb-36" : ""}`}
         >
+          {settings.liveCaptions && (
+            <LiveCaptions
+              style={readingStyle(settings)}
+              onExplain={(fragment) =>
+                void chat.send("Explicá en lenguaje claro lo que dijo el docente", "simplify", {
+                  selection: fragment,
+                  language: settings.aiLanguage === "standard" ? "plain" : settings.aiLanguage,
+                })
+              }
+            />
+          )}
           <AssistantPanel
             chat={chat}
             inputRef={chatInput}
