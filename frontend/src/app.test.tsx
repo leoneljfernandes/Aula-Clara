@@ -283,6 +283,7 @@ describe("onboarding", () => {
       voiceCommands: "off",
       brailleTools: false,
       uiScale: "normal",
+      clickGuard: "off",
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -507,6 +508,26 @@ describe("lector", () => {
     expect(document.querySelector("[data-ui-scale]")).toHaveAttribute("data-ui-scale", "normal");
     expect(screen.getByRole("complementary", { name: "Barra de accesibilidad" })).toHaveClass("lg:block");
   });
+
+  it.each([
+    ["normal", "true"],
+    ["off", "false"],
+  ])(
+    "con el filtro de clics en «%s», dos clics seguidos dejan «Herramientas» en aria-expanded=%s",
+    async (guard, expanded) => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { clickGuard: guard } }),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      const tools = screen.getByRole("button", { name: /Herramientas/ });
+      await user.click(tools);
+      await user.click(tools);
+      expect(tools).toHaveAttribute("aria-expanded", expanded);
+    },
+  );
 
   it("Alt+T cambia el tema y Alt+= agranda el texto", async () => {
     const user = userEvent.setup();

@@ -101,6 +101,19 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "interfaz",
     inReader: true,
   },
+  {
+    key: "clickGuard",
+    kind: "choice",
+    label: "Evitar clics dobles involuntarios",
+    options: [
+      { value: "off", label: "No" },
+      { value: "normal", label: "Sí" },
+      { value: "strong", label: "Sí, más fuerte" },
+    ],
+    help: "Ignora un segundo clic sobre el mismo botón si llega demasiado rápido. No afecta al teclado.",
+    group: "interfaz",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

@@ -1,5 +1,7 @@
 import { createContext, type ReactNode, use, useCallback, useEffect, useState } from "react";
 
+import { installClickGuard } from "@/lib/clickGuard";
+
 import { THEMES } from "./config";
 import { DEFAULT_SETTINGS, type ReadingSettings } from "./settings";
 import { isOnboarded, loadSettings, markOnboarded, saveSettings } from "./storage";
@@ -107,6 +109,13 @@ export function ThemeScope({ children }: { children: ReactNode }): ReactNode {
   useEffect(() => {
     document.body.style.background = theme.vars.bg;
   }, [theme]);
+
+  // Filtro de clics dobles involuntarios: 350 ms («normal») o 700 ms («strong»).
+  const guard = settings.clickGuard;
+  useEffect(() => {
+    if (guard === "off") return;
+    return installClickGuard(document, guard === "strong" ? 700 : 350);
+  }, [guard]);
 
   return (
     <div
