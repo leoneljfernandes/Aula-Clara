@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
 import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
-import { AssistantPanel, explainPrompt, quickActionLabel, useChat } from "@/features/assistant";
+import { AssistantPanel, definePrompt, explainPrompt, quickActionLabel, useChat } from "@/features/assistant";
 import { type Article, libraryApi, type LibraryDocument } from "@/features/library";
 import {
   clamp,
@@ -58,8 +58,17 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const audio = useReadAloud(texts, settings.rate, () => announce("Lectura finalizada"));
   const activeBlock = audio.idx >= 0 ? (readable[audio.idx]?.index ?? -1) : -1;
 
-  const chat = useChat(texts.join("\n\n"));
-  const { text: selection, pos, hidePopover } = useTextSelection(articleRef, mainRef);
+  const chat = useChat(texts.join("\n\n"), settings.aiLanguage);
+  const {
+    text: selection,
+    pos,
+    hidePopover,
+  } = useTextSelection(
+    articleRef,
+    mainRef,
+    // Con lenguaje claro o Lectura Fácil alcanza con 3 letras: se puede pedir la definición de una palabra.
+    settings.aiLanguage === "standard" ? 12 : 3,
+  );
   const progress = useReadingProgress(articleRef, mainRef, doc.progress, (p) =>
     libraryApi.saveProgress(doc.id, p),
   );
@@ -227,9 +236,12 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
 
   const barVisible = simplified || (settings.clickToSelect && assistantSelection !== "");
 
+  /** Una selección de hasta 3 palabras es un término: se ofrece definirlo en vez de explicar un párrafo. */
+  const isTerm = selection.split(/\s+/).filter(Boolean).length <= 3;
   const explainSelection = (): void => {
     hidePopover();
-    void chat.send(explainPrompt(selection), "simplify", { selection });
+    if (isTerm) void chat.send(definePrompt(selection), "glossary", { selection });
+    else void chat.send(explainPrompt(selection), "simplify", { selection });
   };
 
   return (
@@ -399,7 +411,15 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             onClick={explainSelection}
             className="inline-flex min-h-12 items-center gap-2 rounded-xl border-2 border-[var(--onAccent)] bg-[var(--accent)] px-4 font-bold text-[var(--onAccent)] shadow-xl"
           >
-            <span aria-hidden="true">✦</span> Explicar más simple
+            {isTerm ? (
+              <>
+                <span aria-hidden="true">📖</span> Definir término
+              </>
+            ) : (
+              <>
+                <span aria-hidden="true">✦</span> Explicar más simple
+              </>
+            )}
           </button>
         </div>
       )}

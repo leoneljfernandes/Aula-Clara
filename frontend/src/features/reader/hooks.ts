@@ -16,10 +16,12 @@ interface SelectionState {
   pos: { top: number; left: number } | null;
 }
 
-/** Texto elegido dentro del artículo (mínimo 12 caracteres) y dónde mostrar el botón flotante. */
+/** Texto elegido dentro del artículo (con un mínimo de caracteres) y dónde mostrar el botón flotante. */
 export function useTextSelection(
   articleRef: RefObject<HTMLElement | null>,
   scrollRef: RefObject<HTMLElement | null>,
+  /** Cuántos caracteres hacen falta para contar como selección. */
+  minChars: number,
 ): SelectionState & { hidePopover: () => void } {
   const [state, setState] = useState<SelectionState>({ text: "", pos: null });
 
@@ -30,7 +32,7 @@ export function useTextSelection(
       if (!sel || sel.isCollapsed || !article?.contains(sel.anchorNode))
         return setState({ text: "", pos: null });
       const text = sel.toString().trim();
-      if (text.length < 12) return setState({ text: "", pos: null });
+      if (text.length < minChars) return setState({ text: "", pos: null });
       try {
         const rect = sel.getRangeAt(0).getBoundingClientRect();
         setState({
@@ -51,7 +53,7 @@ export function useTextSelection(
       scroller?.removeEventListener("scroll", hide);
       window.removeEventListener("scroll", hide);
     };
-  }, [articleRef, scrollRef]);
+  }, [articleRef, scrollRef, minChars]);
 
   return { ...state, hidePopover: () => setState((s) => ({ ...s, pos: null })) };
 }

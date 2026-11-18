@@ -285,6 +285,7 @@ describe("onboarding", () => {
       uiScale: "normal",
       clickGuard: "off",
       clickToSelect: false,
+      aiLanguage: "standard",
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -589,6 +590,65 @@ describe("lector", () => {
     for (let i = 0; i < 3; i++) await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
     await user.click(screen.getByRole("button", { name: "Reproducir lectura" }));
     expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
+  it("con lenguaje claro, las consultas lo piden y aparecen glosario y esquema", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { aiLanguage: "plain" } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Glosario fácil" }));
+    await waitFor(() =>
+      expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "glossary", language: "plain" }),
+    );
+    expect(screen.getByRole("button", { name: "Esquema visual" })).toBeInTheDocument();
+  });
+
+  it("en estándar la consulta manda el lenguaje estándar", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ language: "standard" }));
+  });
+
+  describe("palabra seleccionada", () => {
+    const selectWord = async (start = 3, end = 16): Promise<void> => {
+      Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ top: 0, bottom: 10, left: 0, right: 10, width: 10, height: 10, x: 0, y: 0 }),
+      });
+      const p = (await screen.findAllByText(/La incorporación de entornos virtuales/))[0]!;
+      const range = document.createRange();
+      range.setStart(p.firstChild!, start);
+      range.setEnd(p.firstChild!, end); // por defecto «incorporación» (13 letras)
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      act(() => document.dispatchEvent(new Event("selectionchange")));
+    };
+
+    it("con lenguaje claro, seleccionar una palabra ofrece «Definir término»", async () => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { aiLanguage: "plain" } }),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await selectWord();
+      await user.click(await screen.findByRole("button", { name: /Definir término/ }));
+      await waitFor(() =>
+        expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "glossary", selection: "incorporación" }),
+      );
+    });
+
+    it("en estándar, una palabra corta seleccionada no muestra nada (el umbral es de 12 letras)", async () => {
+      renderAt("/leer/d1");
+      await selectWord(20, 28); // «entornos»
+      expect(
+        screen.queryByRole("button", { name: /Definir término|Explicar más simple/ }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("Alt+T cambia el tema y Alt+= agranda el texto", async () => {

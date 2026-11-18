@@ -2,9 +2,9 @@
 export { AssistantPanel } from "./AssistantPanel";
 export { AIKeysGuide } from "./AIKeysGuide";
 export { AISettingsDialog } from "./AISettingsDialog";
-export { describeImage, type Provider } from "./api";
+export { type AnswerLanguage, describeImage, type Provider } from "./api";
 export { describeApiError, ImageUnavailableError, needsAISetup } from "./errors";
 export { useAICredentials } from "./credentials";
 export { ProviderBadge } from "./ProviderBadge";
 export { type Chat, useChat } from "./useChat";
-export { explainPrompt, quickActionLabel } from "./quickActions";
+export { definePrompt, explainPrompt, quickActionLabel } from "./quickActions";

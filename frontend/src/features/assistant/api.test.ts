@@ -9,7 +9,11 @@ import { chat, describeImage, listModels } from "./api";
 import { aiCredentials } from "./credentials";
 import { describeApiError, MissingCredentialsError, needsAISetup } from "./errors";
 
-const input = { action: "summarize" as const, documentText: "texto del documento" };
+const input = {
+  action: "summarize" as const,
+  documentText: "texto del documento",
+  language: "standard" as const,
+};
 const HEADERS = { "X-AI-Provider": "gemini", "X-AI-Model": "modelo-x", "X-AI-Key": "key-de-prueba" };
 
 function problem(status: number, code: string): ApiRequestError {
@@ -28,7 +32,7 @@ describe("asistente: cliente de IA", () => {
 
   it("manda la acción, el texto y las credenciales de la persona en headers", async () => {
     request.mockResolvedValue({ answer: "respuesta real", provider: "gemini", model: "modelo-x" });
-    expect(await chat({ ...input, selection: "un párrafo" })).toEqual({
+    expect(await chat({ ...input, selection: "un párrafo", language: "standard" })).toEqual({
       text: "respuesta real",
       provider: "gemini",
       model: "modelo-x",

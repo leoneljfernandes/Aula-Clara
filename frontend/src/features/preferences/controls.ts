@@ -122,6 +122,19 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "interfaz",
     inReader: true,
   },
+  {
+    key: "aiLanguage",
+    kind: "choice",
+    label: "Cómo te responde el asistente",
+    options: [
+      { value: "standard", label: "Estándar" },
+      { value: "plain", label: "Lenguaje claro" },
+      { value: "easy", label: "Lectura Fácil" },
+    ],
+    help: "Lenguaje claro: oraciones cortas y directas. Lectura Fácil: todavía más simple, con ejemplos.",
+    group: "asistente",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { type ChatAction, chat, type Provider } from "./api";
+import { type AnswerLanguage, type ChatAction, chat, type Provider } from "./api";
 import { describeApiError, LIMITS, needsAISetup } from "./errors";
 
 export interface ChatMessage {
@@ -32,7 +32,7 @@ export interface Chat {
   ) => Promise<void>;
 }
 
-export function useChat(documentText: string): Chat {
+export function useChat(documentText: string, language: AnswerLanguage): Chat {
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [typing, setTyping] = useState(false);
 
@@ -46,6 +46,7 @@ export function useChat(documentText: string): Chat {
         message: (extra?.message ?? (action === "free" ? shown : undefined))?.slice(0, LIMITS.message),
         documentText: documentText.slice(0, MAX_CONTEXT_CHARS),
         selection: extra?.selection?.slice(0, LIMITS.selection),
+        language,
       });
       setMessages((m) => [
         ...m,

@@ -5,7 +5,10 @@ import { MissingCredentialsError } from "./errors";
 import { COOKIE_MODE_HEADER } from "./session";
 import type { ProviderId } from "./providers";
 
-export type ChatAction = "free" | "summarize" | "key_concepts" | "quiz" | "simplify";
+export type ChatAction =
+  "free" | "summarize" | "key_concepts" | "quiz" | "simplify" | "glossary" | "visual_outline";
+/** Nivel de lenguaje de las respuestas: estándar, lenguaje claro o Lectura Fácil. */
+export type AnswerLanguage = "standard" | "plain" | "easy";
 export type Provider = ProviderId;
 
 export interface AIAnswer {
@@ -53,6 +56,7 @@ interface ChatInput {
   message?: string | undefined;
   documentText: string;
   selection?: string | undefined;
+  language: AnswerLanguage;
 }
 
 export function chat(input: ChatInput, signal?: AbortSignal): Promise<AIAnswer> {
@@ -75,6 +79,7 @@ async function doChat(input: ChatInput, signal?: AbortSignal): Promise<AIAnswer>
       message: input.message,
       document_text: input.documentText,
       selection: input.selection,
+      language: input.language,
     },
     ...(signal ? { signal } : {}),
   });
