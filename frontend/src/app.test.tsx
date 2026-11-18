@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEFAULT_SETTINGS, type ReadingSettings } from "@/features/preferences";
 import { routes } from "@/router";
 
 // Sin backend en los tests: el cliente HTTP devuelve respuestas fijas de "Gemini".
@@ -248,6 +249,71 @@ describe("onboarding", () => {
     respond(PRESETS);
     expect(await h1()).toHaveTextContent(/Personalizá tu experiencia/);
     expect(screen.queryByText(message)).not.toBeInTheDocument();
+  });
+
+  describe("con el onboarding hecho y ajustes propios", () => {
+    // Ajustes afinados a mano: no coinciden con ningún preset, así que el wizard marca «Personalizado».
+    const TUNED: ReadingSettings = {
+      theme: "sepia",
+      font: "verdana",
+      fontSize: 26,
+      lineHeight: 2,
+      rate: 1.5,
+      audioFocus: true,
+    };
+    const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
+
+    beforeEach(() => {
+      withOnboarding();
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: TUNED }),
+      );
+    });
+
+    it("recorrer los perfiles con las flechas y salir sin terminar no pisa los ajustes", async () => {
+      const user = userEvent.setup();
+      const router = renderAt("/perfil");
+      const custom = await screen.findByRole("radio", { name: /Perfil Personalizado/ });
+      expect(custom).toBeChecked();
+      custom.focus();
+      // Las flechas dan la vuelta: Dislexia, Visión reducida, Fatiga visual. Cada una aplica su preset en vivo.
+      await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
+      expect(screen.getByRole("radio", { name: /Perfil Fatiga visual/ })).toBeChecked();
+
+      await act(() => router.navigate("/biblioteca"));
+      expect(
+        await screen.findByRole("heading", { level: 1, name: /Hola/ }, { timeout: 5_000 }),
+      ).toBeInTheDocument();
+      expect(stored()).toEqual({ schemaVersion: 2, settings: TUNED });
+      // También en memoria: al volver al wizard, los ajustes siguen siendo los propios.
+      await act(() => router.navigate("/perfil"));
+      expect(await screen.findByRole("radio", { name: /Perfil Personalizado/ })).toBeChecked();
+    }, 10_000);
+
+    it("los ajustes del perfil elegido se guardan recién al terminar", async () => {
+      const user = userEvent.setup();
+      const router = renderAt("/perfil");
+      await user.click(await screen.findByRole("radio", { name: /Perfil Visión reducida/ }));
+      await user.click(screen.getByRole("button", { name: /Siguiente/ }));
+      expect(
+        await screen.findByRole("heading", { level: 1, name: "Ajustá los detalles" }),
+      ).toBeInTheDocument();
+      expect(stored()).toEqual({ schemaVersion: 2, settings: TUNED }); // la vista previa no guarda nada
+
+      await user.click(screen.getByRole("button", { name: "Guardar y continuar" }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"), { timeout: 5_000 });
+      expect(stored()).toEqual({
+        schemaVersion: 2,
+        settings: {
+          ...DEFAULT_SETTINGS,
+          font: "atkinson",
+          fontSize: 28,
+          lineHeight: 1.7,
+          theme: "contraste",
+        },
+      });
+    }, 10_000);
   });
 
   it("con el perfil guardado por la versión anterior entra directo a la biblioteca", async () => {

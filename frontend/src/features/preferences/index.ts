@@ -15,7 +15,7 @@ export { CONTROLS, type ControlGroup, type ControlSpec } from "./controls";
 export { homeLoader, requireOnboarding, safeNext } from "./guards";
 export { OnboardingWizard } from "./OnboardingWizard";
 export { applyPreset, loadPresetCatalog, matchPreset, type Preset, type PresetCatalog } from "./presets";
-export { PreferencesProvider, ThemeScope, usePreferences } from "./PreferencesProvider";
+export { PreferencesProvider, ThemeScope, usePreferences, useSettingsDraft } from "./PreferencesProvider";
 export {
   DEFAULT_SETTINGS,
   LINE_HEIGHT,

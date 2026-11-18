@@ -9,7 +9,7 @@ import { useAnnounce } from "@/lib/announcer";
 import { FONTS, MAX_FS, MIN_FS, readingStyle } from "./config";
 import { safeNext } from "./guards";
 import { applyPreset, matchPreset, type Preset, type PresetCatalog } from "./presets";
-import { usePreferences } from "./PreferencesProvider";
+import { usePreferences, useSettingsDraft } from "./PreferencesProvider";
 import { LINE_HEIGHT } from "./settings";
 import { SettingsControls } from "./SettingsControls";
 import { ThemeButtons } from "./ThemeButtons";
@@ -211,8 +211,12 @@ function DetailsStep({ onBack, onFinish }: { onBack: () => void; onFinish: () =>
 /**
  * Wizard de 2 pasos: elegir perfil (presets del catálogo del backend o «Personalizado») y ajustar
  * detalles con vista previa en vivo. Qué perfil se eligió no se guarda: solo los ajustes.
+ *
+ * Todo lo que se cambia acá es un borrador: recorrer los perfiles no pisa los ajustes guardados de
+ * quien vuelve a /perfil. Se guarda solo con «Guardar y continuar»; salir sin terminar los restaura.
  */
 export function OnboardingWizard({ catalog }: { catalog: PresetCatalog }): ReactNode {
+  useSettingsDraft();
   const { settings, onboarded, replaceSettings, completeOnboarding } = usePreferences();
   const announce = useAnnounce();
   const navigate = useNavigate();
@@ -224,6 +228,7 @@ export function OnboardingWizard({ catalog }: { catalog: PresetCatalog }): React
   const [selected, setSelected] = useState<string | null>(() =>
     onboarded ? (matchPreset(presets, settings) ?? CUSTOM.id) : null,
   );
+  // «Personalizado» (`preset` null) no cambia nada: deja aplicado lo que haya.
   const choose = (id: string, preset: Preset | null): void => {
     setSelected(id);
     if (preset) {
