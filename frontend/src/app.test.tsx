@@ -135,14 +135,15 @@ describe("onboarding", () => {
     expect(screen.getByRole("button", { name: /Sepia/ })).toHaveAttribute("aria-pressed", "true");
 
     await user.click(screen.getByRole("button", { name: "Guardar y continuar" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"));
+    // Primera carga de la ruta lazy de la biblioteca: con toda la suite en paralelo puede pasar de 1 s.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"), { timeout: 5_000 });
     expect(window.localStorage.getItem("aulaclara.profile")).toBeNull(); // no se guarda la etiqueta (Ley 25.326)
     expect(window.localStorage.getItem("aulaclara.onboarded")).toBe("true");
     expect(JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "{}")).toMatchObject({
       schemaVersion: 2,
       settings: { font: "dyslexic", theme: "sepia" },
     });
-  });
+  }, 10_000);
 
   it("entrar a una ruta protegida sin perfil pasa por el wizard y vuelve a donde iba", async () => {
     const user = userEvent.setup();
@@ -154,8 +155,9 @@ describe("onboarding", () => {
     await user.click(await screen.findByRole("radio", { name: /Perfil Visión reducida/ }));
     await user.click(screen.getByRole("button", { name: /Siguiente/ }));
     await user.click(await screen.findByRole("button", { name: "Guardar y continuar" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/leer/d1"));
-  });
+    // Primera carga de la ruta lazy del lector (pdf.js y compañía): con toda la suite en paralelo puede pasar de 1 s.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/leer/d1"), { timeout: 5_000 });
+  }, 10_000);
 
   it("ignora un ?next= que apunta a otro sitio (open redirect)", async () => {
     const user = userEvent.setup();
@@ -202,6 +204,50 @@ describe("onboarding", () => {
       "status",
     );
     expect(screen.getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual(["custom"]);
+  });
+
+  it("un preset del catálogo con el id reservado «custom» se descarta", async () => {
+    request.mockImplementation((c: { url: string }) =>
+      c.url === "/presets"
+        ? Promise.resolve([
+            ...PRESETS,
+            { id: "custom", title: "Impostor", icon: "X", description: "", tags: [], settings: {} },
+          ])
+        : fakeBackend(c),
+    );
+    renderAt("/perfil");
+    await h1();
+    expect(screen.getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual([
+      "dislexia",
+      "vision",
+      "fatiga",
+      "custom",
+    ]);
+    expect(screen.getByRole("radio", { name: /Perfil Personalizado/ })).toHaveAttribute("value", "custom");
+    expect(screen.queryByText(/Impostor/)).not.toBeInTheDocument();
+  });
+
+  // Durante una redirección React Router sigue mostrando la ruta de origen: cada entrada tiene su aviso.
+  it.each([
+    ["/perfil", "Cargando tu perfil de lectura…"],
+    ["/", "Cargando…"],
+    ["/leer/d1", "Cargando…"],
+  ])("al entrar por %s, mientras llega el catálogo avisa «%s»", async (path, message) => {
+    let respond: (presets: unknown) => void = () => undefined;
+    request.mockImplementation((c: { url: string }) =>
+      c.url === "/presets"
+        ? new Promise((resolve) => {
+            respond = resolve;
+          })
+        : fakeBackend(c),
+    );
+    renderAt(path);
+    expect(await screen.findByText(message)).toHaveAttribute("role", "status");
+    // El aviso aparece antes de que se pida el catálogo: se contesta recién cuando el pedido salió.
+    await waitFor(() => expect(calls("/presets")).toHaveLength(1));
+    respond(PRESETS);
+    expect(await h1()).toHaveTextContent(/Personalizá tu experiencia/);
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
   });
 
   it("con el perfil guardado por la versión anterior entra directo a la biblioteca", async () => {
@@ -256,10 +302,11 @@ describe("biblioteca", () => {
     // Se espera el título del lector por nombre: h1() podría devolver todavía el de la biblioteca
     // mientras carga la ruta lazy del lector (carrera que hacía intermitente este test).
     expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: /Accesibilidad digital en la educación superior/,
-      }),
+      await screen.findByRole(
+        "heading",
+        { level: 1, name: /Accesibilidad digital en la educación superior/ },
+        { timeout: 5_000 },
+      ),
     ).toBeInTheDocument();
   }, 10_000);
 });

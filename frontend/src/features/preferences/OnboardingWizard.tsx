@@ -17,7 +17,10 @@ const FIELD =
 
 type ProfileOption = Pick<Preset, "id" | "title" | "icon" | "description" | "tags">;
 
-/** «Personalizado» no es un preset del backend: es una opción fija que no cambia los ajustes. */
+/**
+ * «Personalizado» no es un preset del backend: es una opción fija que no cambia los ajustes.
+ * Su id `custom` está reservado: un preset del catálogo con ese id se descarta.
+ */
 const CUSTOM: ProfileOption = {
   id: "custom",
   title: "Personalizado",
@@ -69,12 +72,15 @@ function ProfileCard({
 }
 
 function ProfileStep({
-  catalog,
+  presets,
+  unavailable,
   selected,
   onChoose,
   onNext,
 }: {
-  catalog: PresetCatalog;
+  presets: readonly Preset[];
+  /** Sin catálogo ni caché: solo queda «Personalizado» y se explica por qué. */
+  unavailable: boolean;
   selected: string | null;
   /** `preset` es `null` para «Personalizado». */
   onChoose: (id: string, preset: Preset | null) => void;
@@ -88,7 +94,7 @@ function ProfileStep({
       <p className="mb-8 text-xl text-[var(--muted)]">
         Lo configurás una sola vez. Cada documento que subas se va a abrir con estas preferencias.
       </p>
-      {catalog.source === "unavailable" && (
+      {unavailable && (
         <p role="status" className="mb-6 rounded-xl border-2 border-[var(--border)] p-4 text-lg">
           No pudimos cargar los perfiles sugeridos. Podés seguir con «Personalizado» y ajustar todo a mano.
         </p>
@@ -96,7 +102,7 @@ function ProfileStep({
       <fieldset>
         <legend className="sr-only">Perfil de accesibilidad</legend>
         <div className="grid gap-4 sm:grid-cols-2">
-          {catalog.presets.map((p) => (
+          {presets.map((p) => (
             <ProfileCard
               key={p.id}
               option={p}
@@ -233,9 +239,11 @@ export function OnboardingWizard({ catalog }: { catalog: PresetCatalog }): React
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [step, setStep] = useState<1 | 2>(1);
+  // El id `custom` es de «Personalizado»: un preset que lo use chocaría con la opción fija.
+  const presets = catalog.presets.filter((p) => p.id !== CUSTOM.id);
   // Al volver a /perfil se marca el preset que coincide con los ajustes actuales, o «Personalizado».
   const [selected, setSelected] = useState<string | null>(() =>
-    onboarded ? (matchPreset(catalog.presets, settings) ?? CUSTOM.id) : null,
+    onboarded ? (matchPreset(presets, settings) ?? CUSTOM.id) : null,
   );
   const choose = (id: string, preset: Preset | null): void => {
     setSelected(id);
@@ -273,7 +281,13 @@ export function OnboardingWizard({ catalog }: { catalog: PresetCatalog }): React
           ))}
         </ol>
         {step === 1 ? (
-          <ProfileStep catalog={catalog} selected={selected} onChoose={choose} onNext={() => setStep(2)} />
+          <ProfileStep
+            presets={presets}
+            unavailable={catalog.source === "unavailable"}
+            selected={selected}
+            onChoose={choose}
+            onNext={() => setStep(2)}
+          />
         ) : (
           <DetailsStep onBack={() => setStep(1)} onFinish={finish} />
         )}
