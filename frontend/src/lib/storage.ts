@@ -8,6 +8,14 @@ export const storage = {
       return null;
     }
   },
+  /** Si hay algo guardado en `key`, sea o no JSON válido. */
+  has(key: string): boolean {
+    try {
+      return window.localStorage.getItem(key) !== null;
+    } catch {
+      return false;
+    }
+  },
   set(key: string, value: unknown): void {
     try {
       window.localStorage.setItem(key, JSON.stringify(value));

@@ -28,11 +28,15 @@ export function saveSettings(settings: ReadingSettings): void {
   storage.set(SETTINGS_KEY, { schemaVersion: SETTINGS_SCHEMA_VERSION, settings });
 }
 
-/** Quien tiene el perfil de la versión 1 ya hizo el onboarding: se migra a la marca nueva y la clave vieja se borra. */
+/**
+ * Quien tiene el perfil de la versión 1 (cualquier valor, aunque no sea JSON válido) ya hizo el onboarding:
+ * se migra a la marca nueva y la clave vieja se borra, pero solo si la marca nueva quedó guardada; si no
+ * (almacenamiento lleno o bloqueado), borrarla haría perder el onboarding.
+ */
 export function isOnboarded(): boolean {
-  if (storage.get<unknown>(PROFILE_KEY) !== null) {
+  if (storage.has(PROFILE_KEY)) {
     markOnboarded();
-    storage.remove(PROFILE_KEY);
+    if (storage.get<boolean>(ONBOARDED_KEY) === true) storage.remove(PROFILE_KEY);
     return true;
   }
   return storage.get<boolean>(ONBOARDED_KEY) === true;

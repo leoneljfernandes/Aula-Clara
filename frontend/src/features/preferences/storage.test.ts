@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "./settings";
 import { isOnboarded, loadSettings, markOnboarded, saveSettings } from "./storage";
@@ -29,6 +29,27 @@ it("una persona con el perfil de la versión anterior ya hizo el onboarding, y l
   expect(isOnboarded()).toBe(true);
   expect(window.localStorage.getItem("aulaclara.profile")).toBeNull();
   expect(window.localStorage.getItem("aulaclara.onboarded")).toBe("true");
+});
+
+it("un perfil viejo que no es JSON válido también cuenta como onboarding hecho y se borra", () => {
+  window.localStorage.setItem("aulaclara.profile", "dislexia"); // sin comillas: JSON inválido
+  expect(isOnboarded()).toBe(true);
+  expect(window.localStorage.getItem("aulaclara.profile")).toBeNull();
+  expect(window.localStorage.getItem("aulaclara.onboarded")).toBe("true");
+});
+
+it("si la marca nueva no se pudo guardar, el perfil viejo no se borra (no se pierde el onboarding)", () => {
+  window.localStorage.setItem("aulaclara.profile", JSON.stringify("dislexia"));
+  const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("sin espacio", "QuotaExceededError");
+  });
+  try {
+    expect(isOnboarded()).toBe(true);
+  } finally {
+    setItem.mockRestore();
+  }
+  expect(window.localStorage.getItem("aulaclara.onboarded")).toBeNull();
+  expect(window.localStorage.getItem("aulaclara.profile")).toBe(JSON.stringify("dislexia"));
 });
 
 it("sin nada guardado no hizo el onboarding; markOnboarded lo registra", () => {
