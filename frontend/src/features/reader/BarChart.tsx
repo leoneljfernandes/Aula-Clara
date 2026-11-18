@@ -8,7 +8,7 @@ const PAD = { l: 64, r: 20, t: 30, b: 50 };
 const MAX = 3500;
 
 /** Gráfico del documento de ejemplo: una imagen SIN texto alternativo, a propósito (lo describe la IA). */
-export function BarChart({ svgRef }: { svgRef: Ref<SVGSVGElement> }) {
+export function BarChart({ svgRef }: { svgRef?: Ref<SVGSVGElement> }) {
   const iw = W - PAD.l - PAD.r;
   const ih = H - PAD.t - PAD.b;
   const bw = iw / SAMPLE_CHART.length;

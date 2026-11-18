@@ -1,6 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import "fake-indexeddb/auto";
 
+import { IDBFactory } from "fake-indexeddb";
+
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
@@ -10,6 +12,8 @@ afterEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
   }
+  // Lo que un test guarda en IndexedDB (p. ej. la descripción de una figura) no pasa al siguiente.
+  globalThis.indexedDB = new IDBFactory();
   vi.unstubAllEnvs();
   vi.useRealTimers();
 });

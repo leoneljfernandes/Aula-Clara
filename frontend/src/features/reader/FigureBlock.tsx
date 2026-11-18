@@ -1,4 +1,4 @@
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
@@ -11,13 +11,20 @@ import {
   ProviderBadge,
   type Provider,
 } from "@/features/assistant";
-import { dataUrlToBlob, svgToJpeg } from "@/lib/extractors";
+import type { Block } from "@/lib/extractors";
 import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { BarChart } from "./BarChart";
+import { figureImageBlob } from "./figureImage";
 
 interface FigureBlockProps {
-  dataUrl: string | undefined;
+  block: Extract<Block, { type: "figure" }>;
+  /** Posición del bloque en el artículo (para encontrar el gráfico dibujado en `#blk-{index}`). */
+  index: number;
+  /** Descripción guardada de la figura: con ella, «Interpretar con IA» no vuelve a pedir nada a la API. */
+  alt?: string | undefined;
+  /** Avisa la descripción nueva para que se guarde. */
+  onDescribed(text: string): void;
   caption: string;
   /** Párrafo que rodea a la figura: le da contexto a la IA. */
   context: string;
@@ -40,7 +47,10 @@ interface Result {
 }
 
 export function FigureBlock({
-  dataUrl,
+  block,
+  index,
+  alt,
+  onDescribed,
   caption,
   context,
   buttonId,
@@ -48,33 +58,35 @@ export function FigureBlock({
   rate,
   onAskAssistant,
 }: FigureBlockProps): ReactNode {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const { dataUrl } = block;
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [failure, setFailure] = useState<{ message: string; needsSetup: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // `true` mientras el diálogo muestra una consulta recién hecha; si no, muestra la descripción guardada.
+  const [fresh, setFresh] = useState(false);
 
-  /** La imagen a enviar, o null si no se pudo armar (distinto de un error de la IA). */
-  const prepareImage = async (): Promise<Blob | null> => {
-    try {
-      if (dataUrl) return await dataUrlToBlob(dataUrl);
-      return svgRef.current ? await svgToJpeg(svgRef.current) : null;
-    } catch {
-      return null;
-    }
+  const closeDialog = (): void => {
+    setOpen(false);
+    setFresh(false);
   };
 
-  const analyze = async (): Promise<void> => {
+  const analyze = async (again = false): Promise<void> => {
     if (loading) return;
-    if (result) return setOpen(true);
+    if (!again && (alt || result)) {
+      if (alt && autoSpeak) speakOnce(alt, rate);
+      return setOpen(true);
+    }
     setLoading(true);
     setFailure(null);
+    setFresh(true);
     try {
-      const blob = await prepareImage();
+      const blob = await figureImageBlob(block, index);
       if (!blob) throw new ImageUnavailableError();
       const described = await describeImage(blob, context);
       setResult(described);
+      onDescribed(described.text);
       if (autoSpeak) {
         speakOnce(described.truncated ? withNotice(described.text, TRUNCATED_NOTICE) : described.text, rate);
       }
@@ -89,17 +101,23 @@ export function FigureBlock({
     }
   };
 
+  /** El texto que muestra el diálogo: la descripción guardada o la consulta recién hecha. */
+  const shownText = alt && !fresh ? alt : failure ? undefined : result?.text;
+
   return (
     <figure className="my-10">
       <div className="relative rounded-2xl border-2 border-[var(--border)] bg-[var(--bg)] p-4">
         {dataUrl ? (
           <img
             src={dataUrl}
-            alt="Imagen del documento original sin descripción alternativa. Usá el botón Interpretar con IA para escuchar o leer su contenido."
+            alt={
+              alt ??
+              "Imagen del documento original sin descripción alternativa. Usá el botón Interpretar con IA para escuchar o leer su contenido."
+            }
             className="mx-auto h-auto max-h-[420px] max-w-full"
           />
         ) : (
-          <BarChart svgRef={svgRef} />
+          <BarChart />
         )}
         <div className="absolute top-3 right-3">
           {/* aria-disabled y no disabled: un botón deshabilitado pierde el foco (va a <body>) y el
@@ -133,8 +151,15 @@ export function FigureBlock({
         {caption} <span className="italic">(imagen original sin texto alternativo)</span>
       </figcaption>
       {open && (
-        <Dialog title="Interpretación de la imagen" onClose={() => setOpen(false)} labelId="img-title">
-          {failure || !result ? (
+        <Dialog title="Interpretación de la imagen" onClose={closeDialog} labelId="img-title">
+          {alt && !fresh ? (
+            <>
+              <p className="mb-2 leading-relaxed" style={{ fontSize: "max(18px, 0.9em)" }}>
+                {alt}
+              </p>
+              <p className="mb-6 text-sm text-[var(--muted)]">Descripción guardada</p>
+            </>
+          ) : failure || !result ? (
             <p role="alert" className="mb-6 text-lg">
               {failure?.message ?? "No pudimos analizar esta imagen. Probá de nuevo en unos segundos."}
             </p>
@@ -152,33 +177,43 @@ export function FigureBlock({
             </>
           )}
           <div className="flex flex-wrap gap-3">
-            {result && hasTTS && (
-              <Button variant="primary" onClick={() => speakOnce(result.text, rate)}>
+            {shownText && hasTTS && (
+              <Button variant="primary" onClick={() => speakOnce(shownText, rate)}>
                 🔊 Escuchar descripción
               </Button>
             )}
-            {result && (
+            {shownText && (
               <Button
                 onClick={() => {
-                  setOpen(false);
+                  closeDialog();
                   onAskAssistant();
                 }}
               >
                 Preguntarle al asistente
               </Button>
             )}
+            {alt && !fresh && (
+              <Button
+                onClick={() => {
+                  closeDialog();
+                  void analyze(true);
+                }}
+              >
+                Volver a interpretar con IA
+              </Button>
+            )}
             {failure?.needsSetup && (
               <Button
                 variant="primary"
                 onClick={() => {
-                  setOpen(false);
+                  closeDialog();
                   setSettingsOpen(true);
                 }}
               >
                 Configurar IA
               </Button>
             )}
-            <Button onClick={() => setOpen(false)}>Cerrar</Button>
+            <Button onClick={closeDialog}>Cerrar</Button>
           </div>
         </Dialog>
       )}

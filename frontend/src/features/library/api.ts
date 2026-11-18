@@ -23,6 +23,14 @@ function writeAll(docs: LibraryDocument[]): void {
   storage.set(DOCS_KEY, docs);
 }
 
+/** Devuelve una copia del artículo con la descripción guardada en la figura pedida. */
+export function withFigureAlt(article: Article, figureId: string, alt: string): Article {
+  return {
+    ...article,
+    blocks: article.blocks.map((b) => (b.type === "figure" && b.id === figureId ? { ...b, alt } : b)),
+  };
+}
+
 export const libraryApi = {
   list(): LibraryDocument[] {
     return readAll();
@@ -39,6 +47,12 @@ export const libraryApi = {
     } catch {
       return SAMPLE_ARTICLE; // IndexedDB bloqueado (modo privado): se sigue con el ejemplo
     }
+  },
+
+  /** Guarda la descripción de una figura en el contenido del documento (también en uno semilla), para no volver a pedirla. */
+  async saveFigureAlt(docId: string, figureId: string, alt: string): Promise<void> {
+    const article = await libraryApi.loadArticle(docId);
+    await idb.set(contentKey(docId), withFigureAlt(article, figureId, alt));
   },
 
   /** Guarda el avance sin pasar por una action: se llama muchas veces mientras se hace scroll. */

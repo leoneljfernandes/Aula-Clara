@@ -36,6 +36,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const articleRef = useRef<HTMLElement>(null);
   const chatInput = useRef<HTMLInputElement>(null);
   const [toolsOpen, setToolsOpen] = useToggle();
+  // Descripciones de figuras hechas en esta sesión. Mapa aparte: cambiar `article` reiniciaría el motor de lectura.
+  const [figureAlts, setFigureAlts] = useState<Record<string, string>>({});
 
   // Bloques que se leen en voz alta (todo menos las figuras) y su posición en el artículo.
   // useMemo por identidad (no por optimización): el motor de voz se reinicia si esta lista cambia.
@@ -71,6 +73,12 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       if (from !== null) return audio.playFrom(from);
     }
     audio.play();
+  };
+
+  const describeFigure = (figureId: string, text: string): void => {
+    setFigureAlts((prev) => ({ ...prev, [figureId]: text }));
+    // Si el navegador no deja guardar (modo privado), la descripción igual vale durante esta sesión.
+    libraryApi.saveFigureAlt(doc.id, figureId, text).catch(() => undefined);
   };
 
   // Un único punto de entrada para el Braille (teclado y voz): el plan 03 reemplaza su cuerpo.
@@ -268,6 +276,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             rate={settings.rate}
             onListen={audio.play}
             onAskAboutFigure={() => void chat.send("¿Qué muestra el Gráfico 1?", "free")}
+            figureAlts={figureAlts}
+            onFigureDescribed={describeFigure}
             style={readingStyle(settings)}
             articleRef={articleRef}
             titleRef={(el) => el?.focus()}

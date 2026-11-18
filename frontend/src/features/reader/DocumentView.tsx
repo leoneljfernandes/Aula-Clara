@@ -15,6 +15,9 @@ interface DocumentViewProps {
   rate: number;
   onListen: () => void;
   onAskAboutFigure: () => void;
+  /** Descripciones hechas en esta sesión, por id de figura (aparte del artículo para no reiniciar el motor de lectura). */
+  figureAlts: Readonly<Record<string, string>>;
+  onFigureDescribed(figureId: string, text: string): void;
   style: React.CSSProperties;
   articleRef: Ref<HTMLElement>;
   titleRef: Ref<HTMLHeadingElement>;
@@ -28,6 +31,8 @@ export function DocumentView({
   rate,
   onListen,
   onAskAboutFigure,
+  figureAlts,
+  onFigureDescribed,
   style,
   articleRef,
   titleRef,
@@ -64,7 +69,10 @@ export function DocumentView({
           return (
             <div key={block.id} id={`blk-${i}`}>
               <FigureBlock
-                dataUrl={block.dataUrl}
+                block={block}
+                index={i}
+                alt={figureAlts[block.id] || block.alt || undefined}
+                onDescribed={(text) => onFigureDescribed(block.id, text)}
                 caption={`Gráfico ${figureNumberAt(i)}`}
                 context={before?.type === "p" ? before.text : ""}
                 buttonId={`fig-btn-${i}`}

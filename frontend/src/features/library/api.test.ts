@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { libraryApi } from "./api";
+import { libraryApi, withFigureAlt } from "./api";
 import { SAMPLE_ARTICLE } from "./sample";
 
 describe("libraryApi", () => {
@@ -36,5 +36,30 @@ describe("libraryApi", () => {
       { reason: "unsupported" },
     );
     expect(libraryApi.list()).toHaveLength(3);
+  });
+
+  it("saveFigureAlt guarda la descripción en el bloque de la figura, también en un documento semilla", async () => {
+    await libraryApi.saveFigureAlt("d1", "sample-chart", "Barras que crecen de 2019 a 2024.");
+    const article = await libraryApi.loadArticle("d1");
+    expect(article.blocks.find((b) => b.type === "figure")).toMatchObject({
+      alt: "Barras que crecen de 2019 a 2024.",
+    });
+  });
+
+  it("withFigureAlt solo cambia la figura pedida y no toca el artículo original", () => {
+    const article = {
+      title: "t",
+      meta: "m",
+      blocks: [
+        { type: "figure" as const, id: "a" },
+        { type: "figure" as const, id: "b" },
+      ],
+    };
+    const next = withFigureAlt(article, "b", "torta");
+    expect(next.blocks).toEqual([
+      { type: "figure", id: "a" },
+      { type: "figure", id: "b", alt: "torta" },
+    ]);
+    expect(article.blocks[1]).toEqual({ type: "figure", id: "b" });
   });
 });

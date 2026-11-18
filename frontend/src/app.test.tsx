@@ -470,6 +470,19 @@ describe("lector", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("una figura ya descrita no vuelve a gastar cuota", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const trigger = await screen.findByRole("button", { name: /Interpretar con IA/ });
+    await user.click(trigger);
+    await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    await user.keyboard("{Escape}");
+    await user.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    expect(dialog).toHaveTextContent("Descripción guardada");
+    expect(calls("/ai/describe-image")).toHaveLength(1);
+  });
+
   it("Alt+T cambia el tema y Alt+= agranda el texto", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");
