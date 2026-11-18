@@ -34,3 +34,4 @@ export {
 export { isOnboarded, loadSettings, markOnboarded, saveSettings } from "./storage";
 export { SettingsControls } from "./SettingsControls";
 export { ThemeButtons } from "./ThemeButtons";
+export { VisualStatus } from "./VisualStatus";

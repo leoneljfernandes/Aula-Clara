@@ -22,6 +22,8 @@ interface AssistantPanelProps {
   inputRef: RefObject<HTMLInputElement | null>;
   selection: string;
   rate: number;
+  /** Si es falso (audio oculto), no se ofrece escuchar las respuestas. */
+  canListen: boolean;
   /** Guía por voz: lee en voz alta cada respuesta nueva de la IA al llegar. */
   autoSpeak: boolean;
   /** Con los comandos por voz activos, se ofrece dictar la pregunta (si el navegador sabe reconocer voz). */
@@ -35,6 +37,7 @@ export function AssistantPanel({
   inputRef,
   selection,
   rate,
+  canListen,
   autoSpeak,
   dictation,
   handsFree = false,
@@ -148,7 +151,7 @@ export function AssistantPanel({
                   <Button onClick={() => setSettingsOpen(true)}>Configurar IA</Button>
                 </div>
               )}
-              {m.role === "ai" && i > 0 && hasTTS && (
+              {m.role === "ai" && i > 0 && hasTTS && canListen && (
                 <div className="mt-2">
                   <button
                     type="button"

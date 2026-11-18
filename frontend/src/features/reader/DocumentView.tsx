@@ -11,6 +11,8 @@ interface DocumentViewProps {
   showListenButton: boolean;
   /** Guía por voz: las figuras leen su descripción al recibirla. */
   autoSpeak: boolean;
+  /** Si es falso (audio oculto), las figuras no ofrecen escuchar su descripción. */
+  canListen: boolean;
   /** Velocidad de la voz elegida en los ajustes. */
   rate: number;
   onListen: () => void;
@@ -32,6 +34,7 @@ export function DocumentView({
   activeBlock,
   showListenButton,
   autoSpeak,
+  canListen,
   rate,
   onListen,
   onAskAboutFigure,
@@ -83,6 +86,7 @@ export function DocumentView({
                 context={before?.type === "p" ? before.text : ""}
                 buttonId={`fig-btn-${i}`}
                 autoSpeak={autoSpeak}
+                canListen={canListen}
                 rate={rate}
                 onAskAssistant={onAskAboutFigure}
               />

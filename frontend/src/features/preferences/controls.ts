@@ -135,6 +135,22 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "asistente",
     inReader: true,
   },
+  {
+    key: "hideAudio",
+    kind: "toggle",
+    label: "Ocultar la lectura en voz alta",
+    help: "Saca de la pantalla los controles de audio que no usás.",
+    group: "interfaz",
+    inReader: true,
+  },
+  {
+    key: "visualAlerts",
+    kind: "toggle",
+    label: "Mostrar los avisos en pantalla",
+    help: "Cada aviso («Preferencias guardadas», «Tema Sepia»…) queda visible hasta el siguiente.",
+    group: "interfaz",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

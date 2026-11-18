@@ -17,6 +17,7 @@ import {
   usePreferences,
 } from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
+import { KEYMAP, type ShortcutId } from "@/lib/keymap";
 import { speechBus } from "@/lib/speech";
 import { useReadAloud } from "@/lib/useReadAloud";
 import type { VoiceCommand } from "@/lib/voice/commands";
@@ -31,6 +32,15 @@ import { ToolsPanel } from "./ToolsPanel";
 import { useVoiceCommands } from "./useVoiceCommands";
 import { VoiceCommandBar } from "./VoiceCommandBar";
 import { VoiceHelpDialog } from "./VoiceHelpDialog";
+
+/** Los comandos de voz que manejan la lectura en voz alta. */
+const AUDIO_COMMANDS: ReadonlySet<VoiceCommand["kind"]> = new Set([
+  "play",
+  "pause",
+  "stop",
+  "faster",
+  "slower",
+]);
 
 export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: Article }): ReactNode {
   const { settings, updateSettings } = usePreferences();
@@ -133,6 +143,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       if (chat.typing) return "Esperá a que termine la respuesta";
       void chat.send(...args);
     };
+    // Con el audio oculto no hay lectura que manejar: se avisa en vez de empezar una lectura invisible.
+    if (settings.hideAudio && AUDIO_COMMANDS.has(command.kind)) return "La lectura en voz alta está oculta";
     switch (command.kind) {
       case "play":
         // Ya leyendo no se reinicia el párrafo.
@@ -188,33 +200,35 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   };
   const voiceOn = settings.voiceCommands !== "off";
   const voice = useVoiceCommands({ mode: settings.voiceCommands, onCommand: runVoiceCommand });
-  useReaderHotkeys({
-    singleKey: settings.singleKeyShortcuts,
-    handlers: {
-      playPause: () => (audio.status === "playing" ? audio.pause() : startReading()),
-      stop: audio.stop,
-      fontUp: () => updateSettings({ fontSize: clamp(settings.fontSize + 2, MIN_FS, MAX_FS) }),
-      fontDown: () => updateSettings({ fontSize: clamp(settings.fontSize - 2, MIN_FS, MAX_FS) }),
-      nextTheme: () => {
-        const next = THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length] ?? "claro";
-        updateSettings({ theme: next });
-        announce(`Tema ${THEMES[next].label}`);
-      },
-      focusAssistant: () => chatInput.current?.focus(),
-      summarize: () => void chat.send(quickActionLabel("summarize"), "summarize"),
-      keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
-      quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
-      simplifyBlock,
-      openBraille: () => void openBraille(),
-      silence: () => speechBus.silence(),
-      ...(voiceOn && voice.available ? { toggleMic: voice.toggle } : {}),
-      ...(voiceOn ? { voiceHelp: () => setVoiceHelpOpen(true) } : {}),
-      nextBlock: () => nav.move("any", 1),
-      prevBlock: () => nav.move("any", -1),
-      nextHeading: () => nav.move("h2", 1),
-      nextFigure: () => nav.move("figure", 1),
+  const handlers: Partial<Record<ShortcutId, () => void>> = {
+    playPause: () => (audio.status === "playing" ? audio.pause() : startReading()),
+    stop: audio.stop,
+    fontUp: () => updateSettings({ fontSize: clamp(settings.fontSize + 2, MIN_FS, MAX_FS) }),
+    fontDown: () => updateSettings({ fontSize: clamp(settings.fontSize - 2, MIN_FS, MAX_FS) }),
+    nextTheme: () => {
+      const next = THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length] ?? "claro";
+      updateSettings({ theme: next });
+      announce(`Tema ${THEMES[next].label}`);
     },
-  });
+    focusAssistant: () => chatInput.current?.focus(),
+    summarize: () => void chat.send(quickActionLabel("summarize"), "summarize"),
+    keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
+    quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
+    simplifyBlock,
+    openBraille: () => void openBraille(),
+    silence: () => speechBus.silence(),
+    ...(voiceOn && voice.available ? { toggleMic: voice.toggle } : {}),
+    ...(voiceOn ? { voiceHelp: () => setVoiceHelpOpen(true) } : {}),
+    nextBlock: () => nav.move("any", 1),
+    prevBlock: () => nav.move("any", -1),
+    nextHeading: () => nav.move("h2", 1),
+    nextFigure: () => nav.move("figure", 1),
+  };
+  // Con el audio oculto, los atajos de lectura no hacen nada (ni empiezan una lectura que nadie ve).
+  if (settings.hideAudio) {
+    for (const shortcut of KEYMAP) if (shortcut.requires === "audio") delete handlers[shortcut.id];
+  }
+  useReaderHotkeys({ singleKey: settings.singleKeyShortcuts, handlers });
 
   useEffect(() => {
     if (activeBlock < 0) return;
@@ -323,8 +337,9 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           <DocumentView
             article={article}
             activeBlock={activeBlock}
-            showListenButton={settings.audioFocus && audio.status === "stopped"}
+            showListenButton={settings.audioFocus && !settings.hideAudio && audio.status === "stopped"}
             autoSpeak={settings.voiceGuide}
+            canListen={!settings.hideAudio}
             rate={settings.rate}
             onListen={audio.play}
             onAskAboutFigure={() => void chat.send("¿Qué muestra el Gráfico 1?", "free")}
@@ -348,6 +363,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             inputRef={chatInput}
             selection={assistantSelection}
             rate={settings.rate}
+            canListen={!settings.hideAudio}
             autoSpeak={settings.voiceGuide}
             dictation={voiceOn}
             handsFree={settings.voiceCommands === "continuous"}
@@ -379,7 +395,9 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
                     selection: assistantSelection,
                   });
                 },
-                ...(readFrom !== null && selectedText ? { onReadFrom: () => audio.playFrom(readFrom) } : {}),
+                ...(readFrom !== null && selectedText && !settings.hideAudio
+                  ? { onReadFrom: () => audio.playFrom(readFrom) }
+                  : {}),
                 onAsk: () => chatInput.current?.focus(),
                 onClear: () => {
                   setSelectedBlock(null);
@@ -394,7 +412,9 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
                 onPrev: () => nav.move("any", -1),
                 onNext: () => nav.move("any", 1),
                 playing: audio.status === "playing",
-                onPlayPause: () => (audio.status === "playing" ? audio.pause() : startReading()),
+                ...(settings.hideAudio
+                  ? {}
+                  : { onPlayPause: () => (audio.status === "playing" ? audio.pause() : startReading()) }),
                 ...(voiceOn && voice.available ? { onVoice: voice.toggle } : {}),
                 listening: voice.listening,
                 onAssistant: () => chatInput.current?.focus(),

@@ -286,6 +286,8 @@ describe("onboarding", () => {
       clickGuard: "off",
       clickToSelect: false,
       aiLanguage: "standard",
+      hideAudio: false,
+      visualAlerts: false,
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -648,6 +650,104 @@ describe("lector", () => {
       expect(
         screen.queryByRole("button", { name: /Definir término|Explicar más simple/ }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("sin audio", () => {
+    const settingsWith = (settings: Record<string, unknown>): void =>
+      window.localStorage.setItem("aulaclara.settings", JSON.stringify({ schemaVersion: 2, settings }));
+
+    it("sin audio no hay controles de lectura y Alt+P no hace nada", async () => {
+      settingsWith({ hideAudio: true, audioFocus: true });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      expect(screen.queryByRole("button", { name: "Reproducir lectura" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Escuchar este documento/ })).not.toBeInTheDocument();
+      await user.keyboard("{Alt>}p{/Alt}");
+      expect(screen.queryByText(/Leyendo · bloque/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Resumir esta página" }));
+      await waitFor(() =>
+        expect(screen.getByRole("log")).toHaveTextContent("Resumen de esta página (prueba)"),
+      );
+      expect(screen.queryByRole("button", { name: /Escuchar respuesta/ })).not.toBeInTheDocument();
+    });
+
+    it("con una tecla sola, Espacio tampoco empieza una lectura invisible", async () => {
+      settingsWith({ hideAudio: true, singleKeyShortcuts: true });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await h1());
+      await user.keyboard(" ");
+      expect(screen.queryByText(/Leyendo · bloque/)).not.toBeInTheDocument();
+    });
+
+    it("la descripción de una figura no ofrece escucharla", async () => {
+      settingsWith({ hideAudio: true });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(dialog).toHaveTextContent(/gráfico de barras/i);
+      expect(within(dialog).queryByRole("button", { name: /Escuchar descripción/ })).not.toBeInTheDocument();
+    });
+
+    it("la barra simplificada no ofrece «Leer» ni «Leer desde este párrafo»", async () => {
+      settingsWith({ hideAudio: true, uiScale: "large", clickToSelect: true });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const paragraph = (await screen.findAllByText(/La incorporación de entornos virtuales/))[0]!;
+      await user.click(paragraph);
+      const bar = await screen.findByRole("navigation", { name: "Barra simplificada" });
+      expect(within(bar).queryByRole("button", { name: /Leer/ })).not.toBeInTheDocument();
+      expect(within(bar).getByRole("button", { name: /Siguiente/ })).toBeInTheDocument();
+    });
+
+    it("con el audio apagado, la lista de atajos no muestra los de lectura", async () => {
+      settingsWith({ hideAudio: true });
+      renderAt("/leer/d1");
+      await h1();
+      const tools = screen.getByRole("complementary", { name: "Barra de accesibilidad" });
+      expect(tools).not.toHaveTextContent("Leer / pausar");
+    });
+  });
+
+  describe("avisos en pantalla", () => {
+    it("con avisos en pantalla, el último anuncio queda visible hasta cerrarlo", async () => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { visualAlerts: true } }),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      await user.keyboard("{Alt>}t{/Alt}");
+      const notice = await screen.findByText("Tema Sepia", { selector: ":not([role=status])" });
+      await user.click(screen.getByRole("button", { name: "Cerrar aviso" }));
+      expect(notice).not.toBeInTheDocument();
+    });
+
+    it("un aviso nuevo vuelve a mostrarse aunque se haya cerrado el anterior", async () => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { visualAlerts: true } }),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      await user.keyboard("{Alt>}t{/Alt}");
+      await user.click(await screen.findByRole("button", { name: "Cerrar aviso" }));
+      await user.keyboard("{Alt>}t{/Alt}");
+      expect(await screen.findByRole("button", { name: "Cerrar aviso" })).toBeInTheDocument();
+    });
+
+    it("sin la opción no se muestra ningún recuadro", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      await user.keyboard("{Alt>}t{/Alt}");
+      await screen.findByText("Tema Sepia", { selector: "[role=status]" });
+      expect(screen.queryByRole("button", { name: "Cerrar aviso" })).not.toBeInTheDocument();
     });
   });
 

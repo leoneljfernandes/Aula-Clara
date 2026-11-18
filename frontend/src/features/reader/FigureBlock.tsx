@@ -32,6 +32,8 @@ interface FigureBlockProps {
   buttonId?: string;
   /** Guía por voz: lee la descripción en voz alta apenas llega. */
   autoSpeak: boolean;
+  /** Si es falso (audio oculto), no se ofrece escuchar la descripción. */
+  canListen: boolean;
   /** Velocidad de la voz elegida en los ajustes. */
   rate: number;
   onAskAssistant: () => void;
@@ -55,6 +57,7 @@ export function FigureBlock({
   context,
   buttonId,
   autoSpeak,
+  canListen,
   rate,
   onAskAssistant,
 }: FigureBlockProps): ReactNode {
@@ -177,7 +180,7 @@ export function FigureBlock({
             </>
           )}
           <div className="flex flex-wrap gap-3">
-            {shownText && hasTTS && (
+            {shownText && hasTTS && canListen && (
               <Button variant="primary" onClick={() => speakOnce(shownText, rate)}>
                 🔊 Escuchar descripción
               </Button>

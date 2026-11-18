@@ -16,6 +16,8 @@ export interface ReadingSettings {
   clickGuard: "off" | "normal" | "strong";
   clickToSelect: boolean;
   aiLanguage: "standard" | "plain" | "easy";
+  hideAudio: boolean;
+  visualAlerts: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -33,6 +35,8 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   clickGuard: "off",
   clickToSelect: false,
   aiLanguage: "standard",
+  hideAudio: false,
+  visualAlerts: false,
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -59,6 +63,8 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
   clickGuard: (v): v is ReadingSettings["clickGuard"] => v === "off" || v === "normal" || v === "strong",
   clickToSelect: (v): v is boolean => typeof v === "boolean",
   aiLanguage: (v): v is ReadingSettings["aiLanguage"] => v === "standard" || v === "plain" || v === "easy",
+  hideAudio: (v): v is boolean => typeof v === "boolean",
+  visualAlerts: (v): v is boolean => typeof v === "boolean",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);

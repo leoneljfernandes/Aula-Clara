@@ -16,7 +16,8 @@ interface NavActions {
   onPrev(): void;
   onNext(): void;
   playing: boolean;
-  onPlayPause(): void;
+  /** Sin esto (audio oculto), la barra no ofrece «Leer». */
+  onPlayPause?(): void;
   /** Solo si los comandos por voz están activos y el navegador sabe reconocer voz. */
   onVoice?(): void;
   listening: boolean;
@@ -66,17 +67,19 @@ export function ReaderBottomBar({
           <Button onClick={nav.onNext}>
             <span aria-hidden="true">⬇</span> Siguiente
           </Button>
-          <Button variant="primary" onClick={nav.onPlayPause}>
-            {nav.playing ? (
-              <>
-                <span aria-hidden="true">❚❚</span> Pausar
-              </>
-            ) : (
-              <>
-                <span aria-hidden="true">▶</span> Leer
-              </>
-            )}
-          </Button>
+          {nav.onPlayPause && (
+            <Button variant="primary" onClick={nav.onPlayPause}>
+              {nav.playing ? (
+                <>
+                  <span aria-hidden="true">❚❚</span> Pausar
+                </>
+              ) : (
+                <>
+                  <span aria-hidden="true">▶</span> Leer
+                </>
+              )}
+            </Button>
+          )}
           {nav.onVoice && (
             <Button aria-pressed={nav.listening} onClick={nav.onVoice}>
               <span aria-hidden="true">🎙</span> Voz

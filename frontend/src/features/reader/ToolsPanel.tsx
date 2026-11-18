@@ -25,8 +25,9 @@ import type { ReadAloud } from "@/lib/useReadAloud";
 const capabilities = (
   voiceCommands: boolean,
   brailleTools: boolean,
+  audio: boolean,
 ): Record<NonNullable<Shortcut["requires"]>, boolean> => ({
-  audio: true,
+  audio,
   voice: voiceCommands && speechRecognitionAvailable(),
   braille: brailleTools,
 });
@@ -122,8 +123,11 @@ export function ToolsPanel({
     announce(`Tamaño ${next} píxeles`);
   };
   const hasReaderControls = controlsFor("reader").length > 0;
-  const audioSection = <AudioSection audio={audio} total={total} onPlay={onPlay} />;
-  const has = capabilities(settings.voiceCommands !== "off", settings.brailleTools);
+  // «Ocultar la lectura en voz alta» saca toda la sección de audio.
+  const audioSection = settings.hideAudio ? null : (
+    <AudioSection audio={audio} total={total} onPlay={onPlay} />
+  );
+  const has = capabilities(settings.voiceCommands !== "off", settings.brailleTools, !settings.hideAudio);
   const shortcuts = KEYMAP.filter((s) => !s.requires || has[s.requires])
     .map((s) => ({
       id: s.id,
