@@ -18,14 +18,15 @@ import {
 import { useAnnounce } from "@/lib/announcer";
 import { describeKeys, KEYMAP, type Shortcut } from "@/lib/keymap";
 import { hasTTS } from "@/lib/speech";
+import { speechRecognitionAvailable } from "@/lib/voice/recognizer";
 import type { ReadAloud } from "@/lib/useReadAloud";
 
 /** Qué capacidades hay hoy. La lectura en voz alta siempre está (sin voz del navegador, se simula el avance). */
-const CAPABILITIES: Record<NonNullable<Shortcut["requires"]>, boolean> = {
+const capabilities = (voiceCommands: boolean): Record<NonNullable<Shortcut["requires"]>, boolean> => ({
   audio: true,
-  voice: false,
+  voice: voiceCommands && speechRecognitionAvailable(),
   braille: false,
-};
+});
 
 const H3 = "mb-3 text-base font-bold tracking-wide text-[var(--muted)] uppercase";
 
@@ -102,7 +103,8 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
   };
   const hasReaderControls = controlsFor("reader").length > 0;
   const audioSection = <AudioSection audio={audio} total={total} />;
-  const shortcuts = KEYMAP.filter((s) => !s.requires || CAPABILITIES[s.requires])
+  const has = capabilities(settings.voiceCommands !== "off");
+  const shortcuts = KEYMAP.filter((s) => !s.requires || has[s.requires])
     .map((s) => ({
       id: s.id,
       label: s.label,

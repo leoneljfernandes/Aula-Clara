@@ -2,6 +2,7 @@ import { type ReactNode, type RefObject, useEffect, useRef, useState } from "rea
 import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
+import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
 import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { AISettingsDialog } from "./AISettingsDialog";
@@ -11,6 +12,7 @@ import { providerLabel } from "./providers";
 import { ProviderBadge } from "./ProviderBadge";
 import { QUICK_ACTIONS } from "./quickActions";
 import type { Chat } from "./useChat";
+import { useDictation } from "./useDictation";
 
 const TRUNCATED_NOTICE = "La respuesta se cortó porque el modelo llegó a su límite de largo.";
 
@@ -21,6 +23,8 @@ interface AssistantPanelProps {
   rate: number;
   /** Guía por voz: lee en voz alta cada respuesta nueva de la IA al llegar. */
   autoSpeak: boolean;
+  /** Con los comandos por voz activos, se ofrece dictar la pregunta (si el navegador sabe reconocer voz). */
+  dictation: boolean;
 }
 
 export function AssistantPanel({
@@ -29,12 +33,24 @@ export function AssistantPanel({
   selection,
   rate,
   autoSpeak,
+  dictation,
 }: AssistantPanelProps): ReactNode {
   const [draft, setDraft] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const credentials = useAICredentials();
   const logRef = useRef<HTMLDivElement>(null);
   const { messages, typing, send } = chat;
+
+  const submit = (): void => {
+    const text = draft.trim();
+    if (!text || typing) return;
+    void send(text, "free");
+    setDraft("");
+  };
+  const dictate = useDictation({
+    onText: (text) => setDraft((d) => (d.trim() ? `${d.trim()} ${text}` : text)),
+    onSend: submit,
+  });
 
   useEffect(() => {
     const el = logRef.current;
@@ -176,12 +192,9 @@ export function AssistantPanel({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            const text = draft.trim();
-            if (!text) return;
-            void send(text, "free");
-            setDraft("");
+            submit();
           }}
-          className="flex gap-2"
+          className="flex flex-wrap gap-2"
         >
           <label htmlFor="chat-input" className="sr-only">
             Escribí tu pregunta
@@ -205,7 +218,29 @@ export function AssistantPanel({
           >
             Enviar
           </Button>
+          {dictation && dictate.available && (
+            <Button
+              type="button"
+              className="min-h-[52px] aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
+              aria-pressed={dictate.listening}
+              onClick={dictate.start}
+            >
+              🎙 Dictar pregunta
+            </Button>
+          )}
         </form>
+        {dictation && dictate.error && (
+          <p role="status" className="text-base">
+            {dictate.error}
+          </p>
+        )}
+        {dictate.consentOpen && (
+          <VoiceConsentDialog
+            kind="commands"
+            onAccept={dictate.acceptConsent}
+            onCancel={dictate.cancelConsent}
+          />
+        )}
       </div>
     </section>
   );

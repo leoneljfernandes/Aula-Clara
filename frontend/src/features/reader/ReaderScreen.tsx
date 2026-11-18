@@ -3,12 +3,14 @@ import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
+import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
 import { AssistantPanel, quickActionLabel, useChat } from "@/features/assistant";
 import { type Article, libraryApi, type LibraryDocument } from "@/features/library";
 import {
   clamp,
   MAX_FS,
   MIN_FS,
+  RATES,
   readingStyle,
   THEME_ORDER,
   THEMES,
@@ -17,11 +19,15 @@ import {
 import { useAnnounce } from "@/lib/announcer";
 import { speechBus } from "@/lib/speech";
 import { useReadAloud } from "@/lib/useReadAloud";
+import type { VoiceCommand } from "@/lib/voice/commands";
 
+import { findBlock } from "./blockNav";
 import { DocumentView } from "./DocumentView";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
 import { useReaderNavigation } from "./useReaderNavigation";
 import { ToolsPanel } from "./ToolsPanel";
+import { useVoiceCommands } from "./useVoiceCommands";
+import { VoiceCommandBar } from "./VoiceCommandBar";
 
 export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: Article }): ReactNode {
   const { settings, updateSettings } = usePreferences();
@@ -55,6 +61,54 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     announce,
   });
 
+  const runVoiceCommand = (command: VoiceCommand): void => {
+    switch (command.kind) {
+      case "play":
+        return audio.play();
+      case "pause":
+        return audio.pause();
+      case "stop":
+        return audio.stop();
+      case "nextBlock":
+        return nav.move("any", 1);
+      case "prevBlock":
+        return nav.move("any", -1);
+      case "nextHeading":
+        return nav.move("h2", 1);
+      case "nextFigure":
+        return nav.move("figure", 1);
+      case "faster":
+      case "slower": {
+        const at = RATES.findIndex((r) => r === settings.rate);
+        const next =
+          RATES[Math.min(RATES.length - 1, Math.max(0, at + (command.kind === "faster" ? 1 : -1)))];
+        if (next === undefined) return;
+        updateSettings({ rate: next });
+        announce(`Velocidad x${String(next).replace(".", ",")}`);
+        return;
+      }
+      case "summarize":
+        return void chat.send(quickActionLabel("summarize"), "summarize");
+      case "keyConcepts":
+        return void chat.send(quickActionLabel("key_concepts"), "key_concepts");
+      case "quiz":
+        return void chat.send(quickActionLabel("quiz"), "quiz");
+      case "describeFigure": {
+        // La figura donde está el cursor o, si está en otro bloque, la que sigue.
+        const here = article.blocks[nav.cursor]?.type === "figure" ? nav.cursor : null;
+        const index = here ?? findBlock(article.blocks, nav.cursor, "figure", 1);
+        if (index === null) return announce("No hay más gráficos");
+        document.getElementById(`fig-btn-${index}`)?.click();
+        return;
+      }
+      case "ask":
+        return void chat.send(command.question, "free");
+      case "openBraille":
+        return; // el lector Braille llega con el plan 03
+    }
+  };
+  const voiceOn = settings.voiceCommands !== "off";
+  const voice = useVoiceCommands({ mode: settings.voiceCommands, onCommand: runVoiceCommand });
   useReaderHotkeys({
     singleKey: settings.singleKeyShortcuts,
     handlers: {
@@ -72,6 +126,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
       quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
       silence: () => speechBus.silence(),
+      ...(voiceOn && voice.available ? { toggleMic: voice.toggle } : {}),
       nextBlock: () => nav.move("any", 1),
       prevBlock: () => nav.move("any", -1),
       nextHeading: () => nav.move("h2", 1),
@@ -121,6 +176,15 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         <Button className="lg:hidden" onClick={() => document.getElementById("asistente")?.scrollIntoView()}>
           ✦ Asistente
         </Button>
+        {voiceOn && voice.available && (
+          <Button
+            aria-pressed={voice.listening}
+            onClick={voice.toggle}
+            className="aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
+          >
+            🎙 Micrófono
+          </Button>
+        )}
         <Link
           to="/perfil"
           onClick={audio.stop}
@@ -129,6 +193,10 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           👤 Perfil
         </Link>
       </header>
+      {voiceOn && <VoiceCommandBar {...voice} />}
+      {voice.consentOpen && (
+        <VoiceConsentDialog kind="commands" onAccept={voice.acceptConsent} onCancel={voice.cancelConsent} />
+      )}
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[290px_minmax(0,1fr)_390px]">
         <aside
@@ -165,6 +233,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             selection={selection}
             rate={settings.rate}
             autoSpeak={settings.voiceGuide}
+            dictation={voiceOn}
           />
         </aside>
       </div>

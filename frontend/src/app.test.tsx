@@ -2,10 +2,11 @@ import { act, render, screen, waitFor, type waitForOptions, within } from "@test
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_SETTINGS, type ReadingSettings } from "@/features/preferences";
 import { routes } from "@/router";
+import { FakeRecognition, installFakeRecognition } from "@/test/fakeSpeechRecognition";
 
 // Sin backend en los tests: el cliente HTTP devuelve respuestas fijas de "Gemini".
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
@@ -1182,5 +1183,194 @@ describe("guía de API keys", () => {
       "href",
       "https://build.nvidia.com/settings/api-keys",
     );
+  });
+});
+
+describe("comandos por voz", () => {
+  beforeEach(() => {
+    withOnboarding();
+    withAI();
+    FakeRecognition.instances = [];
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceCommands: "push" } }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("pide consentimiento la primera vez y «resumir» llama al asistente", async () => {
+    installFakeRecognition();
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+    await user.click(within(dialog).getByRole("button", { name: "Usar el micrófono" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("resumir"));
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "summarize" }));
+    expect(screen.getByText(/"resumir" ✓/)).toBeInTheDocument();
+  });
+
+  it("sin soporte del navegador lo explica y no muestra el micrófono", async () => {
+    renderAt("/leer/d1");
+    expect(await screen.findByText(/Tu navegador no permite comandos por voz/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Micrófono/ })).not.toBeInTheDocument();
+  });
+
+  it("el dictado escribe la pregunta y «enviar» la manda", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Dictar pregunta/ }));
+    act(() => FakeRecognition.instances.at(-1)!.emitFinal("qué dice la ley"));
+    expect(screen.getByLabelText("Escribí tu pregunta")).toHaveValue("qué dice la ley");
+    await user.click(screen.getByRole("button", { name: /Dictar pregunta/ }));
+    act(() => FakeRecognition.instances.at(-1)!.emitFinal("enviar"));
+    await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ message: "qué dice la ley" }));
+  });
+
+  describe("con el micrófono ya permitido", () => {
+    beforeEach(() => {
+      installFakeRecognition();
+      window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+    });
+
+    it("«Ahora no» en el consentimiento no enciende el micrófono", async () => {
+      window.localStorage.removeItem("aulaclara.voiceConsent");
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+      await user.click(within(dialog).getByRole("button", { name: "Ahora no" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(FakeRecognition.instances).toHaveLength(0);
+      expect(screen.getByRole("button", { name: /Micrófono/ })).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByText("🎙 Micrófono apagado")).toBeInTheDocument();
+    });
+
+    it("el estado cambia entre apagado y escuchando, y el atajo Alt+M lo alterna", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const mic = await screen.findByRole("button", { name: /Micrófono/ });
+      expect(screen.getByText("🎙 Micrófono apagado")).toBeInTheDocument();
+      await user.keyboard("{Alt>}m{/Alt}");
+      expect(mic).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByText("🎙 Escuchando…")).toBeInTheDocument();
+      expect(FakeRecognition.instances[0]!.starts).toBe(1);
+      expect(FakeRecognition.instances[0]!.continuous).toBe(false);
+      await user.click(mic);
+      expect(FakeRecognition.instances[0]!.stops).toBe(1);
+      act(() => FakeRecognition.instances[0]!.emitEnd()); // el navegador cierra la sesión tras stop()
+      expect(mic).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByText("🎙 Micrófono apagado")).toBeInTheDocument();
+    });
+
+    it("una frase que no es un comando se marca como no entendida y no llama a nadie", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("hola mundo"));
+      expect(screen.getByText(/"hola mundo" ✗ No entendí ese comando/)).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+
+    it("«preguntar …» manda la pregunta tal cual al asistente", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("Preguntar qué es la mitosis"));
+      await waitFor(() =>
+        expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "free", message: "qué es la mitosis" }),
+      );
+    });
+
+    it("«más rápido» sube la velocidad y la anuncia", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("más rápido"));
+      expect(await screen.findByText("Velocidad x1,5")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "x1,5" })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("«siguiente sección» mueve el cursor al próximo título", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("siguiente sección"));
+      expect(document.activeElement?.id).toBe("blk-0");
+    });
+
+    it("«describir imagen» usa la figura siguiente al cursor", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("describir imagen"));
+      await waitFor(() => expect(calls("/ai/describe-image")).toHaveLength(1));
+    });
+
+    it("«braille» se entiende pero todavía no hace nada", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      act(() => FakeRecognition.instances[0]!.emitFinal("braille"));
+      expect(screen.getByText(/"braille" ✓/)).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+
+    it("el permiso denegado se explica y apaga el micrófono", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      const mic = await screen.findByRole("button", { name: /Micrófono/ });
+      await user.click(mic);
+      act(() => FakeRecognition.instances[0]!.emitError("not-allowed"));
+      expect(screen.getByText(/No tenemos permiso para usar el micrófono/)).toBeInTheDocument();
+      expect(mic).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("sin voz en modo manos libres no muestra ningún error", async () => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { voiceCommands: "continuous" } }),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      expect(FakeRecognition.instances[0]!.continuous).toBe(true);
+      act(() => FakeRecognition.instances[0]!.emitError("no-speech"));
+      expect(screen.getByText("🎙 Escuchando…")).toBeInTheDocument();
+    });
+
+    it("al salir del lector el reconocimiento se cierra", async () => {
+      const user = userEvent.setup();
+      const router = renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+      await act(() => router.navigate("/biblioteca"));
+      expect(FakeRecognition.instances[0]!.aborts).toBeGreaterThan(0);
+    });
+  });
+
+  it("el panel de atajos muestra el micrófono solo si hay comandos por voz y soporte", async () => {
+    installFakeRecognition();
+    renderAt("/leer/d1");
+    const keys = await screen.findByRole("heading", { name: "Atajos" });
+    expect(keys.parentElement).toHaveTextContent(/activar o apagar el micrófono/);
+  });
+
+  it("sin soporte del navegador el panel de atajos no ofrece el micrófono", async () => {
+    renderAt("/leer/d1");
+    const keys = await screen.findByRole("heading", { name: "Atajos" });
+    expect(keys.parentElement).not.toHaveTextContent(/micrófono/);
+  });
+
+  it("con los comandos por voz apagados no hay micrófono ni barra, aunque el navegador pueda", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.settings", JSON.stringify({ schemaVersion: 2, settings: {} }));
+    renderAt("/leer/d1");
+    await h1();
+    expect(screen.queryByRole("button", { name: /Micrófono/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Dictar pregunta/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Micrófono apagado/)).not.toBeInTheDocument();
+    expect(FakeRecognition.instances).toHaveLength(0);
   });
 });
