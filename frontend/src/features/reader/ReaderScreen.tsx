@@ -37,6 +37,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const articleRef = useRef<HTMLElement>(null);
   const chatInput = useRef<HTMLInputElement>(null);
   const [toolsOpen, setToolsOpen] = useToggle();
+  // Pantalla simplificada: con la interfaz grande las herramientas quedan plegadas a cualquier ancho.
+  const simplified = settings.uiScale === "large";
   // Descripciones de figuras hechas en esta sesión. Mapa aparte: cambiar `article` reiniciaría el motor de lectura.
   const [brailleOpen, setBrailleOpen] = useState(false);
   const [figureAlts, setFigureAlts] = useState<Record<string, string>>({});
@@ -226,7 +228,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           </div>
         </div>
         <Button
-          className="lg:hidden"
+          className={simplified ? "" : "lg:hidden"}
           aria-expanded={toolsOpen}
           aria-controls="herramientas"
           onClick={setToolsOpen}
@@ -268,11 +270,13 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         />
       )}
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[290px_minmax(0,1fr)_390px]">
+      <div
+        className={`grid min-h-0 flex-1 ${simplified ? "lg:grid-cols-[minmax(0,1fr)_420px]" : "lg:grid-cols-[290px_minmax(0,1fr)_390px]"}`}
+      >
         <aside
           id="herramientas"
           aria-label="Barra de accesibilidad"
-          className={`${toolsOpen ? "block" : "hidden"} border-b-2 border-[var(--border)] bg-[var(--panel)] lg:block lg:overflow-y-auto lg:border-r-2 lg:border-b-0`}
+          className={`${toolsOpen ? "block" : "hidden"} border-b-2 border-[var(--border)] bg-[var(--panel)] ${simplified ? "lg:col-span-2" : "lg:block lg:overflow-y-auto lg:border-r-2 lg:border-b-0"}`}
         >
           <ToolsPanel audio={audio} total={readable.length} />
         </aside>

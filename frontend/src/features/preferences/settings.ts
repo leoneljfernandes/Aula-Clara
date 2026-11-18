@@ -12,6 +12,7 @@ export interface ReadingSettings {
   voiceGuide: boolean;
   voiceCommands: "off" | "push" | "continuous";
   brailleTools: boolean;
+  uiScale: "normal" | "large";
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   voiceGuide: false,
   voiceCommands: "off",
   brailleTools: false,
+  uiScale: "normal",
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -47,6 +49,7 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
   voiceCommands: (v): v is ReadingSettings["voiceCommands"] =>
     v === "off" || v === "push" || v === "continuous",
   brailleTools: (v): v is boolean => typeof v === "boolean",
+  uiScale: (v): v is ReadingSettings["uiScale"] => v === "normal" || v === "large",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);

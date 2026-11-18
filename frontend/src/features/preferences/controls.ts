@@ -90,6 +90,17 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "lectura",
     inReader: true,
   },
+  {
+    key: "uiScale",
+    kind: "choice",
+    label: "Tamaño de los botones",
+    options: [
+      { value: "normal", label: "Normal" },
+      { value: "large", label: "Grandes y pantalla simplificada" },
+    ],
+    group: "interfaz",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

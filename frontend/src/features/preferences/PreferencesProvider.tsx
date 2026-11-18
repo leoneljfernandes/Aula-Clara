@@ -109,7 +109,11 @@ export function ThemeScope({ children }: { children: ReactNode }): ReactNode {
   }, [theme]);
 
   return (
-    <div style={vars} className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
+    <div
+      style={vars}
+      data-ui-scale={settings.uiScale}
+      className="min-h-screen bg-[var(--bg)] text-[var(--fg)]"
+    >
       {children}
     </div>
   );

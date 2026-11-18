@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Interfaz grande (`uiScale: "large"`): ThemeScope publica data-ui-scale y los componentes reaccionan con `large-ui:`,
+   así components/ no depende de features/. */
+@custom-variant large-ui (&:where([data-ui-scale="large"] *));
+
 /* Base de accesibilidad del prototipo original. Los tokens de cada tema
    (--bg, --fg, --accent, --focus…) los fija el layout según las preferencias (fase 2). */
 :root {
@@ -74,4 +78,22 @@ body {
     size: A4 portrait;
     margin: 0;
   }
+}
+
+/* Respaldo de la interfaz grande: agranda cualquier control interactivo, también los que no pasan por Button.
+   Va fuera de capas para ganarle a las utilidades de Tailwind. 64 px es una decisión de diseño (WCAG 2.5.5 pide 44). */
+[data-ui-scale="large"]
+  :is(button, a[href], select, summary, input:not([type="checkbox"], [type="radio"], [type="range"])) {
+  min-height: 64px;
+}
+[data-ui-scale="large"] :is(input[type="checkbox"], input[type="radio"]) {
+  width: 32px;
+  height: 32px;
+}
+[data-ui-scale="large"] [role="group"] {
+  gap: 1rem;
+}
+[data-ui-scale="large"] *:focus-visible {
+  outline-width: 6px;
+  outline-offset: 4px;
 }

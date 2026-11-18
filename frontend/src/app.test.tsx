@@ -282,6 +282,7 @@ describe("onboarding", () => {
       voiceGuide: false,
       voiceCommands: "off",
       brailleTools: false,
+      uiScale: "normal",
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -482,6 +483,29 @@ describe("lector", () => {
     const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
     expect(dialog).toHaveTextContent("Descripción guardada");
     expect(calls("/ai/describe-image")).toHaveLength(1);
+  });
+
+  it("con botones grandes, la pantalla se simplifica: herramientas plegadas y atributo en el tema", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { uiScale: "large" } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    expect(document.querySelector("[data-ui-scale]")).toHaveAttribute("data-ui-scale", "large");
+    const tools = screen.getByRole("complementary", { name: "Barra de accesibilidad" });
+    expect(tools).toHaveClass("hidden");
+    expect(tools).not.toHaveClass("lg:block");
+    await user.click(screen.getByRole("button", { name: /Herramientas/ }));
+    expect(tools).toHaveClass("block");
+  });
+
+  it("en tamaño normal el panel de herramientas se ve en escritorio", async () => {
+    renderAt("/leer/d1");
+    await h1();
+    expect(document.querySelector("[data-ui-scale]")).toHaveAttribute("data-ui-scale", "normal");
+    expect(screen.getByRole("complementary", { name: "Barra de accesibilidad" })).toHaveClass("lg:block");
   });
 
   it("Alt+T cambia el tema y Alt+= agranda el texto", async () => {
