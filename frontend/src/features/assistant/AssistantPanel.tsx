@@ -49,7 +49,8 @@ export function AssistantPanel({
   const submit = (): void => {
     const text = draft.trim();
     if (!text || typing) return;
-    void send(text, "free");
+    // Con un texto elegido, la pregunta libre lo lleva como contexto.
+    void send(text, "free", selection ? { selection } : undefined);
     setDraft("");
   };
   const dictate = useDictation({

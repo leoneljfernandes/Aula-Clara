@@ -114,6 +114,14 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "interfaz",
     inReader: true,
   },
+  {
+    key: "clickToSelect",
+    kind: "toggle",
+    label: "Elegir un párrafo con un clic",
+    help: "Un clic o Enter sobre un párrafo lo selecciona, sin arrastrar el mouse, y muestra acciones grandes abajo.",
+    group: "interfaz",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

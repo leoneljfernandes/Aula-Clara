@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, type waitForOptions, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, type waitForOptions, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
@@ -284,6 +284,7 @@ describe("onboarding", () => {
       brailleTools: false,
       uiScale: "normal",
       clickGuard: "off",
+      clickToSelect: false,
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -1945,5 +1946,112 @@ describe("Braille", () => {
     );
     expect(calls("/ai/describe-image")).toHaveLength(1);
     expect(dialog).not.toHaveTextContent("Cada gráfico usa una consulta");
+  });
+});
+
+describe("elegir un párrafo con un clic", () => {
+  beforeEach(() => {
+    withOnboarding();
+    withAI();
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { clickToSelect: true } }),
+    );
+  });
+
+  const firstParagraph = async () =>
+    (await screen.findAllByText(/La incorporación de entornos virtuales/))[0]!;
+
+  it("un clic selecciona el párrafo y «Explicar» lo manda sin selección de texto", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const paragraph = await firstParagraph();
+    await user.click(paragraph);
+    expect(paragraph).toHaveAttribute("data-selected", "true");
+    await user.click(screen.getByRole("button", { name: /Explicar este párrafo más simple/ }));
+    await waitFor(() =>
+      expect(calls("/ai/chat")[0]?.data).toMatchObject({
+        action: "simplify",
+        selection: paragraph.textContent,
+      }),
+    );
+  });
+
+  it("«Preguntar» lleva el párrafo como contexto de la pregunta libre", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const paragraph = await firstParagraph();
+    await user.click(paragraph);
+    await user.click(screen.getByRole("button", { name: /Preguntar sobre este párrafo/ }));
+    expect(screen.getByLabelText("Escribí tu pregunta")).toHaveFocus();
+    await user.keyboard("¿Qué quiere decir?{Enter}");
+    await waitFor(() =>
+      expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "free", selection: paragraph.textContent }),
+    );
+  });
+
+  it("Enter sobre el bloque enfocado lo selecciona y «Quitar selección» lo suelta", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const paragraph = await firstParagraph();
+    paragraph.focus();
+    await user.keyboard("{Enter}");
+    expect(paragraph).toHaveAttribute("data-selected", "true");
+    expect(
+      await screen.findByText(/Párrafo seleccionado\. Las acciones están en la barra de abajo\./),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Quitar selección/ }));
+    expect(paragraph).not.toHaveAttribute("data-selected");
+    expect(screen.queryByRole("navigation", { name: "Barra simplificada" })).not.toBeInTheDocument();
+  });
+
+  it("arrastrar para seleccionar texto no selecciona el bloque", async () => {
+    renderAt("/leer/d1");
+    const paragraph = await firstParagraph();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.click(paragraph);
+    expect(paragraph).not.toHaveAttribute("data-selected");
+  });
+
+  it("el texto arrastrado también tiene sus acciones en la barra, no en un botón flotante", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const paragraph = await firstParagraph();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    act(() => document.dispatchEvent(new Event("selectionchange")));
+    expect(screen.queryByRole("button", { name: "Explicar más simple" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Explicar este párrafo más simple/ }));
+    await waitFor(() =>
+      expect(calls("/ai/chat")[0]?.data).toMatchObject({
+        action: "simplify",
+        selection: paragraph.textContent,
+      }),
+    );
+  });
+
+  it("la tecla 4 explica el párrafo elegido y no el del cursor", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { clickToSelect: true, singleKeyShortcuts: true } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const paragraph = await firstParagraph();
+    await user.click(paragraph);
+    // El cursor se mueve a otro bloque, pero el elegido sigue siendo el primero.
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await user.keyboard("4");
+    await waitFor(() =>
+      expect(calls("/ai/chat")[0]?.data).toMatchObject({
+        action: "simplify",
+        selection: paragraph.textContent,
+      }),
+    );
   });
 });

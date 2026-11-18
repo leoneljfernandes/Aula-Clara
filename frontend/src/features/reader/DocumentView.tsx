@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { KeyboardEvent, ReactNode, Ref } from "react";
 
 import type { Article } from "@/features/library";
 
@@ -15,6 +15,10 @@ interface DocumentViewProps {
   rate: number;
   onListen: () => void;
   onAskAboutFigure: () => void;
+  /** Índice (en article.blocks) del párrafo elegido con un clic, o null. */
+  selectedBlock: number | null;
+  /** Si existe, un clic o Enter sobre un párrafo o título lo elige (sin arrastrar el mouse). */
+  onSelectBlock?: (index: number) => void;
   /** Descripciones hechas en esta sesión, por id de figura (aparte del artículo para no reiniciar el motor de lectura). */
   figureAlts: Readonly<Record<string, string>>;
   onFigureDescribed(figureId: string, text: string): void;
@@ -31,6 +35,8 @@ export function DocumentView({
   rate,
   onListen,
   onAskAboutFigure,
+  selectedBlock,
+  onSelectBlock,
   figureAlts,
   onFigureDescribed,
   style,
@@ -84,13 +90,28 @@ export function DocumentView({
           );
         }
         const active = i === activeBlock;
-        const cls = `reading-block rounded-lg ${active ? "-mx-2 px-2" : ""}`;
+        const selected = i === selectedBlock;
+        const cls = `reading-block rounded-lg ${active || selected ? "-mx-2 px-2" : ""} ${selected ? "outline-4 outline-[var(--accent)]" : ""}`;
+        const select = onSelectBlock && {
+          // Arrastrar para seleccionar texto deja una selección: ahí el clic no elige el bloque.
+          onClick: () => {
+            if (window.getSelection()?.isCollapsed !== false) onSelectBlock(i);
+          },
+          onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+            if (e.key === "Enter" && e.target === e.currentTarget) {
+              e.preventDefault();
+              onSelectBlock(i);
+            }
+          },
+        };
         const highlight = active ? { background: "var(--hl)", color: "var(--hlFg)" } : undefined;
         return block.type === "h2" ? (
           <h2
             key={i}
             id={`blk-${i}`}
             tabIndex={-1}
+            data-selected={selected ? "true" : undefined}
+            {...select}
             className={`${cls} mt-10 mb-3 font-bold`}
             style={{ ...highlight, fontSize: "1.25em", lineHeight: 1.3 }}
           >
@@ -101,6 +122,8 @@ export function DocumentView({
             key={i}
             id={`blk-${i}`}
             tabIndex={-1}
+            data-selected={selected ? "true" : undefined}
+            {...select}
             className={`${cls} mb-5`}
             style={highlight}
             aria-current={active ? "true" : undefined}

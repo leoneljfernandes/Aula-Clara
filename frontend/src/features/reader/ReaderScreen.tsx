@@ -24,6 +24,7 @@ import type { VoiceCommand } from "@/lib/voice/commands";
 import { findBlock, readableIndex } from "./blockNav";
 import { BrailleDialog } from "./braille/BrailleDialog";
 import { DocumentView } from "./DocumentView";
+import { ReaderBottomBar } from "./ReaderBottomBar";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
 import { useReaderNavigation } from "./useReaderNavigation";
 import { ToolsPanel } from "./ToolsPanel";
@@ -39,6 +40,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const [toolsOpen, setToolsOpen] = useToggle();
   // Pantalla simplificada: con la interfaz grande las herramientas quedan plegadas a cualquier ancho.
   const simplified = settings.uiScale === "large";
+  // Párrafo elegido con un clic o Enter (`clickToSelect`): las acciones están en la barra de abajo.
+  const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
   // Descripciones de figuras hechas en esta sesión. Mapa aparte: cambiar `article` reiniciaría el motor de lectura.
   const [brailleOpen, setBrailleOpen] = useState(false);
   const [figureAlts, setFigureAlts] = useState<Record<string, string>>({});
@@ -95,9 +98,9 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     setBrailleOpen(true);
   };
 
-  // Explica más simple el bloque del cursor (el plan 04 lo extiende a un bloque elegido).
+  // Explica más simple el párrafo elegido con un clic o, si no hay, el del cursor.
   const simplifyBlock = (): void => {
-    const block = article.blocks[nav.cursor];
+    const block = article.blocks[selectedBlock ?? nav.cursor];
     if (block === undefined || block.type === "figure") {
       announce("Elegí un párrafo primero (Alt+↓ o J).");
       return;
@@ -205,6 +208,19 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       ?.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }, [activeBlock]);
 
+  const selectBlock = (index: number): void => {
+    setSelectedBlock(index);
+    nav.setCursor(index);
+    announce("Párrafo seleccionado. Las acciones están en la barra de abajo.");
+  };
+  const selectedBlockData = selectedBlock === null ? undefined : article.blocks[selectedBlock];
+  const selectedText = selectedBlockData && selectedBlockData.type !== "figure" ? selectedBlockData.text : "";
+  // El texto sobre el que actúan el asistente y la barra: el párrafo elegido o, si no, el texto arrastrado.
+  const assistantSelection = selectedText || selection;
+  const readFrom = selectedBlock === null ? null : readableIndex(article.blocks, selectedBlock);
+
+  const barVisible = settings.clickToSelect && assistantSelection !== "";
+
   const explainSelection = (): void => {
     hidePopover();
     void chat.send(explainPrompt(selection), "simplify", { selection });
@@ -281,7 +297,11 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           <ToolsPanel audio={audio} total={readable.length} />
         </aside>
 
-        <main id="contenido" ref={mainRef} className="min-w-0 bg-[var(--bg)] lg:overflow-y-auto">
+        <main
+          id="contenido"
+          ref={mainRef}
+          className={`min-w-0 bg-[var(--bg)] lg:overflow-y-auto ${barVisible ? "pb-36 scroll-pb-36" : ""}`}
+        >
           <DocumentView
             article={article}
             activeBlock={activeBlock}
@@ -290,6 +310,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             rate={settings.rate}
             onListen={audio.play}
             onAskAboutFigure={() => void chat.send("¿Qué muestra el Gráfico 1?", "free")}
+            selectedBlock={selectedBlock}
+            {...(settings.clickToSelect ? { onSelectBlock: selectBlock } : {})}
             figureAlts={figureAlts}
             onFigureDescribed={describeFigure}
             style={readingStyle(settings)}
@@ -306,7 +328,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           <AssistantPanel
             chat={chat}
             inputRef={chatInput}
-            selection={selection}
+            selection={assistantSelection}
             rate={settings.rate}
             autoSpeak={settings.voiceGuide}
             dictation={voiceOn}
@@ -324,7 +346,27 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         />
       )}
 
-      {pos && selection && (
+      {settings.clickToSelect && assistantSelection && (
+        <ReaderBottomBar
+          block={{
+            text: assistantSelection,
+            onExplain: () => {
+              hidePopover();
+              void chat.send(explainPrompt(assistantSelection), "simplify", {
+                selection: assistantSelection,
+              });
+            },
+            ...(readFrom !== null && selectedText ? { onReadFrom: () => audio.playFrom(readFrom) } : {}),
+            onAsk: () => chatInput.current?.focus(),
+            onClear: () => {
+              setSelectedBlock(null);
+              window.getSelection()?.removeAllRanges();
+            },
+          }}
+        />
+      )}
+
+      {!settings.clickToSelect && pos && selection && (
         <div className="fixed z-40" style={{ top: pos.top, left: pos.left }}>
           <button
             type="button"

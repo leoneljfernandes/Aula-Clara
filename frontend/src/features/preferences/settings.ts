@@ -14,6 +14,7 @@ export interface ReadingSettings {
   brailleTools: boolean;
   uiScale: "normal" | "large";
   clickGuard: "off" | "normal" | "strong";
+  clickToSelect: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   brailleTools: false,
   uiScale: "normal",
   clickGuard: "off",
+  clickToSelect: false,
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -53,6 +55,7 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
   brailleTools: (v): v is boolean => typeof v === "boolean",
   uiScale: (v): v is ReadingSettings["uiScale"] => v === "normal" || v === "large",
   clickGuard: (v): v is ReadingSettings["clickGuard"] => v === "off" || v === "normal" || v === "strong",
+  clickToSelect: (v): v is boolean => typeof v === "boolean",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);
