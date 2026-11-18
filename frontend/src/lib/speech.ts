@@ -23,6 +23,12 @@ function utterance(text: string, rate: number): SpeechSynthesisUtterance {
 function cancelSynthesis(): void {
   if (!hasTTS) return;
   try {
+    // Chrome sigue en pausa después de cancelar: sin reanudar, el próximo speak() podría quedar mudo.
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+  } catch {
+    // se cancela igual
+  }
+  try {
     window.speechSynthesis.cancel();
   } catch {
     // nada que cancelar
@@ -35,38 +41,58 @@ export interface SpeechOwner {
 }
 
 let current: SpeechOwner | null = null;
+/** El dueño conserva el árbitro pero está en pausa del usuario: no cuenta como «hablando». */
+let paused = false;
 const listeners = new Set<(speaking: boolean) => void>();
 
-function setCurrent(next: SpeechOwner | null): void {
-  const was = current !== null;
-  current = next;
-  if (was === (next !== null)) return;
-  for (const listener of [...listeners]) listener(next !== null);
+const speaking = (): boolean => current !== null && !paused;
+
+/** Avisa a los suscriptores solo si lo que `isSpeaking()` devuelve cambió respecto de `before`. */
+function notify(before: boolean): void {
+  const now = speaking();
+  if (now === before) return;
+  for (const listener of [...listeners]) listener(now);
 }
 
 /**
  * Árbitro de voz: hay un solo dueño a la vez. Quien empieza a hablar interrumpe al anterior y le avisa,
  * así la lectura del documento queda en pausa en vez de trabada. `isSpeaking` vale también en modo simulado.
+ * La voz se corta antes de avisar a los suscriptores.
  */
 export const speechBus = {
   claim(owner: SpeechOwner): void {
+    const before = speaking();
     const previous = current;
-    const wasSpeaking = previous !== null;
     current = owner;
+    paused = false;
     if (previous && previous !== owner) previous.onInterrupted();
     cancelSynthesis();
-    if (!wasSpeaking) for (const listener of [...listeners]) listener(true);
+    notify(before);
   },
   release(owner: SpeechOwner): void {
-    if (current === owner) setCurrent(null);
+    if (current !== owner) return;
+    const before = speaking();
+    current = null;
+    paused = false;
+    notify(before);
+  },
+  /** El dueño pausó (o reanudó) su voz sin soltar el árbitro. */
+  setPaused(owner: SpeechOwner, value: boolean): void {
+    if (current !== owner || paused === value) return;
+    const before = speaking();
+    paused = value;
+    notify(before);
   },
   silence(): void {
+    const before = speaking();
     const previous = current;
-    setCurrent(null);
+    current = null;
+    paused = false;
     previous?.onInterrupted();
     cancelSynthesis();
+    notify(before);
   },
-  isSpeaking: (): boolean => current !== null,
+  isSpeaking: speaking,
   subscribe(listener: (speaking: boolean) => void): () => void {
     listeners.add(listener);
     return () => void listeners.delete(listener);
@@ -159,7 +185,9 @@ export class ReadAloudEngine {
   }
 
   private speakFrom(i: number): void {
-    this.cancelSpeech();
+    // La voz vieja la corta `claim`; acá solo se invalidan los callbacks y el temporizador.
+    this.token++;
+    clearTimeout(this.timer);
     const mine = this.token;
     const text = this.items[i];
     if (text === undefined) {
@@ -203,6 +231,7 @@ export class ReadAloudEngine {
       if (!this.simulated && !this.interrupted) {
         try {
           window.speechSynthesis.resume();
+          speechBus.setPaused(this.owner, false);
           this.set({ status: "playing", idx: this.idx });
           return;
         } catch {
@@ -227,6 +256,7 @@ export class ReadAloudEngine {
       this.token++;
       clearTimeout(this.timer);
     }
+    speechBus.setPaused(this.owner, true);
     this.set({ status: "paused", idx: this.idx });
   }
 

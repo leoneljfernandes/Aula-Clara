@@ -10,16 +10,24 @@ class FakeUtterance {
 }
 const spoken: FakeUtterance[] = [];
 const synth = {
+  paused: false,
   speak: (u: FakeUtterance) => spoken.push(u),
   cancel: () => spoken.splice(0).forEach((u) => u.onerror?.({ error: "interrupted" })),
-  pause: vi.fn(),
-  resume: vi.fn(),
+  pause: vi.fn(() => {
+    synth.paused = true;
+  }),
+  resume: vi.fn(() => {
+    synth.paused = false;
+  }),
   getVoices: () => [],
 };
 
 let speech: typeof import("./speech");
 beforeEach(async () => {
   spoken.length = 0;
+  synth.paused = false;
+  synth.pause.mockClear();
+  synth.resume.mockClear();
   vi.resetModules();
   vi.stubGlobal("speechSynthesis", synth);
   vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
@@ -124,4 +132,87 @@ it("si el motor no estaba hablando, silence no lo mueve", () => {
   states.length = 0;
   speech.speechBus.silence();
   expect(states).toEqual([]);
+});
+
+it("en pausa del usuario isSpeaking es false y avisa; al continuar vuelve a ser true", () => {
+  const seen: boolean[] = [];
+  const engine = new speech.ReadAloudEngine(["a", "b"], () => 1, vi.fn(), vi.fn());
+  engine.play();
+  speech.speechBus.subscribe((s) => seen.push(s));
+  engine.pause();
+  expect(speech.speechBus.isSpeaking()).toBe(false);
+  expect(seen).toEqual([false]);
+  engine.play();
+  expect(speech.speechBus.isSpeaking()).toBe(true);
+  expect(seen).toEqual([false, true]);
+  expect(synth.resume).toHaveBeenCalledOnce();
+  expect(spoken).toHaveLength(1); // se reanudó, no se volvió a hablar
+});
+
+it("hablar algo suelto con la lectura en pausa la interrumpe y deja isSpeaking en true", () => {
+  const states: unknown[] = [];
+  const engine = new speech.ReadAloudEngine(
+    ["a", "b"],
+    () => 1,
+    (s) => states.push(s),
+    vi.fn(),
+  );
+  engine.play();
+  engine.pause();
+  const seen: boolean[] = [];
+  speech.speechBus.subscribe((s) => seen.push(s));
+  speech.speakOnce("respuesta");
+  expect(states.at(-1)).toEqual({ status: "paused", idx: 0 });
+  expect(speech.speechBus.isSpeaking()).toBe(true);
+  expect(seen).toEqual([true]);
+  engine.play();
+  expect(states.at(-1)).toEqual({ status: "playing", idx: 0 });
+});
+
+it("silence con la lectura en pausa no avisa de nada nuevo y play relee el párrafo", () => {
+  const states: unknown[] = [];
+  const engine = new speech.ReadAloudEngine(
+    ["a", "b"],
+    () => 1,
+    (s) => states.push(s),
+    vi.fn(),
+  );
+  engine.play();
+  engine.pause();
+  const seen: boolean[] = [];
+  speech.speechBus.subscribe((s) => seen.push(s));
+  speech.speechBus.silence();
+  expect(seen).toEqual([]);
+  expect(states.at(-1)).toEqual({ status: "paused", idx: 0 });
+  engine.play();
+  expect(states.at(-1)).toEqual({ status: "playing", idx: 0 });
+  expect(spoken).toHaveLength(1);
+  expect(speech.speechBus.isSpeaking()).toBe(true);
+});
+
+it("silence corta la voz antes de avisar a los suscriptores", () => {
+  const order: string[] = [];
+  speech.speakOnce("hola");
+  speech.speechBus.subscribe((s) => order.push(`aviso ${s}`));
+  const cancel = vi.spyOn(synth, "cancel").mockImplementation(() => void order.push("cancel"));
+  speech.speechBus.silence();
+  expect(order).toEqual(["cancel", "aviso false"]);
+  cancel.mockRestore();
+});
+
+it("cancelar una voz en pausa la reanuda antes para que la próxima no quede muda", () => {
+  const engine = new speech.ReadAloudEngine(["a"], () => 1, vi.fn(), vi.fn());
+  engine.play();
+  engine.pause();
+  expect(synth.paused).toBe(true);
+  speech.speakOnce("respuesta");
+  expect(synth.paused).toBe(false);
+});
+
+it("seguir de párrafo en párrafo cancela la voz una sola vez por párrafo", () => {
+  const cancel = vi.spyOn(synth, "cancel");
+  const engine = new speech.ReadAloudEngine(["a", "b"], () => 1, vi.fn(), vi.fn());
+  engine.play();
+  expect(cancel).toHaveBeenCalledTimes(1);
+  cancel.mockRestore();
 });
