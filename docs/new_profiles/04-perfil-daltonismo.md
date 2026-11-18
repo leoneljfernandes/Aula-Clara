@@ -1,6 +1,6 @@
 # 04 · Perfil Daltonismo (`id: "daltonismo"`)
 
-> **Estado:** documento de propuesta inicial. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+> **Estado:** construido por el [plan 06](./2026-11-18-perfiles-06-daltonismo.md) (nombres de color, inspector, realce, temas verificados, descripciones con guía de color, indicadores sin color y preset). Las secciones 3 y 4 describen lo construido; la 2 es la investigación original. Donde este documento contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
 
 ## 1. Motivos y objetivos del perfil
 
@@ -70,59 +70,38 @@ Además del requisito WCAG 1.4.1 que ya cumple el selector de temas, se refuerza
 
 ---
 
-## 3. Plan de implementación paso a paso
+## 3. Cómo quedó construido
 
-### Paso 1: Tema `okabe`, Preset `daltonismo` y Matrices de Simulación CVD
-- **Archivos a modificar:**
-  - [`frontend/src/features/preferences/config.ts`](../../frontend/src/features/preferences/config.ts):
-    - Agregar el tema `okabe` en `THEMES` y `THEME_ORDER`.
-    - Agregar `cvdType: "none" | "deuteranopia" | "protanopia" | "tritanopia" | "achromatopsia"` en `ReadingSettings`.
-    - Agregar el perfil `daltonismo` en `PROFILES`.
-  - [`backend/app/seed/profiles.json`](../../backend/app/seed/profiles.json):
-    ```json
-    {
-      "id": "daltonismo",
-      "title": "Daltonismo",
-      "icon": "◑",
-      "description": "Paleta segura Okabe-Ito, identificador de colores en gráficos y realce cromático.",
-      "tags": ["Paleta Okabe-Ito", "Detector de color en gráficos", "IA con guía de color"],
-      "preset": {
-        "font": "atkinson",
-        "font_size": 20,
-        "line_height": 1.7,
-        "theme": "okabe",
-        "audio_focus": false,
-        "cvd_type": "deuteranopia"
-      }
-    }
-    ```
+### Paso 1: Ajuste «Visión de los colores» y preset `daltonismo` (hecho, plan 06)
+- El ajuste es `cvdType` (`none`, `unsure`, `protan`, `deutan`, `tritan`, `achromat`), en el grupo «Colores». Con `unsure` («Tengo dificultad, no sé de qué tipo») el realce usa el de deuteranopía, el tipo más frecuente.
+- El preset está en [`backend/app/seed/presets.json`](../../backend/app/seed/presets.json) con `cvd_type: "unsure"`. No hay un campo `cvd_profile` ni sub-perfiles por tipo: el tipo se elige en el ajuste.
 
-### Paso 2: Utilidades de Color y Daltonización (`frontend/src/lib/color/`)
-- **Archivos nuevos (funciones puras, sin dependencias externas):**
-  1. `frontend/src/lib/color/colorNamer.ts`:
-     - Conversión `rgbToLab(r, g, b)` y función `describeColor(r, g, b): { name: string; hex: string }` que devuelve el nombre en español más cercano.
-  2. `frontend/src/lib/color/cvdSimulation.ts`:
-     - Matrices de transformación de color (Machado et al., 2009) para simular `protanopia`, `deuteranopia`, `tritanopia` y `achromatopsia` sobre cualquier color hexadecimal (usadas tanto en los tests de contraste como en los filtros SVG de daltonización).
+### Paso 2: Matemática de color (`frontend/src/lib/color/`) (hecho, plan 06)
+- `convert.ts`: sRGB, RGB lineal, CIELAB (D65), distancia **CIEDE2000** (probada con los datos de Sharma, Wu y Dalal, 2005), luminancia y contraste WCAG.
+- `names.ts`: **18 nombres de color en español** (Negro, Blanco, tres grises, Rojo y Rojo oscuro, Rosa, Naranja, Marrón, Amarillo, tres verdes, Celeste, Azul, Azul marino y Violeta). Se nombra la referencia más cercana por CIEDE2000; el hex que se muestra es el color medido.
+- `cvd.ts`: simulación de **Machado, Oliveira y Fernandes (2009)**, severidad 1,0, en RGB lineal; el realce (daltonización) `M = I + E · (I − S)`; los 20 valores del `feColorMatrix`; y el promedio de 3 × 3 píxeles. La matriz de **tritanopía es una aproximación**. Las matrices se comprobaron por la propiedad que garantiza el artículo (cada fila suma 1, un gris sigue siendo gris) y contra los valores del plan, no contra la tabla del paper.
+- **Acromatopsia sin realce:** con ese tipo no hay realce que ayude, así que «Realzar colores» se deshabilita y se explica; quedan «Identificar colores» e «Interpretar con IA».
 
-### Paso 3: Inspector de Color y Realce en `FigureBlock.tsx`
-- **Archivos a modificar:**
-  - [`frontend/src/features/reader/FigureBlock.tsx`](../../frontend/src/features/reader/FigureBlock.tsx):
-    - Si `settings.cvdType !== "none"` (o a demanda desde la figura), mostrar dos controles junto a «Interpretar con IA»:
-      1. **«🔍 Identificar colores»:** activa el puntero inspector sobre la imagen que muestra en vivo `Nombre del color (ej. Verde oscuro · #1B7837)` tanto en un tooltip visual como en una región `aria-live="polite"`.
-      2. **«🎨 Realzar colores»:** aplica el filtro de daltonización acorde a `settings.cvdType` para separar series rojo/verde o azul/amarillo.
+### Paso 3: Inspector y realce en las figuras (hecho, plan 06)
+- `features/reader/ColorInspector.tsx` y `ColorFilterDefs.tsx`; las botoneras están en `FigureBlock.tsx`, solo con `cvdType` distinto de `none`.
+- **«🔍 Identificar colores»:** una mira sobre la figura que nombra el color con el puntero, el dedo o el **teclado** (flechas: 2 % del ancho o del alto; con Shift, 10 %; `Esc` sale y devuelve el foco al botón). Promedia 3 × 3 píxeles, así el ruido de un JPEG no cambia el nombre, y anuncia «{nombre} · {HEX}» 300 ms después de que la mira se detuvo.
+- **«🎨 Realzar colores»:** aplica el filtro SVG `#cvd-enhance` (`feColorMatrix` en `linearRGB`) a la imagen, sin tocar los botones.
 
-### Paso 4: Mejora del Prompt de Descripción de Imágenes en el Backend
-- **Archivos a modificar:**
-  - [`backend/app/prompts/image_description.md`](../../backend/app/prompts/image_description.md):
-    - Incluir la instrucción explícita de vincular siempre cada color mencionado con su ubicación espacial, forma o etiqueta en el gráfico, y volcar las series en formato tabular/lista clara.
+### Paso 4: Descripciones de IA con guía de color (hecho, plan 06)
+- `describe-image` acepta `color_guide` (por defecto `false`); con él, el prompt suma `app/prompts/image_color_guide.md` (cada color con su posición o su forma, hasta 180 palabras) y la respuesta tiene su propia entrada de caché. `FigureBlock` lo manda con `cvdType` distinto de `none`.
+
+### Paso 5: Temas verificados e indicadores sin color (hecho, plan 06)
+- **Los cuatro temas se verificaron bajo simulación** de protanopía, deuteranopía y tritanopía: el texto, el texto sobre el color de acento y sobre el resaltado, y el foco mantienen el contraste (4,5:1 y 3:1) y el resaltado se distingue del fondo (ΔE2000 ≥ 10). Ningún tema necesitó cambios.
+- **Cero dependencia exclusiva del color (1.4.1):** el bloque que se lee en voz alta lleva un **borde izquierdo de 4 px** además del fondo (y `aria-current`), el bloque elegido con un clic lleva un contorno de 4 px y los estados de «Configurar IA» empiezan con **✓** o **✕**.
+- **Tema `okabe` (opcional):** ver la nota al final.
 
 ---
 
 ## 4. Criterios de aceptación y pruebas automatizadas
 
-1. **Test matemático de contraste bajo Daltonismo (`frontend/src/features/preferences/config.test.ts`):**
-   - Aplicar las matrices de `cvdSimulation.ts` (`protanopia`, `deuteranopia`, `tritanopia`) a los colores del tema `okabe` y verificar que los pares `bg/fg`, `panel/fg` y `accent/onAccent` mantengan un ratio de contraste $\ge 4.5:1$ incluso bajo simulación de pérdida de conos L, M o S.
-2. **Test unitario del identificador de colores (`frontend/src/lib/color/colorNamer.test.ts`):**
-   - Verificar que `(220, 30, 30)` se identifique como `"Rojo"`, `(30, 180, 50)` como `"Verde"`, `(20, 80, 210)` como `"Azul"`, `(240, 220, 30)` como `"Amarillo"` y `(128, 128, 128)` como `"Gris"`.
-3. **Test de integración en el lector (`frontend/src/app.test.tsx`):**
-   - Seleccionar el perfil **Daltonismo**, abrir un documento con figura y verificar que aplica el tema `okabe` y habilita las herramientas de identificación y realce de color en la figura.
+1. **`lib/color/*.test.ts`:** CIEDE2000 contra los datos de Sharma y otros, los 18 nombres, la simulación y el realce (el realce separa un rojo de un verde para una persona con deuteranopía), los 20 valores del filtro y el promedio de 3 × 3.
+2. **`features/preferences/config.test.ts`:** cada tema bajo protan, deutan y tritan.
+3. **`app.test.tsx` («daltonismo»):** el inspector con el teclado, el realce y su apagado, acromatopsia, «no sé» usa deuteranopía y la guía de color en «Interpretar con IA».
+4. **Backend:** `test_ai_service.py` y `tests/api/test_ai.py` (la guía de color amplía el prompt y tiene su propia caché), `test_presets.py` y `test_seed.py`.
+
+**Pendiente de prueba manual** (ver [`docs/accesibilidad.md`](../accesibilidad.md)): con un PDF que tenga un gráfico de barras rojo y verde, el inspector nombra los colores, «Realzar colores» separa las series con la simulación de DevTools (Rendering → Emulate vision deficiencies → Deuteranopia) y la descripción con IA menciona color y posición. No se hizo en la construcción: no había un navegador con DevTools.

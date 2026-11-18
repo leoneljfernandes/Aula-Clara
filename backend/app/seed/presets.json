@@ -27,5 +27,10 @@
    "description": "Respuestas en lenguaje claro, glosario y esquemas, avisos en pantalla y subtítulos en vivo de la clase.",
    "tags": ["Lenguaje claro", "Glosario y esquemas", "Subtítulos en vivo"],
    "settings": {"font": "atkinson", "font_size": 20, "line_height": 1.8, "theme": "claro", "audio_focus": false,
-                "ai_language": "plain", "hide_audio": true, "visual_alerts": true, "live_captions": true}}
+                "ai_language": "plain", "hide_audio": true, "visual_alerts": true, "live_captions": true}},
+  {"id": "daltonismo", "title": "Daltonismo", "icon": "◑",
+   "description": "Nombres de los colores y realce en los gráficos, y descripciones con IA que dicen dónde está cada color.",
+   "tags": ["Identificar colores", "Realce de colores", "IA con guía de color"],
+   "settings": {"font": "atkinson", "font_size": 20, "line_height": 1.7, "theme": "claro", "audio_focus": false,
+                "cvd_type": "unsure"}}
 ]

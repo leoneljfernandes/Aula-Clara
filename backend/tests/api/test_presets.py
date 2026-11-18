@@ -5,7 +5,7 @@ async def test_presets_catalog_lists_the_seed_presets(client: AsyncClient) -> No
     response = await client.get("/api/v1/presets")
     assert response.status_code == 200
     presets = {p["id"]: p for p in response.json()}
-    assert set(presets) == {"dislexia", "vision", "fatiga", "ceguera", "motriz", "sordera"}
+    assert set(presets) == {"dislexia", "vision", "fatiga", "ceguera", "motriz", "sordera", "daltonismo"}
     assert presets["vision"]["settings"] == {
         "font": "atkinson",
         "font_size": 28,
@@ -19,6 +19,7 @@ async def test_presets_catalog_lists_the_seed_presets(client: AsyncClient) -> No
     assert presets["ceguera"]["settings"]["braille_tools"] is True
     assert presets["motriz"]["settings"]["ui_scale"] == "large"
     assert presets["sordera"]["settings"]["ai_language"] == "plain"
+    assert presets["daltonismo"]["settings"]["cvd_type"] == "unsure"
 
 
 async def test_old_profiles_endpoint_is_gone(client: AsyncClient) -> None:

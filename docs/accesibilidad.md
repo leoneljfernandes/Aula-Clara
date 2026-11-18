@@ -103,3 +103,6 @@ Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles q
 - [ ] **Sordera, lenguaje claro:** con una key real, pedir «Resumir» en estándar y en lenguaje claro y comparar el largo de las oraciones; «Glosario fácil» debe dar tres líneas por término.
 - [ ] **Sordera, subtítulos:** con el micrófono de la notebook a 3 m, anotar la precisión en `03-perfil-sordera.md`; comprobar que se vuelven a escuchar solos tras un silencio largo y que al salir del lector el micrófono se apaga.
 - [ ] **Sordera, voz de la app:** en Chrome, una respuesta larga leída en voz alta que se corta sola (voces remotas) no deja a la app «hablando» ni al micrófono en pausa.
+- [ ] **Daltonismo, gráfico real:** con un PDF que tenga un gráfico de barras rojo y verde, comprobar que el inspector nombra los colores con el mouse, con el dedo y con el teclado, y que «Realzar colores» separa las series con la simulación de DevTools (Rendering → Emulate vision deficiencies → Deuteranopia).
+- [ ] **Daltonismo, IA:** que «Interpretar con IA» mencione cada color junto a su posición o su forma.
+- [ ] **Daltonismo, tritanopía:** la matriz de tritanopía es una aproximación: confirmar con una persona con tritanopía o con la simulación de DevTools (Tritanopia) que los temas y el realce se ven bien.

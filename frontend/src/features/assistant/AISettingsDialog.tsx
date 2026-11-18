@@ -273,6 +273,10 @@ export function AISettingsDialog({ onClose }: { onClose: () => void }): ReactNod
             {usingSealed ? "Ver los modelos de mi key guardada" : "Probar key y ver modelos"}
           </Button>
           <p role="status" className={`mt-2 min-h-7 text-base ${status.kind === "error" ? "font-bold" : ""}`}>
+            {/* El estado no se distingue solo por el color (criterio 1.4.1): empieza con un símbolo. */}
+            {(status.kind === "ok" || status.kind === "error") && (
+              <span aria-hidden="true">{status.kind === "ok" ? "✓ " : "✕ "}</span>
+            )}
             {status.text}
           </p>
         </div>

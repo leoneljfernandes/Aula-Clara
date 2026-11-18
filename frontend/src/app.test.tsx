@@ -1120,6 +1120,8 @@ describe("lector", () => {
     await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
     expect(await screen.findByText(/Leyendo · bloque 1 de/)).toBeInTheDocument();
     expect(document.querySelector("[id^=blk-][aria-current=true], h2[id^=blk-]")).not.toBeNull();
+    // El bloque que se lee no se distingue solo por el color de fondo (criterio 1.4.1): lleva además un borde.
+    expect(document.querySelector("[id^=blk-][aria-current=true]")).toHaveClass("border-l-4");
     await user.click(screen.getByRole("button", { name: "Detener lectura" }));
     expect(screen.getByText("Listo para leer.")).toBeInTheDocument();
   });
@@ -1152,7 +1154,7 @@ describe("IA con la key de cada persona", () => {
     await user.click(within(dialog).getByRole("radio", { name: /Groq/ }));
     await user.type(within(dialog).getByLabelText(/Tu API key de Groq/), "gsk_key-de-prueba");
     await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
-    await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent("Key válida"));
+    await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent(/^✓ Key válida/));
     // La prueba usa el modo de headers: la key viaja una vez, antes de guardarla.
     expect(calls("/ai/models")[0]?.headers).toEqual({
       "X-AI-Provider": "groq",

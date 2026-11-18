@@ -100,7 +100,8 @@ export function DocumentView({
         }
         const active = i === activeBlock;
         const selected = i === selectedBlock;
-        const cls = `reading-block rounded-lg ${active || selected ? "-mx-2 px-2" : ""} ${selected ? "outline-4 outline-[var(--accent)]" : ""}`;
+        // Ningún estado se comunica solo con color (1.4.1): el bloque que se lee lleva además un borde a la izquierda.
+        const cls = `reading-block rounded-lg ${active || selected ? "-mx-2 px-2" : ""} ${active ? "border-l-4 border-[var(--accent)] pl-3" : ""} ${selected ? "outline-4 outline-[var(--accent)]" : ""}`;
         const select = onSelectBlock && {
           // Arrastrar para seleccionar texto deja una selección: ahí el clic no elige el bloque.
           onClick: () => {
@@ -120,6 +121,7 @@ export function DocumentView({
             id={`blk-${i}`}
             tabIndex={-1}
             data-selected={selected ? "true" : undefined}
+            aria-current={active ? "true" : undefined}
             {...select}
             className={`${cls} mt-10 mb-3 font-bold`}
             style={{ ...highlight, fontSize: "1.25em", lineHeight: 1.3 }}
