@@ -159,6 +159,22 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "asistente",
     inReader: true,
   },
+  {
+    key: "cvdType",
+    kind: "choice",
+    label: "Visión de los colores",
+    options: [
+      { value: "none", label: "Sin dificultad" },
+      { value: "unsure", label: "Tengo dificultad, no sé de qué tipo" },
+      { value: "protan", label: "Protanopía o protanomalía (rojos)" },
+      { value: "deutan", label: "Deuteranopía o deuteranomalía (verdes)" },
+      { value: "tritan", label: "Tritanopía o tritanomalía (azules y amarillos)" },
+      { value: "achromat", label: "Acromatopsia (sin colores)" },
+    ],
+    help: "Con acromatopsia, probá también el perfil «Visión reducida» y el tema «Oscuro cálido» si te molesta la luz.",
+    group: "colores",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

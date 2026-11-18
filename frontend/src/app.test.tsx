@@ -289,6 +289,7 @@ describe("onboarding", () => {
       hideAudio: false,
       visualAlerts: false,
       liveCaptions: false,
+      cvdType: "none",
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -2466,5 +2467,60 @@ describe("subtítulos en vivo", () => {
     renderAt("/leer/d1");
     expect(await screen.findByText(/Tu navegador no permite subtítulos en vivo/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Empezar subtítulos" })).not.toBeInTheDocument();
+  });
+});
+
+describe("daltonismo", () => {
+  beforeEach(() => {
+    withOnboarding();
+    withAI();
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { cvdType: "deutan" } }),
+    );
+    vi.stubGlobal("createImageBitmap", async () => ({ width: 100, height: 50, close() {} }));
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage() {},
+      getImageData: () => ({
+        data: new Uint8ClampedArray(100 * 50 * 4).map((_, i) => [220, 30, 30, 255][i % 4]!),
+      }),
+    } as unknown as CanvasRenderingContext2D);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("el inspector nombra el color con el teclado", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Identificar colores/ }));
+    const inspector = await screen.findByRole("application", { name: /Inspector de colores/ });
+    expect(inspector).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(await screen.findByText("Rojo · #DC1E1E", {}, { timeout: 1_000 })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("application")).not.toBeInTheDocument();
+  });
+
+  it("al cerrar el inspector el foco vuelve al botón", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const toggle = await screen.findByRole("button", { name: /Identificar colores/ });
+    await user.click(toggle);
+    await screen.findByRole("application");
+    await user.keyboard("{Escape}");
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("sin daltonismo no hay botón de identificar colores", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { cvdType: "none" } }),
+    );
+    renderAt("/leer/d1");
+    await screen.findByRole("button", { name: /Interpretar con IA/ });
+    expect(screen.queryByRole("button", { name: /Identificar colores/ })).not.toBeInTheDocument();
   });
 });

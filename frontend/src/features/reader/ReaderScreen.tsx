@@ -347,6 +347,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             showListenButton={settings.audioFocus && !settings.hideAudio && audio.status === "stopped"}
             autoSpeak={settings.voiceGuide}
             canListen={!settings.hideAudio}
+            cvdType={settings.cvdType}
             rate={settings.rate}
             onListen={audio.play}
             onAskAboutFigure={() => void chat.send("¿Qué muestra el Gráfico 1?", "free")}

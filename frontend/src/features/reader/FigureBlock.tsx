@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
@@ -11,11 +11,14 @@ import {
   ProviderBadge,
   type Provider,
 } from "@/features/assistant";
+import type { ReadingSettings } from "@/features/preferences";
 import type { Block } from "@/lib/extractors";
 import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
-import { BarChart } from "./BarChart";
 import { figureImageBlob } from "@/lib/figureImage";
+
+import { BarChart } from "./BarChart";
+import { ColorInspector } from "./ColorInspector";
 
 interface FigureBlockProps {
   block: Extract<Block, { type: "figure" }>;
@@ -34,6 +37,8 @@ interface FigureBlockProps {
   autoSpeak: boolean;
   /** Si es falso (audio oculto), no se ofrece escuchar la descripción. */
   canListen: boolean;
+  /** Tipo de daltonismo elegido: con uno distinto de «none», se ofrecen las herramientas de color. */
+  cvdType: ReadingSettings["cvdType"];
   /** Velocidad de la voz elegida en los ajustes. */
   rate: number;
   onAskAssistant: () => void;
@@ -58,6 +63,7 @@ export function FigureBlock({
   buttonId,
   autoSpeak,
   canListen,
+  cvdType,
   rate,
   onAskAssistant,
 }: FigureBlockProps): ReactNode {
@@ -69,6 +75,26 @@ export function FigureBlock({
   const [settingsOpen, setSettingsOpen] = useState(false);
   // `true` mientras el diálogo muestra una consulta recién hecha; si no, muestra la descripción guardada.
   const [fresh, setFresh] = useState(false);
+  // Inspector de colores: la imagen se arma al abrirlo y se suelta al cerrarlo.
+  const [inspecting, setInspecting] = useState(false);
+  const [inspectorImage, setInspectorImage] = useState<Blob | null>(null);
+  const [inspectorFailed, setInspectorFailed] = useState(false);
+  const inspectButton = useRef<HTMLButtonElement>(null);
+
+  const closeInspector = (): void => {
+    setInspecting(false);
+    setInspectorImage(null);
+    setInspectorFailed(false);
+    inspectButton.current?.focus();
+  };
+
+  const toggleInspector = async (): Promise<void> => {
+    if (inspecting) return closeInspector();
+    setInspecting(true);
+    const blob = await figureImageBlob(block, index);
+    if (blob) setInspectorImage(blob);
+    else setInspectorFailed(true);
+  };
 
   const closeDialog = (): void => {
     setOpen(false);
@@ -122,6 +148,7 @@ export function FigureBlock({
         ) : (
           <BarChart />
         )}
+        {inspectorImage && <ColorInspector image={inspectorImage} onClose={closeInspector} />}
         <div className="absolute top-3 right-3">
           {/* aria-disabled y no disabled: un botón deshabilitado pierde el foco (va a <body>) y el
               diálogo no podría devolverlo al cerrarse. */}
@@ -150,6 +177,22 @@ export function FigureBlock({
           </button>
         </div>
       </div>
+      {cvdType !== "none" && (
+        <div
+          className="mt-3 flex flex-wrap items-center gap-3"
+          role="group"
+          aria-label="Herramientas de color"
+        >
+          <Button ref={inspectButton} aria-pressed={inspecting} onClick={() => void toggleInspector()}>
+            <span aria-hidden="true">🔍</span> Identificar colores
+          </Button>
+          {inspectorFailed && (
+            <p role="alert" className="text-base">
+              No pudimos armar la imagen para identificar sus colores.
+            </p>
+          )}
+        </div>
+      )}
       <figcaption className="mt-2 text-[0.8em] text-[var(--muted)]">
         {caption} <span className="italic">(imagen original sin texto alternativo)</span>
       </figcaption>

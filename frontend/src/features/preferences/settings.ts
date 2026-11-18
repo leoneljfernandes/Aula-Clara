@@ -19,6 +19,7 @@ export interface ReadingSettings {
   hideAudio: boolean;
   visualAlerts: boolean;
   liveCaptions: boolean;
+  cvdType: "none" | "unsure" | "protan" | "deutan" | "tritan" | "achromat";
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   hideAudio: false,
   visualAlerts: false,
   liveCaptions: false,
+  cvdType: "none",
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -68,6 +70,8 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
   hideAudio: (v): v is boolean => typeof v === "boolean",
   visualAlerts: (v): v is boolean => typeof v === "boolean",
   liveCaptions: (v): v is boolean => typeof v === "boolean",
+  cvdType: (v): v is ReadingSettings["cvdType"] =>
+    v === "none" || v === "unsure" || v === "protan" || v === "deutan" || v === "tritan" || v === "achromat",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);

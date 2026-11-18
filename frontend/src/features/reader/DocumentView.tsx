@@ -1,6 +1,7 @@
 import type { KeyboardEvent, ReactNode, Ref } from "react";
 
 import type { Article } from "@/features/library";
+import type { ReadingSettings } from "@/features/preferences";
 
 import { FigureBlock } from "./FigureBlock";
 
@@ -13,6 +14,8 @@ interface DocumentViewProps {
   autoSpeak: boolean;
   /** Si es falso (audio oculto), las figuras no ofrecen escuchar su descripción. */
   canListen: boolean;
+  /** Tipo de daltonismo elegido: con uno, las figuras ofrecen identificar y realzar colores. */
+  cvdType: ReadingSettings["cvdType"];
   /** Velocidad de la voz elegida en los ajustes. */
   rate: number;
   onListen: () => void;
@@ -35,6 +38,7 @@ export function DocumentView({
   showListenButton,
   autoSpeak,
   canListen,
+  cvdType,
   rate,
   onListen,
   onAskAboutFigure,
@@ -87,6 +91,7 @@ export function DocumentView({
                 buttonId={`fig-btn-${i}`}
                 autoSpeak={autoSpeak}
                 canListen={canListen}
+                cvdType={cvdType}
                 rate={rate}
                 onAskAssistant={onAskAboutFigure}
               />
