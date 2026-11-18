@@ -1,5 +1,7 @@
 # 03 · Perfil Sordera / Hipoacusia (`id: "sordera"`)
 
+> **Estado:** documento de propuesta inicial. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+
 ## 1. Motivos y objetivos del perfil
 
 A primera vista podría pensarse que, como un PDF o un Word ya son texto escrito, un estudiante con **sordera o hipoacusia** no necesita adaptaciones en una plataforma de lectura. Sin embargo, la evidencia en educación superior e inclusión universitaria muestra tres barreras críticas que **Aula Clara** puede resolver directamente:

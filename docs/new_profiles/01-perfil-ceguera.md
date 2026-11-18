@@ -1,5 +1,7 @@
 # 01 · Perfil Ceguera (`id: "ceguera"`)
 
+> **Estado:** documento de propuesta inicial. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+
 ## 1. Motivos y objetivos del perfil
 
 Mientras que los perfiles actuales (*Visión reducida* y *Fatiga visual*) asumen que el estudiante mira la pantalla y usa el audio como complemento, una persona **ciega** (o con ceguera legal severa) interactúa con la plataforma **sin referencia visual**:

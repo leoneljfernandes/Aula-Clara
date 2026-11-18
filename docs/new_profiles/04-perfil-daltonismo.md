@@ -1,5 +1,7 @@
 # 04 · Perfil Daltonismo (`id: "daltonismo"`)
 
+> **Estado:** documento de propuesta inicial. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+
 ## 1. Motivos y objetivos del perfil
 
 El **daltonismo** (deficiencia en la visión del color o *CVD*) afecta aproximadamente al **8 % de los hombres y al 0,5 % de las mujeres**. En el ámbito universitario presenta una barrera cotidiana que suele pasar desapercibida:

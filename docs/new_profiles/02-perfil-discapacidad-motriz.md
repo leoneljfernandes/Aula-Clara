@@ -1,5 +1,7 @@
 # 02 · Perfil Discapacidad Motriz (`id: "motriz"`)
 
+> **Estado:** documento de propuesta inicial. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+
 ## 1. Motivos y objetivos del perfil
 
 Los estudiantes con **discapacidad motriz** (como parálisis cerebral, lesiones medulares, distrofias musculares, temblor esencial, secuelas neuromotoras o amputaciones) enfrentan barreras muy concretas en las aplicaciones web de estudio tradicionales:
