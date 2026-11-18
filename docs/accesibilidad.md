@@ -94,3 +94,7 @@ Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles q
 - [ ] **Braille, relieve:** en la vista previa de impresión de Chrome, A4 al 100 %, medir 6 mm entre celdas y 10 mm entre líneas (o exportar a PDF y medir); después imprimir sobre papel microcápsula y confirmar las medidas con la institución.
 - [ ] **Braille, lector de pantalla:** abrir el diálogo «Braille» con NVDA, JAWS o VoiceOver y comprobar que se oyen la explicación y los botones, y no «puntos braille 1 2 4…».
 - [ ] **Braille, revisión de la norma:** comparar la signografía implementada con la versión vigente de B 2 (hay una versión 4, mayo de 2025) y decidir los casos que B 2 no define («PDFs», «3.141»).
+- [ ] **Motriz, solo teclado:** recorrer el lector con `Tab`, `Enter`, `J` y `K` y la interfaz grande: ningún control queda tapado por la barra simplificada (criterio 2.4.11).
+- [ ] **Motriz, celular:** con la interfaz grande en un ancho de 360 px, que no haya scroll horizontal.
+- [ ] **Motriz, doble clic:** con el filtro en «Sí», un doble clic rápido en «▶ Leer» no inicia y pausa enseguida.
+- [ ] **Motriz, manos libres:** con los comandos en «Manos libres», «bajar» y «subir» mueven el cursor y la app no se oye a sí misma.

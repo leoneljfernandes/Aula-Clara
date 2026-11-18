@@ -16,5 +16,11 @@
    "tags": ["Teclado y voz", "Lectura en voz alta", "Braille (.BRF e impresión)"],
    "settings": {"font": "atkinson", "font_size": 24, "line_height": 1.8, "theme": "contraste", "audio_focus": true,
                 "voice_guide": false, "voice_commands": "push", "single_key_shortcuts": false,
-                "braille_tools": true}}
+                "braille_tools": true}},
+  {"id": "motriz", "title": "Discapacidad motriz", "icon": "⌖",
+   "description": "Botones grandes, pantalla despejada, elegir párrafos con un toque y control por teclado o por voz.",
+   "tags": ["Botones grandes", "Atajos de una tecla", "Párrafos con un toque"],
+   "settings": {"font": "atkinson", "font_size": 22, "line_height": 1.8, "theme": "claro", "audio_focus": false,
+                "ui_scale": "large", "click_to_select": true, "click_guard": "normal",
+                "single_key_shortcuts": true, "voice_commands": "push"}}
 ]

@@ -547,6 +547,12 @@ describe("lector", () => {
       expect(document.getElementById("contenido")).toHaveClass("pb-36", "scroll-pb-36");
     });
 
+    it("también deja espacio en la columna del asistente para que la barra no tape el campo del chat", async () => {
+      renderAt("/leer/d1");
+      await screen.findByRole("navigation", { name: "Barra simplificada" });
+      expect(screen.getByRole("complementary", { name: "Panel de asistencia IA" })).toHaveClass("pb-36");
+    });
+
     it("«Leer» de la barra arranca desde el bloque del cursor y pasa a «Pausar»", async () => {
       const user = userEvent.setup();
       renderAt("/leer/d1");

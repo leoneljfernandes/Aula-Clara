@@ -323,7 +323,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         <aside
           id="asistente"
           aria-label="Panel de asistencia IA"
-          className="flex flex-col border-t-2 border-[var(--border)] bg-[var(--panel)] lg:overflow-hidden lg:border-t-0 lg:border-l-2"
+          className={`flex flex-col border-t-2 border-[var(--border)] bg-[var(--panel)] lg:overflow-hidden lg:border-t-0 lg:border-l-2 ${barVisible ? "pb-36" : ""}`}
         >
           <AssistantPanel
             chat={chat}
