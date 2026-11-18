@@ -9,7 +9,7 @@ Es una SPA de React 18 en un solo archivo, con Tailwind por CDN y Babel en el na
 
 | Vista | Qué hace |
 |---|---|
-| **Onboarding** | Wizard de 2 pasos. Paso 1: elegir uno de los 4 perfiles (`PROFILES`: dislexia, visión reducida, fatiga visual, personalizado). Paso 2: ajustar el tema, la tipografía, el tamaño (14 a 40 px) y el interlineado, con vista previa en vivo. Guarda `aulaclara.profile` y `aulaclara.settings` en `localStorage`. |
+| **Onboarding** | Wizard de 2 pasos. Paso 1: elegir un preset del catálogo que sirve el backend (hoy dislexia, visión reducida y fatiga visual) o «Personalizado». Paso 2: ajustar el tema, la tipografía, el tamaño (14 a 40 px) y el interlineado, con vista previa en vivo. Guarda `aulaclara.settings` y `aulaclara.onboarded` en `localStorage` (el preset elegido no se guarda). |
 | **Biblioteca** | Drag & drop de archivos (con procesamiento simulado), documentos recientes (`INITIAL_DOCS`) con barra de progreso y búsqueda. |
 | **Lector** | Tres columnas: herramientas de accesibilidad, visor y asistente. El visor muestra el `ARTICLE` fijo y la figura `CHART`. Incluye: lectura en voz alta (`useReadAloud` con Web Speech, resaltado del párrafo y simulación si no hay voces), progreso de lectura según el scroll, el botón flotante «Explicar más simple» al seleccionar texto, el botón «Interpretar con IA» en la figura, atajos Alt+P/S/=/−/T/A y un diálogo de atajos con trampa de foco. |
 
@@ -21,7 +21,7 @@ La IA está simulada en dos lugares: `mockReply(kind, text)`, con los tipos `res
 |---|---|---|---|
 | Versión de React | React 18 | `architecting-react-apps`, `routing-with-react-router` (React Router v8 exige React ≥ 19.2.7) | **React 19** + TypeScript estricto |
 | Navegación | `view` en el contexto global ("router por vista") | `routing-with-react-router` | **React Router v8 en data mode**: `createBrowserRouter`, rutas `lazy`, `loader`/`action`, `ErrorBoundary` por rama |
-| Estado global | Un contexto con vista, ajustes, perfil, documentos y documento abierto | `architecting-react-apps` (el contexto global gigante es un anti-patrón) | **Contextos chicos**: `Preferences` (perfil y ajustes de lectura) y `Announcer` (`aria-live`). Los documentos se leen en loaders, la vista sale de la URL y el documento abierto, de `:documentId` |
+| Estado global | Un contexto con vista, ajustes, perfil, documentos y documento abierto | `architecting-react-apps` (el contexto global gigante es un anti-patrón) | **Contextos chicos**: `Preferences` (ajustes de lectura) y `Announcer` (`aria-live`). Los documentos se leen en loaders, la vista sale de la URL y el documento abierto, de `:documentId` |
 | Carpetas del frontend | `app/`, `shared/{ui,hooks,lib,config}`, `types/` | `architecting-react-apps` | `main.tsx`, `router.tsx`, `lib/`, `components/`, `features/<f>/` con `index.ts` público y `routes/`, más el alias `@/` y reglas de ESLint que hacen cumplir los imports |
 | Cliente HTTP | `shared/lib/apiClient.ts` | `building-axios-clients` | **Axios solo en `lib/http`**, con `toApiError` (una unión discriminada) y reintento con backoff solo en métodos idempotentes. No hay login, así que no hay refresh de tokens |
 | Memoización | sin definir | `optimizing-react-renders` (proyecto nuevo) | **React Compiler** activado y nada de `useMemo`/`useCallback` manual |
@@ -51,7 +51,7 @@ aula-clara/
 ├─ vercel.json                    # build del frontend, fallback de la SPA y ruteo de /api/* a la función
 ├─ api/index.py                   # entrypoint de Vercel: agrega backend/ al path e importa app.main
 ├─ .github/workflows/pages.yml    # despliegue opcional del frontend a GitHub Pages
-├─ docs/  (arquitectura.md · accesibilidad.md · adr/0001-spa.md)
+├─ docs/  (arquitectura.md · accesibilidad.md · adr/0001 a 0004)
 ├─ frontend/                      # React 19 + Vite 8 + TypeScript 6 + Tailwind 4
 │  ├─ vite.config.ts              # alias @/, React Compiler, envDir "..", base para Pages, proxy /api
 │  ├─ eslint.config.js            # dirección de dependencias + react-hooks recommended
@@ -59,7 +59,7 @@ aula-clara/
 │     ├─ main.tsx · router.tsx    # createRoot + reporte de errores · árbol de rutas (lazy, middleware)
 │     ├─ routes/                  # módulos de ruta finos: root-layout, profile, library, reader, ai-guide, route-error
 │     ├─ features/
-│     │  ├─ preferences/          # config (temas, fuentes, perfiles), provider, wizard de onboarding, guards
+│     │  ├─ preferences/          # config (temas, fuentes), settings (validador único), presets (catálogo del backend), controls (registro), provider, wizard, guards
 │     │  ├─ library/              # api (localStorage + IndexedDB), importación por pasos, pantalla, subida
 │     │  ├─ reader/               # visor, herramientas, figuras con «Interpretar con IA», hooks (selección, progreso, atajos)
 │     │  └─ assistant/            # cliente de IA, chat, panel, indicador de proveedor
@@ -73,14 +73,14 @@ aula-clara/
    ├─ pyproject.toml · uv.lock    # dependencias, ruff, mypy --strict, pytest, import-linter
    ├─ app/
    │  ├─ main.py · config.py · errors.py · rate_limit.py
-   │  ├─ api/        deps.py (raíz de composición) · router.py · health · profiles · documents · ai
-   │  ├─ schemas/    profile · document (Page[T]) · ai
-   │  ├─ services/   profile · document · ai · ai_rules (funciones puras) · prompts
+   │  ├─ api/        deps.py (raíz de composición) · router.py · health · presets · documents · ai
+   │  ├─ schemas/    preset · document (Page[T]) · ai
+   │  ├─ services/   preset · document · ai · ai_rules (funciones puras) · prompts
    │  ├─ crud/       base (Repository[T]) · memory · seed · answer_cache
    │  ├─ providers/llm/   base · gemini · openai_compatible (Groq, OpenRouter) · factory
-   │  ├─ models/     dataclasses: Profile, Document, ChatMessage
+   │  ├─ models/     dataclasses: Preset, Document, ChatMessage
    │  ├─ prompts/    study_assistant.md · image_description.md (versionados)
-   │  ├─ seed/       profiles.json · documents.json
+   │  ├─ seed/       presets.json · documents.json
    │  └─ observability/   logging (JSON a stdout) · tracing (modo mínimo)
    └─ tests/         unit/ (reglas puras, services con autospec, proveedores) · api/ (endpoints)
 ```
@@ -113,7 +113,7 @@ Los repositorios en memoria y la caché viven mientras viva el proceso: `deps.py
 |---|---|---|
 | GET | `/api/health/live` | `{status}` |
 | GET | `/api/health/ready` | `{status, version}` (no depende de ninguna key) |
-| GET | `/api/v1/profiles` | los 4 perfiles (catálogo chico, sin paginar) |
+| GET | `/api/v1/presets` | el catálogo de presets de ajustes (`id`, `title`, `icon`, `description`, `tags`, `settings`), sin paginar. El frontend lo pide en runtime y valida lo que llega ([ADR 0004](adr/0004-catalogo-de-presets.md)) |
 | GET · POST · PATCH · DELETE | `/api/v1/documents[/{id}]` | `DocumentRead`; el listado se pagina con `offset`/`limit` |
 | POST · GET · DELETE | `/api/v1/ai/session` | **Key sellada en cookie** ([ADR 0003](adr/0003-key-sellada-en-cookie.md)). `POST {provider, api_key, remember}` sella la key y la deja en la cookie `__Host-aula_ai`; `GET` comprueba que la cookie vuelve; `DELETE` la borra. Nunca devuelven la key. Todos exigen el header `X-Aula-Clara: 1`. Sin `SEALING_KEY` el `POST` responde 503 `ai_sessions_disabled` |
 | GET | `/api/v1/ai/models` | headers `X-AI-Provider` y `X-AI-Key` (o la cookie) → `{provider, key_verified, models: [{id, name, supports_images, free}]}`. Valida la key si el proveedor lo permite |
@@ -175,22 +175,24 @@ El servidor **no tiene API keys ni modelo de IA**: los trae cada persona en sus 
 ### 5.1 Rutas
 
 ```text
-/                        → loader: redirige a /biblioteca si hay perfil guardado, si no a /perfil
+/                        → loader: redirige a /biblioteca si ya se hizo el onboarding (`aulaclara.onboarded`), si no a /perfil
 /perfil                  → wizard de onboarding (también se entra desde «👤 Perfil»)
-/ayuda/ia                → guía pública para conseguir la API key de cada proveedor (sin perfil)
-(pathless, middleware: requireProfile → sin perfil, redirige a /perfil?next=…)
+/ayuda/ia                → guía pública para conseguir la API key de cada proveedor (sin onboarding)
+(pathless, middleware: requireOnboarding → sin onboarding, redirige a /perfil?next=…)
   /biblioteca            → loader: documentos; action: subir, borrar
   /leer/:documentId      → loader: documento + contenido (404 si no existe)
 *                        → NotFound dentro del layout
 ```
 
-Cada ruta es `lazy`, así que Vite genera un chunk por ruta: pdf.js y mammoth quedan fuera del bundle inicial. `basename` sale de `import.meta.env.BASE_URL`, para que la app funcione bajo `/<repo>/` en GitHub Pages.
+Cada ruta es `lazy`, así que Vite genera un chunk por ruta: pdf.js y mammoth quedan fuera del bundle inicial. Las rutas cuyo loader lee `localStorage` llevan `hydrateFallbackElement` («Cargando tu perfil de lectura…»), para no mostrar una pantalla en blanco mientras se resuelven. `basename` sale de `import.meta.env.BASE_URL`, para que la app funcione bajo `/<repo>/` en GitHub Pages.
 
 ### 5.2 Datos y estado
 
 | Dato | Dónde vive |
 |---|---|
-| Perfil y ajustes de lectura | `PreferencesProvider` (se persiste en `localStorage`) |
+| Ajustes de lectura | `PreferencesProvider`. Se persisten en `localStorage` (`aulaclara.settings`) como `{ schemaVersion: 2, settings }`; un único validador `FIELDS` (`settings.ts`) valida cada campo al leer y al aplicar un preset. La clave vieja `aulaclara.profile` se migra a `aulaclara.onboarded` y se borra |
+| Onboarding hecho | `aulaclara.onboarded` (`localStorage`). **No se guarda qué preset se eligió**: revelaría una discapacidad, dato sensible según la Ley 25.326 |
+| Catálogo de presets | `GET /api/v1/presets` en runtime (`presets.ts`, timeout de 5 s, sin reintento) con caché en `localStorage` (`aulaclara.presets`). Sin backend ni caché, el onboarding ofrece solo «Personalizado», una opción fija del frontend (el id `custom` está reservado) |
 | Anuncios para lectores de pantalla | `Announcer` (contexto separado: cambia con otra frecuencia) |
 | Documentos (metadatos y progreso) | `features/library/api.ts` → `localStorage`; loaders y actions de ruta. El progreso se guarda con debounce, sin action, para no revalidar en cada scroll |
 | Contenido extraído | **IndexedDB** (decisión del 2026-11-17): `localStorage` tiene alrededor de 5 MB por origen y un par de PDF largos lo llenan |
@@ -210,6 +212,8 @@ Cada ruta es `lazy`, así que Vite genera un chunk por ruta: pdf.js y mammoth qu
 
 Se mantiene todo lo del prototipo: el enlace "Saltar al contenido" en el layout, el foco al `h1` al abrir el lector, el `Dialog` con trampa de foco y cierre con Esc, `aria-live` mediante `Announcer`, el chat con `role="log"`, objetivos táctiles de 48 px como mínimo, `prefers-reduced-motion`, los atajos con `useHotkeys` (Alt+P/S/=/−/T/A) y contraste AA en los 4 temas, que se verifica con un test de los pares de `THEMES`.
 
+Ajustes de lectura sin arrastrar (WCAG 2.5.7): el tamaño y el interlineado usan `Stepper` (botones «−» y «+»), no controles deslizantes. La interfaz de ajustes, en el onboarding y en el lector, sale del registro `CONTROLS` (`controls.ts`) vía `SettingsControls`. En la biblioteca **ya no hay una caja «Perfil activo»**: mostrar el preset elegido exponía una categoría sensible, y es una decisión de producto, no un faltante ([ADR 0004](adr/0004-catalogo-de-presets.md)).
+
 ## 6. Despliegue
 
 - **Headers de seguridad** (`vercel.json`): CSP estricta (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'`), `nosniff`, `Referrer-Policy: no-referrer` y `Permissions-Policy`. La CSP importa porque la key de cada persona vive en el navegador: un XSS podría robarla. Se probó en Chromium sirviendo `dist/` con los mismos headers: importar PDF y Word, chatear y describir imágenes no generan violaciones.
@@ -222,7 +226,7 @@ El plan sigue el de `instructions.md`, reordenado según el orden de construcci�
 
 1. **Esqueleto** ✅. Monorepo, `.gitignore`, `.env`/`.env.example`, backend y frontend con sus chequeos. El despliegue vacío en Vercel quedó incluido en la fase 6, sin probar.
 2. **Frontend sin IA** ✅. Migración del prototipo a features y rutas. Paridad visual y de accesibilidad, más un test de humo por ruta.
-3. **Backend en capas** ✅. `profiles` y `documents`: schemas, models, repositorios en memoria, services y routers, con tests.
+3. **Backend en capas** ✅. `presets` (antes `profiles`) y `documents`: schemas, models, repositorios en memoria, services y routers, con tests.
 4. **IA real** ✅. `LLMProvider` (Gemini, Groq y OpenRouter), prompts, rate limit, caché y reintento. Se conectan el chat y «Interpretar con IA».
    - **4c. Key sellada en cookie, auditoría de dependencias** ✅ (2026-11-18). Ver ADR 0003. Probado en Chromium, contra el servidor de pruebas y contra el servidor de desarrollo de Vite.
    - **4b. Key y modelo por persona** ✅ (2026-11-17). «Configurar IA», `/ai/models`, errores separados y CSP. Probado de punta a punta en Chromium con keys reales de Gemini (chat e imagen) y Groq (chat); OpenRouter, solo con dobles.
@@ -279,7 +283,7 @@ uv export --no-dev --no-hashes --no-emit-project | uvx pip-audit -r /dev/stdin  
 | Límite por IP excedido (429 propio) | — | el cliente muestra «esperá N segundos» | El límite protege la cuota gratuita y la persona sabe cuánto esperar |
 | Chat | `useActionState` | hook `useChat` con estado local | La mutación no cambia datos de ningún loader y necesita el historial de mensajes |
 | Importar y avanzar el progreso | `action` de ruta | funciones de `libraryApi` | La importación muestra el avance por pasos, y el progreso se guarda con cada scroll |
-| `GET /profiles` | lo consume el frontend | existe y funciona, pero el frontend usa su propia copia | Los perfiles tienen que funcionar sin backend (Pages); el endpoint demuestra la arquitectura |
+| `GET /profiles` | lo consume el frontend | pasó a `GET /presets` y el frontend lo pide en runtime, con caché en `localStorage` y el respaldo «Personalizado» sin backend | Un preset nuevo no debería requerir desplegar el frontend; ver [ADR 0004](adr/0004-catalogo-de-presets.md). En Pages hace falta `VITE_API_URL` y el origen en `CORS_ORIGINS` |
 | Proveedor de Groq | SDK | `OpenAICompatibleProvider` con `httpx` (también sirve para OpenRouter) | Un SDK menos que empaquetar en la función de Vercel |
 | Keys de IA | en el `.env` del servidor, con cadena Gemini → Groq | la key y el modelo de cada persona, en headers | El servicio en Vercel no depende de una cuota única; ver ADR 0002 |
 | Contexto del asistente | «sección visible y selección» | el comienzo del documento (hasta `MAX_INPUT_CHARS`) y la selección | Elegir la sección visible agrega complejidad; queda como mejora |

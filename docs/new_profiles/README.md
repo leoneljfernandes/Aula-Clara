@@ -27,7 +27,7 @@
 
 ## 1. Visión general y matriz de nuevos perfiles
 
-Actualmente, `PROFILES` en [`frontend/src/features/preferences/config.ts`](../../frontend/src/features/preferences/config.ts) y [`backend/app/seed/profiles.json`](../../backend/app/seed/profiles.json) definen 4 opciones (`dislexia`, `vision`, `fatiga`, `custom`) centradas exclusivamente en variables tipográficas y de color (`ReadingSettings`).
+Hasta el plan 01, `PROFILES` (frontend) y `profiles.json` (backend) definían 4 opciones (`dislexia`, `vision`, `fatiga`, `custom`) centradas exclusivamente en variables tipográficas y de color (`ReadingSettings`). Hoy el catálogo vive en [`backend/app/seed/presets.json`](../../backend/app/seed/presets.json) (3 presets más «Personalizado», que es fijo del frontend) y `ReadingSettings` está en [`settings.ts`](../../frontend/src/features/preferences/settings.ts).
 
 Los cuatro nuevos perfiles requieren pasar de **preferencias solo visuales** a **preferencias multimodales (visuales, cromáticas, auditivas, táctiles, motrices y lingüísticas)**:
 
@@ -71,7 +71,9 @@ frontend/src/
 
 ### 2.1. Extensión del modelo `ReadingSettings`
 
-En [`frontend/src/features/preferences/config.ts`](../../frontend/src/features/preferences/config.ts) y en el esquema del backend (`backend/app/schemas/profile.py` y `backend/app/models/profile.py`), `ReadingSettings` incorpora banderas ortogonales (que cualquier persona también puede activar manualmente en el paso 2 del wizard «Ajustá los detalles»):
+> **Estado:** la implementación va por planes, y esta sección describe la propuesta original. Lo vigente está en la [hoja de ruta](./2026-11-18-perfiles-00-hoja-de-ruta.md) (los ajustes finales y sus claves, en su §4) y en el [plan 01 · Catálogo y preferencias](./2026-11-18-perfiles-01-catalogo-y-preferencias.md), ya construido: el catálogo de presets lo sirve `GET /api/v1/presets` y los ajustes se validan con `FIELDS` en `settings.ts` ([ADR 0004](../adr/0004-catalogo-de-presets.md)). Los nombres de los campos de abajo cambiaron (por ejemplo `brailleEnabled` pasa a `brailleTools`).
+
+En [`frontend/src/features/preferences/settings.ts`](../../frontend/src/features/preferences/settings.ts) (el backend guarda los ajustes de cada preset como pares clave-valor y no los interpreta), `ReadingSettings` incorpora banderas ortogonales (que cualquier persona también puede activar manualmente en el paso 2 del wizard «Ajustá los detalles»):
 
 ```ts
 export type CvdType = "none" | "deuteranopia" | "protanopia" | "tritanopia" | "achromatopsia";

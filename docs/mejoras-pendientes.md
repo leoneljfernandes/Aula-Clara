@@ -18,7 +18,7 @@ Los nombres de modelos, los precios y los límites gratuitos cambian seguido: **
 
 - El perfil y las preferencias de lectura viven en `localStorage` (`features/preferences/storage.ts`), los documentos en IndexedDB, y la key de IA en `sessionStorage` o `localStorage`.
 - No hay cuentas: borrar los datos del sitio borra todo, y no se puede pasar de un dispositivo a otro.
-- En el backend, `Profile` en realidad es un **preset** («Baja visión», «Dislexia»…), y el CRUD de documentos guarda en memoria (`InMemoryRepository`) y nadie lo usa.
+- En el backend, el catálogo de **presets** («Baja visión», «Dislexia»…) se sirve en `GET /api/v1/presets` y el frontend lo pide en runtime ([ADR 0004](adr/0004-catalogo-de-presets.md)); el CRUD de documentos guarda en memoria (`InMemoryRepository`) y nadie lo usa.
 
 ### Objetivo
 
@@ -26,11 +26,11 @@ Que cada persona tenga una cuenta con sus preferencias y su biblioteca, y que lo
 
 ### Fase 2.1: perfil versionado y exportable, sin servidor (chica)
 
-1. Definir un único `UserProfile` con `schemaVersion` y una función `migrate(raw) → UserProfile` en `features/preferences/storage.ts`. Cada cambio de forma suma una versión y una migración, con test.
+1. ✅ **Hecho** (2026-11-18). Los ajustes se guardan versionados: `aulaclara.settings` = `{ schemaVersion: 2, settings }`, con un único validador `FIELDS` en `features/preferences/settings.ts` y la lectura en `storage.ts` (que también acepta el objeto plano de la versión 1 y migra la clave `aulaclara.profile`). En lugar de un `UserProfile` con `migrate`, cada cambio de forma suma una versión y se valida campo a campo, con test. Cuando haya cuentas habrá que sumarle lo que no son ajustes de lectura.
 2. **Exportar e importar** el perfil y las preferencias como JSON desde la pantalla de perfil. Sirve de copia de seguridad y para cambiar de dispositivo. La key de IA queda afuera por defecto; incluirla tiene que ser una opción explícita, con aviso.
-3. Renombrar en el backend `Profile` a `Preset` (modelo, esquema, endpoint `/api/v1/presets`), para que «perfil de usuario» quede libre.
+3. ✅ **Hecho** (2026-11-18). En el backend `Profile` pasó a `Preset` (modelo, esquema, servicio, `seed/presets.json` y endpoint `/api/v1/presets`; `/api/v1/profiles` se eliminó), así «perfil de usuario» queda libre.
 
-**Terminado cuando:** exportar en un navegador e importar en otro reproduce exactamente las preferencias, y un perfil guardado con la versión anterior se migra solo.
+**Terminado cuando:** exportar en un navegador e importar en otro reproduce exactamente las preferencias, y un perfil guardado con la versión anterior se migra solo. (Falta el punto 2, exportar e importar; la migración de la versión anterior ya funciona.)
 
 ### Fase 2.2: base de datos y cuentas (grande)
 
@@ -60,7 +60,7 @@ Al iniciar sesión por primera vez, ofrecer «Subir mis datos de este dispositiv
 
 ### Fase 2.4: privacidad y datos sensibles (obligatoria antes de producción)
 
-- **Que alguien elija «Dislexia» o «Baja visión» revela una discapacidad: es un dato sensible** según la Ley 25.326 de Argentina. Hay que guardar solo las preferencias de lectura, no la etiqueta del preset, y pedir consentimiento explícito e informado.
+- **Que alguien elija «Dislexia» o «Baja visión» revela una discapacidad: es un dato sensible** según la Ley 25.326 de Argentina. Hay que guardar solo las preferencias de lectura, no la etiqueta del preset (✅ **hecho** el 2026-11-18: el frontend no guarda qué preset se eligió, migra y borra `aulaclara.profile`, y la biblioteca ya no muestra «Perfil activo»; ver [ADR 0004](adr/0004-catalogo-de-presets.md)), y pedir consentimiento explícito e informado (pendiente, junto con las cuentas).
 - Política de privacidad, borrado de cuenta con todos sus datos, y exportación de todos los datos.
 - **Las API keys de IA siguen fuera de la base de datos**, también con cuentas: viven sellada en una cookie `HttpOnly` (ADR 0003), no en el servidor. Guardarlas en el servidor obliga a cifrarlas (envelope encryption) y a custodiar la clave de cifrado. Solo se justificaría si se pide sincronizarlas entre dispositivos, y aun así como opción.
 
