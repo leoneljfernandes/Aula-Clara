@@ -20,14 +20,72 @@ function utterance(text: string, rate: number): SpeechSynthesisUtterance {
   return u;
 }
 
+function cancelSynthesis(): void {
+  if (!hasTTS) return;
+  try {
+    window.speechSynthesis.cancel();
+  } catch {
+    // nada que cancelar
+  }
+}
+
+/** Quien habla (el motor de lectura o una locución suelta). Se entera cuando otra voz lo interrumpe. */
+export interface SpeechOwner {
+  onInterrupted(): void;
+}
+
+let current: SpeechOwner | null = null;
+const listeners = new Set<(speaking: boolean) => void>();
+
+function setCurrent(next: SpeechOwner | null): void {
+  const was = current !== null;
+  current = next;
+  if (was === (next !== null)) return;
+  for (const listener of [...listeners]) listener(next !== null);
+}
+
+/**
+ * Árbitro de voz: hay un solo dueño a la vez. Quien empieza a hablar interrumpe al anterior y le avisa,
+ * así la lectura del documento queda en pausa en vez de trabada. `isSpeaking` vale también en modo simulado.
+ */
+export const speechBus = {
+  claim(owner: SpeechOwner): void {
+    const previous = current;
+    const wasSpeaking = previous !== null;
+    current = owner;
+    if (previous && previous !== owner) previous.onInterrupted();
+    cancelSynthesis();
+    if (!wasSpeaking) for (const listener of [...listeners]) listener(true);
+  },
+  release(owner: SpeechOwner): void {
+    if (current === owner) setCurrent(null);
+  },
+  silence(): void {
+    const previous = current;
+    setCurrent(null);
+    previous?.onInterrupted();
+    cancelSynthesis();
+  },
+  isSpeaking: (): boolean => current !== null,
+  subscribe(listener: (speaking: boolean) => void): () => void {
+    listeners.add(listener);
+    return () => void listeners.delete(listener);
+  },
+};
+
 /** Lee un texto suelto (descripción de una imagen, respuesta del asistente). */
 export function speakOnce(text: string, rate = 1): boolean {
   if (!hasTTS) return false;
+  const owner: SpeechOwner = { onInterrupted: () => {} };
   try {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance(text, rate));
+    const u = utterance(text, rate);
+    u.onend = () => speechBus.release(owner);
+    u.onerror = () => speechBus.release(owner);
+    speechBus.claim(owner);
+    window.speechSynthesis.speak(u);
     return true;
   } catch {
+    speechBus.release(owner);
     return false;
   }
 }
@@ -50,6 +108,11 @@ export class ReadAloudEngine {
   private idx = -1;
   private simulated = !hasTTS;
   private state: ReadState = STOPPED;
+  /** Es el dueño actual del árbitro de voz. */
+  private holding = false;
+  /** Otra voz cortó la lectura: al continuar hay que releer el párrafo, no reanudar. */
+  private interrupted = false;
+  private readonly owner: SpeechOwner = { onInterrupted: () => this.onInterrupted() };
 
   private readonly items: readonly string[];
   private readonly getRate: () => number;
@@ -77,13 +140,22 @@ export class ReadAloudEngine {
   private cancelSpeech(): void {
     this.token++;
     clearTimeout(this.timer);
-    if (hasTTS) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {
-        // nada que cancelar
-      }
-    }
+    if (this.holding) cancelSynthesis();
+  }
+
+  private release(): void {
+    this.holding = false;
+    speechBus.release(this.owner);
+  }
+
+  /** Otra voz tomó el árbitro (o se pidió silencio): la lectura queda en pausa en el mismo párrafo. */
+  private onInterrupted(): void {
+    this.token++;
+    clearTimeout(this.timer);
+    this.holding = false;
+    this.interrupted = true;
+    if (this.state.status === "stopped") return;
+    this.set({ status: "paused", idx: this.idx });
   }
 
   private speakFrom(i: number): void {
@@ -91,10 +163,14 @@ export class ReadAloudEngine {
     const mine = this.token;
     const text = this.items[i];
     if (text === undefined) {
+      this.release();
       this.set(STOPPED);
       if (i >= this.items.length) this.onFinished();
       return;
     }
+    this.interrupted = false;
+    this.holding = true;
+    speechBus.claim(this.owner);
     this.set({ status: "playing", idx: i });
     const next = (): void => {
       if (mine === this.token) this.speakFrom(i + 1);
@@ -124,7 +200,7 @@ export class ReadAloudEngine {
 
   play(): void {
     if (this.state.status === "paused") {
-      if (!this.simulated) {
+      if (!this.simulated && !this.interrupted) {
         try {
           window.speechSynthesis.resume();
           this.set({ status: "playing", idx: this.idx });
@@ -154,8 +230,16 @@ export class ReadAloudEngine {
     this.set({ status: "paused", idx: this.idx });
   }
 
+  /** Lee desde el párrafo `i` (índice en la lista de textos). */
+  playFrom(i: number): void {
+    if (i < 0 || i >= this.items.length) return;
+    this.speakFrom(i);
+  }
+
   stop(): void {
     this.cancelSpeech();
+    this.release();
+    this.interrupted = false;
     this.set(STOPPED);
   }
 
@@ -166,6 +250,7 @@ export class ReadAloudEngine {
 
   dispose(): void {
     this.cancelSpeech();
+    this.release();
   }
 
   get isSimulated(): boolean {

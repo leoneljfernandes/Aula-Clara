@@ -6,6 +6,8 @@ export interface ReadAloud extends ReadState {
   play: () => void;
   pause: () => void;
   stop: () => void;
+  /** Lee desde el párrafo `i` de la lista de textos leíbles. */
+  playFrom: (i: number) => void;
 }
 
 /** Lectura en voz alta de una lista de párrafos, con resaltado (idx), pausa y velocidad. */
@@ -43,5 +45,6 @@ export function useReadAloud(items: readonly string[], rate: number, onFinished:
     play: () => engine.current?.play(),
     pause: () => engine.current?.pause(),
     stop: () => engine.current?.stop(),
+    playFrom: (i) => engine.current?.playFrom(i),
   };
 }

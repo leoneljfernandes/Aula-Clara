@@ -15,6 +15,7 @@ import {
   usePreferences,
 } from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
+import { speechBus } from "@/lib/speech";
 import { useReadAloud } from "@/lib/useReadAloud";
 
 import { DocumentView } from "./DocumentView";
@@ -61,8 +62,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       summarize: () => void chat.send(quickActionLabel("summarize"), "summarize"),
       keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
       quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
-      // La tarea 2 lo cambia por `speechBus.silence()`.
-      silence: () => window.speechSynthesis?.cancel(),
+      silence: () => speechBus.silence(),
     },
   });
 
