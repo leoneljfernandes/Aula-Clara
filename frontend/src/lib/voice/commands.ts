@@ -14,7 +14,8 @@ type SimpleKind =
   | "keyConcepts"
   | "quiz"
   | "describeFigure"
-  | "openBraille";
+  | "openBraille"
+  | "showHelp";
 
 export type VoiceCommand = { kind: SimpleKind } | { kind: "ask"; question: string };
 
@@ -44,7 +45,63 @@ const PHRASES: Record<SimpleKind, readonly string[]> = {
   quiz: ["preguntas", "preguntas de repaso"],
   describeFigure: ["describir imagen", "interpretar grafico"],
   openBraille: ["braille", "traducir a braille"],
+  showHelp: ["ayuda", "comandos", "que puedo decir"],
 };
+
+export type CommandGroup = "Lectura" | "Navegación" | "Asistente de IA" | "Otros";
+
+/**
+ * Cómo se presenta cada comando en la lista de ayuda. El tipo `Record` obliga a describir cada comando nuevo:
+ * así la lista nunca queda desactualizada respecto de `PHRASES`. El orden de acá es el orden de la lista.
+ */
+const COMMAND_INFO: Record<SimpleKind, { group: CommandGroup; label: string }> = {
+  play: { group: "Lectura", label: "Leer el documento (desde el párrafo elegido)" },
+  pause: { group: "Lectura", label: "Pausar la lectura" },
+  stop: { group: "Lectura", label: "Detener la lectura" },
+  faster: { group: "Lectura", label: "Leer más rápido" },
+  slower: { group: "Lectura", label: "Leer más lento" },
+  nextBlock: { group: "Navegación", label: "Párrafo siguiente" },
+  prevBlock: { group: "Navegación", label: "Párrafo anterior" },
+  nextHeading: { group: "Navegación", label: "Título siguiente" },
+  nextFigure: { group: "Navegación", label: "Gráfico siguiente" },
+  summarize: { group: "Asistente de IA", label: "Resumir el documento" },
+  keyConcepts: { group: "Asistente de IA", label: "Conceptos clave" },
+  quiz: { group: "Asistente de IA", label: "Preguntas de repaso" },
+  describeFigure: { group: "Asistente de IA", label: "Describir el gráfico" },
+  openBraille: { group: "Otros", label: "Abrir Braille" },
+  showHelp: { group: "Otros", label: "Ver esta lista de comandos" },
+};
+
+export interface CatalogEntry {
+  kind: SimpleKind;
+  label: string;
+  phrases: readonly string[];
+  /** Gasta una consulta de la cuota de IA (en manos libres exige decir antes «asistente»). */
+  usesAI: boolean;
+}
+
+export interface CatalogGroup {
+  title: CommandGroup;
+  entries: readonly CatalogEntry[];
+}
+
+const GROUP_ORDER: readonly CommandGroup[] = ["Lectura", "Navegación", "Asistente de IA", "Otros"];
+
+/** Todas las frases que se reconocen, agrupadas para mostrarlas. Sale de `PHRASES`: es la fuente única. */
+export function commandCatalog(): CatalogGroup[] {
+  const kinds = Object.keys(COMMAND_INFO) as SimpleKind[];
+  return GROUP_ORDER.map((title) => ({
+    title,
+    entries: kinds
+      .filter((kind) => COMMAND_INFO[kind].group === title)
+      .map((kind) => ({
+        kind,
+        label: COMMAND_INFO[kind].label,
+        phrases: PHRASES[kind],
+        usesAI: AI_KINDS.has(kind),
+      })),
+  }));
+}
 
 const BY_PHRASE = new Map<string, SimpleKind>(
   (Object.entries(PHRASES) as [SimpleKind, readonly string[]][]).flatMap(([kind, phrases]) =>

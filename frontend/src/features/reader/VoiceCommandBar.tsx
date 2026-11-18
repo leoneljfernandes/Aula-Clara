@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Button } from "@/components/Button";
+
 import type { VoiceCommands } from "./useVoiceCommands";
 
 type BarState = Pick<VoiceCommands, "available" | "listening" | "paused" | "heard" | "error">;
@@ -11,7 +13,14 @@ const Mic = (): ReactNode => <span aria-hidden="true">🎙</span>;
  * un lector de pantalla con parlantes diría «Escuchando…» justo ante el micrófono recién abierto, y esa sería la
  * única frase que se oiría. Los sonidos de encendido y apagado ya avisan del estado.
  */
-export function VoiceCommandBar({ available, listening, paused, heard, error }: BarState): ReactNode {
+export function VoiceCommandBar({
+  available,
+  listening,
+  paused,
+  heard,
+  error,
+  onHelp,
+}: BarState & { onHelp: () => void }): ReactNode {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b-2 border-[var(--border)] bg-[var(--soft)] px-4 py-2 text-base lg:px-5">
       {available && (
@@ -36,6 +45,9 @@ export function VoiceCommandBar({ available, listening, paused, heard, error }: 
           <span>Tu navegador no permite comandos por voz. Probá Chrome, Edge o Safari.</span>
         )}
       </div>
+      <Button className="ml-auto min-h-10" onClick={onHelp}>
+        <span aria-hidden="true">❔</span> ¿Qué puedo decir?
+      </Button>
       {paused && (
         <span aria-hidden="true" className="text-[var(--muted)]">
           En pausa mientras habla la app

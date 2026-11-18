@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSpeech, parseCommand } from "./commands";
+import { normalizeSpeech, parseCommand, commandCatalog } from "./commands";
 
 it("normaliza mayúsculas, tildes y puntuación", () => {
   expect(normalizeSpeech("  Siguiente   PÁRRAFO. ")).toBe("siguiente parrafo");
@@ -133,5 +133,38 @@ describe("modo manos libres: las acciones de IA exigen «asistente»", () => {
       kind: "ask",
       question: "qué es",
     });
+  });
+});
+
+describe("catálogo de frases", () => {
+  it("«ayuda», «comandos» y «qué puedo decir» abren la lista de comandos", () => {
+    expect(parseCommand("ayuda")).toEqual({ kind: "showHelp" });
+    expect(parseCommand("Comandos")).toEqual({ kind: "showHelp" });
+    expect(parseCommand("¿Qué puedo decir?")).toEqual({ kind: "showHelp" });
+    expect(parseCommand("ayuda", { continuous: true })).toEqual({ kind: "showHelp" });
+  });
+
+  it("cada comando tiene una etiqueta y un grupo, y el catálogo no deja ninguna frase afuera", () => {
+    const catalog = commandCatalog();
+    expect(catalog.map((g) => g.title)).toEqual(["Lectura", "Navegación", "Asistente de IA", "Otros"]);
+    const listed = catalog.flatMap((g) => g.entries.flatMap((e) => e.phrases));
+    expect(listed).toEqual(expect.arrayContaining(["leer", "siguiente", "resumir", "braille", "ayuda"]));
+    expect(new Set(listed).size).toBe(listed.length);
+  });
+
+  it("toda frase del catálogo se entiende como el comando con que aparece", () => {
+    for (const group of commandCatalog()) {
+      for (const entry of group.entries) {
+        for (const phrase of entry.phrases) {
+          expect(parseCommand(phrase)).toEqual({ kind: entry.kind });
+        }
+      }
+    }
+  });
+
+  it("marca las acciones que gastan cuota de la IA", () => {
+    const entries = commandCatalog().flatMap((g) => g.entries);
+    expect(entries.find((e) => e.kind === "summarize")?.usesAI).toBe(true);
+    expect(entries.find((e) => e.kind === "play")?.usesAI).toBe(false);
   });
 });

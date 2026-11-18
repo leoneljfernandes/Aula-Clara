@@ -3,7 +3,7 @@ import { speechBus } from "@/lib/speech";
 import { playEarcon } from "./earcons";
 
 export type RecognitionErrorKind =
-  "not-allowed" | "no-speech" | "network" | "language" | "no-microphone" | "other";
+  "not-allowed" | "no-speech" | "network" | "language" | "no-microphone" | "unresponsive" | "other";
 
 export interface RecognizerOptions {
   continuous: boolean;
@@ -50,6 +50,8 @@ const MAX_RESTART_MS = 5_000;
 const MAX_START_RETRIES = 5;
 /** Errores de red seguidos (en modo continuo) tras los cuales se deja de insistir. */
 const MAX_NETWORK_ERRORS = 5;
+/** En una sola frase, sin ningún resultado ni error en este tiempo, el navegador no está respondiendo. */
+const RESPONSE_TIMEOUT_MS = 15_000;
 
 function recognitionCtor(): BrowserRecognitionCtor | undefined {
   if (typeof window === "undefined") return undefined;
@@ -114,6 +116,8 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   let paused = false; // en pausa porque la app habla (solo modo continuo)
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+  let signaled = false; // el navegador mandó un resultado o un error en esta sesión
   let unsubscribe: (() => void) | undefined;
 
   const setListening = (value: boolean): void => {
@@ -128,6 +132,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
     paused = false;
     running = false;
     clearTimeout(timer);
+    clearTimeout(watchdog);
     unsubscribe?.();
     unsubscribe = undefined;
     if (listening) {
@@ -140,13 +145,27 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
     if (!wanted || disposed) return;
     try {
       if (local) rec.processLocally = true;
+      signaled = false;
       rec.start();
       running = true;
+      if (!opts.continuous) watchdog = setTimeout(unresponsive, RESPONSE_TIMEOUT_MS);
     } catch {
       // el navegador sigue cerrando la sesión anterior: se reintenta un momento después
       if (attempt < MAX_START_RETRIES) timer = setTimeout(() => beginSession(attempt + 1), RESTART_MS);
       else finish();
     }
+  }
+
+  /** Una frase sin respuesta del navegador (no hubo resultado ni error): se corta y se avisa. */
+  function unresponsive(): void {
+    if (!wanted || signaled) return;
+    try {
+      rec.abort();
+    } catch {
+      // ya estaba cerrándose
+    }
+    opts.onError("unresponsive");
+    finish();
   }
 
   /** 300 ms entre reinicios normales; con errores de red seguidos la espera se duplica, hasta 5 s. */
@@ -162,6 +181,8 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
     if (!wanted) return;
     if (speaking) {
       clearTimeout(timer);
+      clearTimeout(watchdog);
+      signaled = true; // el cierre que sigue lo causamos nosotros: no es un navegador que no responde
       if (opts.continuous) paused = true;
       if (running) {
         try {
@@ -177,6 +198,8 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   };
 
   rec.onresult = (e) => {
+    signaled = true;
+    clearTimeout(watchdog);
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const result = e.results[i];
       const text = result?.[0]?.transcript.trim();
@@ -189,6 +212,8 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
 
   rec.onerror = (e) => {
     if (e.error === "aborted") return; // lo causamos nosotros al callarnos o apagar
+    signaled = true;
+    clearTimeout(watchdog);
     const kind = mapError(e.error);
     // Sin voz es normal en modo continuo (cada ciclo sin hablar termina así): se reinicia sin avisar.
     if (kind === "no-speech" && opts.continuous) return;
@@ -206,6 +231,8 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   rec.onend = () => {
     running = false;
     if (paused) return; // nos callamos por la voz de la app: se reanuda cuando termine
+    // Una sola frase que se cierra sin resultado ni error: el navegador abrió el micrófono y no hizo nada.
+    if (wanted && !opts.continuous && !signaled) opts.onError("unresponsive");
     if (wanted && opts.continuous) {
       scheduleRestart(); // reinicio automático: sin tonos ni cambio de estado
       return;
@@ -233,6 +260,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
       if (running) {
         wanted = false;
         clearTimeout(timer);
+        clearTimeout(watchdog);
         try {
           rec.stop(); // el `end` que sigue cierra el estado y avisa
         } catch {
@@ -258,6 +286,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
       unsubscribe?.();
       unsubscribe = undefined;
       clearTimeout(timer);
+      clearTimeout(watchdog);
       wanted = false;
       running = false;
       setListening(false);

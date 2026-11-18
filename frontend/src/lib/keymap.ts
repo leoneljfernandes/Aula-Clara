@@ -13,6 +13,7 @@ export type ShortcutId =
   | "nextFigure"
   | "toggleMic"
   | "openBraille"
+  | "voiceHelp"
   | "summarize"
   | "keyConcepts"
   | "quiz"
@@ -48,6 +49,13 @@ export const KEYMAP: readonly Shortcut[] = [
     label: "Activar o apagar el micrófono",
     alt: ["KeyM"],
     single: ["KeyM"],
+    requires: "voice",
+  },
+  {
+    id: "voiceHelp",
+    label: "Ver los comandos de voz",
+    alt: ["KeyV"],
+    single: ["KeyV"],
     requires: "voice",
   },
   { id: "openBraille", label: "Abrir Braille", alt: ["KeyB"], single: ["KeyB"], requires: "braille" },

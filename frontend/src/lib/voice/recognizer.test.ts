@@ -261,3 +261,61 @@ it("si start() del navegador falla, reintenta y después se rinde sin ruido", ()
   expect(start).toHaveBeenCalledTimes(6);
   expect(o.onError).not.toHaveBeenCalled();
 });
+
+it("en una sola frase, si el navegador cierra la sesión sin resultado ni error, avisa que no respondió", () => {
+  installFakeRecognition();
+  const o = opts();
+  createRecognizer({ ...o, continuous: false })!.start();
+  FakeRecognition.instances[0]!.emitEnd();
+  expect(o.onError).toHaveBeenCalledExactlyOnceWith("unresponsive");
+  expect(o.onListeningChange).toHaveBeenLastCalledWith(false);
+});
+
+it("en una sola frase, si pasan 15 s sin ningún resultado ni error, lo corta y avisa", () => {
+  installFakeRecognition();
+  const o = opts();
+  createRecognizer({ ...o, continuous: false })!.start();
+  const fake = FakeRecognition.instances[0]!;
+  vi.advanceTimersByTime(14_999);
+  expect(o.onError).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(1);
+  expect(o.onError).toHaveBeenCalledExactlyOnceWith("unresponsive");
+  expect(fake.aborts).toBe(1);
+  expect(o.onListeningChange).toHaveBeenLastCalledWith(false);
+});
+
+it("un resultado o un error del navegador evita el aviso de «no respondió»", () => {
+  installFakeRecognition();
+  const heard = opts();
+  createRecognizer({ ...heard, continuous: false })!.start();
+  const first = FakeRecognition.instances[0]!;
+  first.emitFinal("siguiente");
+  first.emitEnd();
+  vi.advanceTimersByTime(20_000);
+  expect(heard.onError).not.toHaveBeenCalled();
+
+  const failed = opts();
+  createRecognizer({ ...failed, continuous: false })!.start();
+  const second = FakeRecognition.instances[1]!;
+  second.emitError("no-speech");
+  second.emitEnd();
+  vi.advanceTimersByTime(20_000);
+  expect(failed.onError).toHaveBeenCalledExactlyOnceWith("no-speech");
+});
+
+it("detener a mano o en manos libres no cuenta como «no respondió»", () => {
+  installFakeRecognition();
+  const stopped = opts();
+  const r = createRecognizer({ ...stopped, continuous: false })!;
+  r.start();
+  r.stop();
+  FakeRecognition.instances[0]!.emitEnd();
+  vi.advanceTimersByTime(20_000);
+  expect(stopped.onError).not.toHaveBeenCalled();
+
+  const handsFree = opts();
+  createRecognizer({ ...handsFree, continuous: true })!.start();
+  FakeRecognition.instances[1]!.emitEnd();
+  vi.advanceTimersByTime(20_000);
+  expect(handsFree.onError).not.toHaveBeenCalled();
+});

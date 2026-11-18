@@ -36,6 +36,7 @@ Los define `frontend/src/lib/keymap.ts`; el diálogo de atajos y el panel de her
 | Título siguiente | `Alt+H` | `H` |
 | Gráfico siguiente | `Alt+G` | `G` |
 | Micrófono (comandos de voz) | `Alt+M` | `M` |
+| Ver los comandos de voz (con los comandos por voz activos) | `Alt+V` | `V` |
 | Braille (abre el diálogo con «Herramientas de Braille» encendido; apagado anuncia «El Braille todavía no está disponible») | `Alt+B` | `B` |
 | Resumir · Conceptos · Preguntas · Explicar el bloque actual más simple | — | `1` · `2` · `3` · `4` |
 | Silenciar la voz | `Esc` (siempre, dentro del lector) | — |
@@ -98,3 +99,4 @@ Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles q
 - [ ] **Motriz, celular:** con la interfaz grande en un ancho de 360 px, que no haya scroll horizontal.
 - [ ] **Motriz, doble clic:** con el filtro en «Sí», un doble clic rápido en «▶ Leer» no inicia y pausa enseguida.
 - [ ] **Motriz, manos libres:** con los comandos en «Manos libres», «bajar» y «subir» mueven el cursor y la app no se oye a sí misma.
+- [ ] **Voz en Firefox:** confirmar que, al tocar «Micrófono» o «Dictar pregunta», la barra explica que el navegador no devolvió texto (Firefox no trae reconocimiento de voz) y que la lista de comandos se abre con «¿Qué puedo decir?», `Alt+V` y diciendo «ayuda».

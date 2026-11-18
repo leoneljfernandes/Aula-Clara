@@ -30,6 +30,7 @@ import { useReaderNavigation } from "./useReaderNavigation";
 import { ToolsPanel } from "./ToolsPanel";
 import { useVoiceCommands } from "./useVoiceCommands";
 import { VoiceCommandBar } from "./VoiceCommandBar";
+import { VoiceHelpDialog } from "./VoiceHelpDialog";
 
 export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: Article }): ReactNode {
   const { settings, updateSettings } = usePreferences();
@@ -44,6 +45,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
   // Descripciones de figuras hechas en esta sesión. Mapa aparte: cambiar `article` reiniciaría el motor de lectura.
   const [brailleOpen, setBrailleOpen] = useState(false);
+  const [voiceHelpOpen, setVoiceHelpOpen] = useState(false);
   const [figureAlts, setFigureAlts] = useState<Record<string, string>>({});
 
   // Bloques que se leen en voz alta (todo menos las figuras) y su posición en el artículo.
@@ -170,6 +172,9 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         return askAI(command.question, "free");
       case "openBraille":
         return openBraille();
+      case "showHelp":
+        setVoiceHelpOpen(true);
+        return;
     }
   };
   const voiceOn = settings.voiceCommands !== "off";
@@ -194,6 +199,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       openBraille: () => void openBraille(),
       silence: () => speechBus.silence(),
       ...(voiceOn && voice.available ? { toggleMic: voice.toggle } : {}),
+      ...(voiceOn ? { voiceHelp: () => setVoiceHelpOpen(true) } : {}),
       nextBlock: () => nav.move("any", 1),
       prevBlock: () => nav.move("any", -1),
       nextHeading: () => nav.move("h2", 1),
@@ -276,7 +282,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           👤 Perfil
         </Link>
       </header>
-      {voiceOn && <VoiceCommandBar {...voice} />}
+      {voiceOn && <VoiceCommandBar {...voice} onHelp={() => setVoiceHelpOpen(true)} />}
       {voice.consentOpen && (
         <VoiceConsentDialog
           kind="commands"
@@ -336,6 +342,10 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           />
         </aside>
       </div>
+
+      {voiceHelpOpen && settings.voiceCommands !== "off" && (
+        <VoiceHelpDialog mode={settings.voiceCommands} onClose={() => setVoiceHelpOpen(false)} />
+      )}
 
       {brailleOpen && (
         <BrailleDialog

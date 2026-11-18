@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { speechBus } from "@/lib/speech";
 import { normalizeSpeech } from "@/lib/voice/commands";
 import { grantVoiceConsent, hasVoiceConsent } from "@/lib/voice/consent";
+import { UNRESPONSIVE_MESSAGE } from "@/lib/voice/messages";
 import { type MicOwner, micLock } from "@/lib/voice/micLock";
 import { createRecognizer, type Recognizer, speechRecognitionAvailable } from "@/lib/voice/recognizer";
 
@@ -75,6 +76,7 @@ export function useDictation({ onText, onSend }: Options): Dictation {
       },
       onError: (kind) => {
         if (kind === "no-speech") setError("No te escuché");
+        else if (kind === "unresponsive") setError(UNRESPONSIVE_MESSAGE);
         else
           setError(
             kind === "not-allowed"

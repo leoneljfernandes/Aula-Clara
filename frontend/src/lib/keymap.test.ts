@@ -95,3 +95,9 @@ it("describeKeys nombra las teclas especiales", () => {
   expect(describeKeys(byId("summarize"), { singleKey: false })).toBe("");
   expect(describeKeys(byId("silence"), { singleKey: false })).toBe("Esc");
 });
+
+it("Alt+V abre la lista de comandos de voz, y «V» sola solo con los atajos de una tecla", () => {
+  expect(matchShortcut(key("KeyV", { altKey: true }), { singleKey: false })).toBe("voiceHelp");
+  expect(matchShortcut(key("KeyV"), { singleKey: false })).toBeNull();
+  expect(matchShortcut(key("KeyV"), { singleKey: true })).toBe("voiceHelp");
+});

@@ -113,6 +113,10 @@ Reglas de los atajos de una sola tecla (`singleKeyShortcuts`, apagado por defect
 | Braille | «braille», «traducir a braille» (abre el diálogo de Braille; con `brailleTools` apagado anuncia «El Braille todavía no está disponible») |
 | Pregunta libre | «preguntar …» o «asistente …»: el resto de la frase va al asistente |
 
+**Dónde está el catálogo y cómo ampliarlo.** Todas las frases viven en una sola tabla, `PHRASES` de [`frontend/src/lib/voice/commands.ts`](../../frontend/src/lib/voice/commands.ts). La lista que ve la persona (botón «¿Qué puedo decir?» de la barra de voz, `Alt+V` o `V`, y la frase «ayuda», «comandos» o «qué puedo decir») sale de `commandCatalog()`, que lee esa misma tabla. Para sumar una frase a un comando existente se agrega a su lista en `PHRASES`; para un comando nuevo, además de su lista, TypeScript obliga a darle un grupo y una etiqueta en `COMMAND_INFO` y a atenderlo en `runVoiceCommand` (`ReaderScreen`). Los tests comprueban que toda frase del catálogo se entienda como el comando con que aparece.
+
+**Navegador sin servicio de voz.** En una sola frase (modo «al tocar» y dictado), si el navegador abre el micrófono y no devuelve ni un resultado ni un error —se cierra la sesión sin nada, o pasan 15 s—, la barra muestra «El navegador abrió el micrófono pero no devolvió ningún texto…» (es el caso de Firefox). En manos libres no se aplica: ahí cada ciclo sin hablar termina en silencio.
+
 **Regla del modo continuo.** En manos libres el micrófono está siempre abierto y puede oír voces ajenas (un titular, un video, otra persona). Por eso las acciones que **gastan cuota de la IA** (resumir, conceptos clave, preguntas, describir imagen y preguntar) exigen decir antes el prefijo **«asistente»** («asistente resumí»), y la pregunta libre además necesita **al menos 3 palabras** después del prefijo. En cambio la navegación y la lectura van sin prefijo y no gastan cuota: **«para», «lee» o «baja» sueltos sí disparan detener, leer y bloque siguiente** en manos libres. En modo `push` todo va sin prefijo.
 
 ### 2.3. Traducción a Braille, vista en pantalla e impresión física (hecho, plan 03)

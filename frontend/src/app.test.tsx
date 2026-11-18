@@ -2116,3 +2116,88 @@ describe("elegir un párrafo con un clic", () => {
     );
   });
 });
+
+describe("lista de comandos de voz", () => {
+  beforeEach(() => withOnboarding());
+  const withVoice = (mode: "push" | "continuous"): void =>
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceCommands: mode } }),
+    );
+
+  it("el botón «¿Qué puedo decir?» abre la lista con las frases que se reconocen", async () => {
+    withVoice("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Qué puedo decir/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Comandos de voz" });
+    expect(dialog).toHaveTextContent("«siguiente»");
+    expect(dialog).toHaveTextContent("«resumir»");
+    expect(dialog).toHaveTextContent("preguntar");
+    expect(dialog).toHaveTextContent("enviar");
+    expect(dialog).not.toHaveTextContent("Decí antes «asistente»");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Alt+V abre la lista aunque el navegador no tenga reconocimiento de voz", async () => {
+    withVoice("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}v{/Alt}");
+    expect(await screen.findByRole("dialog", { name: "Comandos de voz" })).toBeInTheDocument();
+  });
+
+  it("en manos libres explica el prefijo «asistente»", async () => {
+    withVoice("continuous");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Qué puedo decir/ }));
+    expect(await screen.findByRole("dialog", { name: "Comandos de voz" })).toHaveTextContent(
+      "Decí antes «asistente»",
+    );
+  });
+
+  it("con los comandos apagados no hay botón ni atajo", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    expect(screen.queryByRole("button", { name: /Qué puedo decir/ })).not.toBeInTheDocument();
+    await user.keyboard("{Alt>}v{/Alt}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("decir «ayuda» abre la lista", async () => {
+    withVoice("push");
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    act(() => FakeRecognition.instances.at(-1)!.emitFinal("ayuda"));
+    expect(await screen.findByRole("dialog", { name: "Comandos de voz" })).toBeInTheDocument();
+  });
+
+  it("si el navegador abre el micrófono y no devuelve nada, la barra lo dice", async () => {
+    withVoice("push");
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    act(() => FakeRecognition.instances.at(-1)!.emitEnd());
+    expect(await screen.findByText(/no devolvió ningún texto/)).toBeInTheDocument();
+  });
+
+  it("el dictado también avisa cuando el navegador no devuelve nada", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem("aulaclara.voiceConsent", JSON.stringify({ commands: true }));
+    withVoice("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Dictar pregunta/ }));
+    act(() => FakeRecognition.instances.at(-1)!.emitEnd());
+    expect(await screen.findByText(/no devolvió ningún texto/)).toBeInTheDocument();
+  });
+});

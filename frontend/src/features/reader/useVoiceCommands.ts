@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { speechBus } from "@/lib/speech";
 import { parseCommand, type VoiceCommand } from "@/lib/voice/commands";
+import { UNRESPONSIVE_MESSAGE } from "@/lib/voice/messages";
 import { grantVoiceConsent, hasVoiceConsent } from "@/lib/voice/consent";
 import { type MicOwner, micLock } from "@/lib/voice/micLock";
 import {
@@ -39,6 +40,7 @@ const ERRORS: Partial<Record<RecognitionErrorKind, string>> = {
   "no-microphone": "No encontramos un micrófono conectado.",
   language: "Tu navegador no reconoce voz en español.",
   network: "No hay conexión con el servicio de reconocimiento de voz.",
+  unresponsive: UNRESPONSIVE_MESSAGE,
   other: "El micrófono dejó de funcionar.",
 };
 
