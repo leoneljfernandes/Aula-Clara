@@ -1,6 +1,5 @@
 import { storage } from "@/lib/storage";
 
-import { PROFILES, type Profile } from "./config";
 import {
   DEFAULT_SETTINGS,
   type ReadingSettings,
@@ -10,12 +9,8 @@ import {
 
 const SETTINGS_KEY = "aulaclara.settings";
 const ONBOARDED_KEY = "aulaclara.onboarded";
+/** Solo de la versión 1: se lee para migrar y se borra. El perfil elegido ya no se guarda (Ley 25.326). */
 const PROFILE_KEY = "aulaclara.profile";
-
-export function loadProfileId(): Profile["id"] | null {
-  const id = storage.get<string>(PROFILE_KEY);
-  return PROFILES.find((p) => p.id === id)?.id ?? null;
-}
 
 /**
  * Acepta el sobre `{ schemaVersion: 2, settings }` y el objeto plano de la versión 1.
@@ -45,8 +40,4 @@ export function isOnboarded(): boolean {
 
 export function markOnboarded(): void {
   storage.set(ONBOARDED_KEY, true);
-}
-
-export function saveProfileId(id: Profile["id"]): void {
-  storage.set(PROFILE_KEY, id);
 }

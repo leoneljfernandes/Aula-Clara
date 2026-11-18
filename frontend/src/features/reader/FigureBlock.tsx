@@ -50,6 +50,7 @@ export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: Figur
   };
 
   const analyze = async (): Promise<void> => {
+    if (loading) return;
     if (result) return setOpen(true);
     setLoading(true);
     setFailure(null);
@@ -78,12 +79,14 @@ export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: Figur
           <BarChart svgRef={svgRef} />
         )}
         <div className="absolute top-3 right-3">
+          {/* aria-disabled y no disabled: un botón deshabilitado pierde el foco (va a <body>) y el
+              diálogo no podría devolverlo al cerrarse. */}
           <button
             type="button"
             onClick={() => void analyze()}
-            disabled={loading}
+            aria-disabled={loading}
             aria-busy={loading}
-            className="inline-flex min-h-[52px] items-center gap-2 rounded-xl border-2 border-[var(--onAccent)] bg-[var(--accent)] px-5 text-[17px] font-bold text-[var(--onAccent)] shadow-lg disabled:cursor-wait"
+            className="inline-flex min-h-[52px] items-center gap-2 rounded-xl border-2 border-[var(--onAccent)] bg-[var(--accent)] px-5 text-[17px] font-bold text-[var(--onAccent)] shadow-lg aria-disabled:cursor-wait"
             style={{ fontFamily: "'Atkinson Hyperlegible', sans-serif", letterSpacing: 0, wordSpacing: 0 }}
           >
             {loading ? (

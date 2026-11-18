@@ -1,6 +1,6 @@
 import { createBrowserRouter, type RouteObject } from "react-router";
 
-import { homeLoader, requireProfile } from "@/features/preferences";
+import { homeLoader, requireOnboarding } from "@/features/preferences";
 import { RootLayout } from "@/routes/root-layout";
 import { NotFound, RouteError } from "@/routes/route-error";
 
@@ -12,14 +12,14 @@ export const routes: RouteObject[] = [
     Component: RootLayout,
     ErrorBoundary: RouteError,
     children: [
-      // Con perfil guardado → /biblioteca; sin perfil → /perfil.
+      // Con el onboarding hecho → /biblioteca; sin hacer → /perfil.
       { index: true, loader: homeLoader },
       { path: "perfil", lazy: () => import("@/routes/profile") },
       // La guía de API keys es pública: se puede leer antes de elegir un perfil.
       { path: "ayuda/ia", lazy: () => import("@/routes/ai-guide") },
       {
-        // Sin perfil guardado, biblioteca y lector pasan antes por el onboarding.
-        middleware: [requireProfile],
+        // Sin el onboarding hecho, biblioteca y lector pasan antes por él.
+        middleware: [requireOnboarding],
         ErrorBoundary: RouteError,
         children: [
           { path: "biblioteca", lazy: () => import("@/routes/library") },

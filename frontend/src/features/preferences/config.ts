@@ -1,6 +1,6 @@
 import type { ReadingSettings } from "./settings";
 
-/** Temas, tipografías y perfiles: los mismos valores del prototipo original. */
+/** Temas y tipografías: los mismos valores del prototipo original. Los perfiles vienen del backend (presets.ts). */
 export interface ThemeDef {
   label: string;
   swatch: readonly [string, string];
@@ -101,50 +101,6 @@ export type FontId = keyof typeof FONTS;
 export const MIN_FS = 14;
 export const MAX_FS = 40;
 export const RATES = [0.75, 1, 1.5] as const;
-
-export interface Profile {
-  id: "dislexia" | "vision" | "fatiga" | "custom";
-  title: string;
-  icon: string;
-  desc: string;
-  tags: readonly string[];
-  preset: Partial<ReadingSettings> | null;
-}
-
-export const PROFILES: readonly Profile[] = [
-  {
-    id: "dislexia",
-    title: "Dislexia",
-    icon: "Aa",
-    desc: "Fuente especializada, mayor interlineado y más espacio entre letras.",
-    tags: ["OpenDyslexic", "Interlineado amplio", "Fondo sepia"],
-    preset: { font: "dyslexic", fontSize: 21, lineHeight: 1.9, theme: "sepia", audioFocus: false },
-  },
-  {
-    id: "vision",
-    title: "Visión reducida",
-    icon: "A+",
-    desc: "Alto contraste y texto grande para leer sin esfuerzo.",
-    tags: ["Texto 28 px", "Negro y amarillo", "Tipografía legible"],
-    preset: { font: "atkinson", fontSize: 28, lineHeight: 1.7, theme: "contraste", audioFocus: false },
-  },
-  {
-    id: "fatiga",
-    title: "Fatiga visual",
-    icon: "☾",
-    desc: "Modo oscuro cálido y la lectura en voz alta siempre a mano.",
-    tags: ["Modo oscuro cálido", "Audio destacado", "Verdana"],
-    preset: { font: "verdana", fontSize: 20, lineHeight: 1.8, theme: "oscuro", audioFocus: true },
-  },
-  {
-    id: "custom",
-    title: "Personalizado",
-    icon: "⚙",
-    desc: "Elegí vos el tamaño, los colores y la tipografía.",
-    tags: ["Control total"],
-    preset: null,
-  },
-];
 
 export const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));
 

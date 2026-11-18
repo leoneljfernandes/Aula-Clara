@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PROFILES, THEME_ORDER, THEMES } from "./config";
+import { THEME_ORDER, THEMES } from "./config";
 
 /** Contraste WCAG 2.1 entre dos colores hex. */
 function luminance(hex: string): number {
@@ -28,18 +28,5 @@ describe("contraste AA (4.5:1 texto, 3:1 foco y bordes) en los 4 temas", () => {
     expect(contrast(v.accent, v.bg)).toBeGreaterThanOrEqual(3);
     expect(contrast(v.border, v.bg)).toBeGreaterThanOrEqual(3);
     expect(contrast(v.focus, v.bg)).toBeGreaterThanOrEqual(3);
-  });
-});
-
-describe("perfiles", () => {
-  it("son los 4 del prototipo y solo «Personalizado» no trae preset", () => {
-    expect(PROFILES.map((p) => p.id)).toEqual(["dislexia", "vision", "fatiga", "custom"]);
-    expect(PROFILES.filter((p) => p.preset === null).map((p) => p.id)).toEqual(["custom"]);
-  });
-  it("visión reducida: texto de 28 px en alto contraste", () => {
-    expect(PROFILES.find((p) => p.id === "vision")?.preset).toMatchObject({
-      fontSize: 28,
-      theme: "contraste",
-    });
   });
 });

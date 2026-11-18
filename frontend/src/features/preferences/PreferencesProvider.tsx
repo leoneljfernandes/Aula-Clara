@@ -1,35 +1,40 @@
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 
-import { type Profile, THEMES } from "./config";
+import { THEMES } from "./config";
 import { DEFAULT_SETTINGS, type ReadingSettings } from "./settings";
-import { loadProfileId, loadSettings, saveProfileId, saveSettings } from "./storage";
+import { isOnboarded, loadSettings, markOnboarded, saveSettings } from "./storage";
 
 interface Preferences {
   settings: ReadingSettings;
-  profile: Profile["id"] | null;
+  onboarded: boolean;
+  /** Cambia algunos campos y conserva el resto (los controles de ajuste). */
   updateSettings: (patch: Partial<ReadingSettings>) => void;
-  saveProfile: (id: Profile["id"]) => void;
+  /** Reemplaza todos los ajustes (elegir un preset no arrastra nada del anterior). */
+  replaceSettings: (next: ReadingSettings) => void;
+  /** Marca el onboarding como hecho y guarda los ajustes. No guarda qué perfil se eligió. */
+  completeOnboarding: () => void;
 }
 
 const PreferencesContext = createContext<Preferences | null>(null);
 
-/** Perfil y ajustes de lectura: cambian poco y los lee casi toda la app. Se persisten en localStorage. */
+/** Ajustes de lectura: cambian poco y los lee casi toda la app. Se persisten en localStorage. */
 export function PreferencesProvider({ children }: { children: ReactNode }): ReactNode {
   const [settings, setSettings] = useState<ReadingSettings>(loadSettings);
-  const [profile, setProfile] = useState<Profile["id"] | null>(loadProfileId);
+  const [onboarded, setOnboarded] = useState<boolean>(isOnboarded);
 
-  // El perfil guardado es lo que "activa" la persistencia de ajustes (como en el prototipo).
+  // Terminar el onboarding es lo que "activa" la persistencia de ajustes (como en el prototipo).
   useEffect(() => {
-    if (profile) saveSettings(settings);
-  }, [settings, profile]);
+    if (onboarded) saveSettings(settings);
+  }, [settings, onboarded]);
 
   const value: Preferences = {
     settings,
-    profile,
+    onboarded,
     updateSettings: (patch) => setSettings((s) => ({ ...s, ...patch })),
-    saveProfile: (id) => {
-      setProfile(id);
-      saveProfileId(id);
+    replaceSettings: (next) => setSettings(next),
+    completeOnboarding: () => {
+      setOnboarded(true);
+      markOnboarded();
       saveSettings(settings);
     },
   };

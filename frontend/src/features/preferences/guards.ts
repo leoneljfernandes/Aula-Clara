@@ -1,6 +1,6 @@
 import { type LoaderFunction, type MiddlewareFunction, redirect } from "react-router";
 
-import { loadProfileId } from "./storage";
+import { isOnboarded } from "./storage";
 
 /** Solo rutas internas: `?next=//sitio-malo.com` sería un open redirect. */
 export function safeNext(next: string | null): string | null {
@@ -15,10 +15,10 @@ function appPath(url: URL): string {
   return (path || "/") + url.search;
 }
 
-/** Protege biblioteca y lector: sin perfil guardado se pasa primero por el onboarding. */
-export const requireProfile: MiddlewareFunction = ({ request }) => {
-  if (loadProfileId()) return;
+/** Protege biblioteca y lector: sin terminar el onboarding se pasa primero por él. */
+export const requireOnboarding: MiddlewareFunction = ({ request }) => {
+  if (isOnboarded()) return;
   throw redirect(`/perfil?next=${encodeURIComponent(appPath(new URL(request.url)))}`);
 };
 
-export const homeLoader: LoaderFunction = () => redirect(loadProfileId() ? "/biblioteca" : "/perfil");
+export const homeLoader: LoaderFunction = () => redirect(isOnboarded() ? "/biblioteca" : "/perfil");

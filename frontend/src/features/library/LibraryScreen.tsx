@@ -3,7 +3,6 @@ import { Link } from "react-router";
 
 import { KeysDialog } from "@/components/KeysDialog";
 import { Logo } from "@/components/Logo";
-import { PROFILES, usePreferences } from "@/features/preferences";
 
 import { RecentDocuments } from "./RecentDocuments";
 import type { LibraryDocument } from "./types";
@@ -14,11 +13,9 @@ const NAV_ITEM =
   "flex min-h-12 items-center gap-3 rounded-xl px-4 text-left font-bold hover:bg-[var(--soft)]";
 
 export function LibraryScreen({ documents }: { documents: readonly LibraryDocument[] }): ReactNode {
-  const { profile } = usePreferences();
   const [query, setQuery] = useState("");
   const [showKeys, setShowKeys] = useState(false);
   const importState = useImport();
-  const profileName = PROFILES.find((p) => p.id === profile)?.title;
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[280px_1fr]">
@@ -39,12 +36,6 @@ export function LibraryScreen({ documents }: { documents: readonly LibraryDocume
             <span aria-hidden="true">⌨</span> Atajos de teclado
           </button>
         </nav>
-        {profileName && (
-          <div className="mt-auto hidden rounded-xl border-2 border-[var(--border)] p-4 text-base lg:block">
-            <span className="block text-[var(--muted)]">Perfil activo</span>
-            <span className="font-bold">{profileName}</span>
-          </div>
-        )}
       </aside>
 
       <div className="min-w-0">

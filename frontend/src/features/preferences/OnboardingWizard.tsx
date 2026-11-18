@@ -5,8 +5,9 @@ import { Button } from "@/components/Button";
 import { Logo } from "@/components/Logo";
 import { useAnnounce } from "@/lib/announcer";
 
-import { clamp, FONTS, MAX_FS, MIN_FS, PROFILES, type Profile, readingStyle } from "./config";
+import { clamp, FONTS, MAX_FS, MIN_FS, readingStyle } from "./config";
 import { safeNext } from "./guards";
+import { applyPreset, matchPreset, type Preset, type PresetCatalog } from "./presets";
 import { usePreferences } from "./PreferencesProvider";
 import { ThemeButtons } from "./ThemeButtons";
 
@@ -14,13 +15,69 @@ const STEPS = ["Elegí tu perfil", "Ajustá los detalles"] as const;
 const FIELD =
   "w-full min-h-[52px] px-3 rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] text-lg font-bold";
 
+type ProfileOption = Pick<Preset, "id" | "title" | "icon" | "description" | "tags">;
+
+/** «Personalizado» no es un preset del backend: es una opción fija que no cambia los ajustes. */
+const CUSTOM: ProfileOption = {
+  id: "custom",
+  title: "Personalizado",
+  icon: "⚙",
+  description: "Elegí vos el tamaño, los colores y la tipografía.",
+  tags: ["Control total"],
+};
+
+function ProfileCard({
+  option,
+  active,
+  onChoose,
+}: {
+  option: ProfileOption;
+  active: boolean;
+  onChoose: () => void;
+}): ReactNode {
+  return (
+    <label
+      className={`relative block cursor-pointer rounded-2xl border-2 p-5 ${active ? "border-[var(--accent)] bg-[var(--soft)]" : "border-[var(--border)] hover:bg-[var(--soft)]"}`}
+      style={active ? { boxShadow: "inset 0 0 0 2px var(--accent)" } : undefined}
+    >
+      <input
+        type="radio"
+        name="perfil"
+        value={option.id}
+        checked={active}
+        onChange={onChoose}
+        className="absolute top-5 right-5 h-6 w-6"
+        style={{ accentColor: "var(--accent)" }}
+      />
+      <span
+        aria-hidden="true"
+        className="mb-4 grid h-14 w-14 place-items-center rounded-xl bg-[var(--accent)] text-2xl font-bold text-[var(--onAccent)]"
+      >
+        {option.icon}
+      </span>
+      <span className="mb-1 block text-2xl font-bold">Perfil {option.title}</span>
+      <span className="mb-3 block text-lg text-[var(--muted)]">{option.description}</span>
+      <span className="flex flex-wrap gap-2">
+        {option.tags.map((t) => (
+          <span key={t} className="rounded-full border-2 border-[var(--border)] px-3 py-1 text-sm font-bold">
+            {t}
+          </span>
+        ))}
+      </span>
+    </label>
+  );
+}
+
 function ProfileStep({
+  catalog,
   selected,
   onChoose,
   onNext,
 }: {
-  selected: Profile["id"] | null;
-  onChoose: (p: Profile) => void;
+  catalog: PresetCatalog;
+  selected: string | null;
+  /** `preset` es `null` para «Personalizado». */
+  onChoose: (id: string, preset: Preset | null) => void;
   onNext: () => void;
 }): ReactNode {
   return (
@@ -31,47 +88,27 @@ function ProfileStep({
       <p className="mb-8 text-xl text-[var(--muted)]">
         Lo configurás una sola vez. Cada documento que subas se va a abrir con estas preferencias.
       </p>
+      {catalog.source === "unavailable" && (
+        <p role="status" className="mb-6 rounded-xl border-2 border-[var(--border)] p-4 text-lg">
+          No pudimos cargar los perfiles sugeridos. Podés seguir con «Personalizado» y ajustar todo a mano.
+        </p>
+      )}
       <fieldset>
         <legend className="sr-only">Perfil de accesibilidad</legend>
         <div className="grid gap-4 sm:grid-cols-2">
-          {PROFILES.map((p) => {
-            const active = selected === p.id;
-            return (
-              <label
-                key={p.id}
-                className={`relative block cursor-pointer rounded-2xl border-2 p-5 ${active ? "border-[var(--accent)] bg-[var(--soft)]" : "border-[var(--border)] hover:bg-[var(--soft)]"}`}
-                style={active ? { boxShadow: "inset 0 0 0 2px var(--accent)" } : undefined}
-              >
-                <input
-                  type="radio"
-                  name="perfil"
-                  value={p.id}
-                  checked={active}
-                  onChange={() => onChoose(p)}
-                  className="absolute top-5 right-5 h-6 w-6"
-                  style={{ accentColor: "var(--accent)" }}
-                />
-                <span
-                  aria-hidden="true"
-                  className="mb-4 grid h-14 w-14 place-items-center rounded-xl bg-[var(--accent)] text-2xl font-bold text-[var(--onAccent)]"
-                >
-                  {p.icon}
-                </span>
-                <span className="mb-1 block text-2xl font-bold">Perfil {p.title}</span>
-                <span className="mb-3 block text-lg text-[var(--muted)]">{p.desc}</span>
-                <span className="flex flex-wrap gap-2">
-                  {p.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-full border-2 border-[var(--border)] px-3 py-1 text-sm font-bold"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </span>
-              </label>
-            );
-          })}
+          {catalog.presets.map((p) => (
+            <ProfileCard
+              key={p.id}
+              option={p}
+              active={selected === p.id}
+              onChoose={() => onChoose(p.id, p)}
+            />
+          ))}
+          <ProfileCard
+            option={CUSTOM}
+            active={selected === CUSTOM.id}
+            onChoose={() => onChoose(CUSTOM.id, null)}
+          />
         </div>
       </fieldset>
       <div className="mt-8 flex justify-end">
@@ -186,24 +223,30 @@ function DetailsStep({ onBack, onFinish }: { onBack: () => void; onFinish: () =>
   );
 }
 
-/** Wizard de 2 pasos: elegir perfil y ajustar detalles con vista previa en vivo. */
-export function OnboardingWizard(): ReactNode {
-  const { profile, updateSettings, saveProfile } = usePreferences();
+/**
+ * Wizard de 2 pasos: elegir perfil (presets del catálogo del backend o «Personalizado») y ajustar
+ * detalles con vista previa en vivo. Qué perfil se eligió no se guarda: solo los ajustes.
+ */
+export function OnboardingWizard({ catalog }: { catalog: PresetCatalog }): ReactNode {
+  const { settings, onboarded, replaceSettings, completeOnboarding } = usePreferences();
   const announce = useAnnounce();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [step, setStep] = useState<1 | 2>(1);
-  const [selected, setSelected] = useState<Profile["id"] | null>(profile);
-  const choose = (p: Profile): void => {
-    setSelected(p.id);
-    if (p.preset) {
-      updateSettings(p.preset);
-      announce(`Perfil ${p.title} aplicado`);
+  // Al volver a /perfil se marca el preset que coincide con los ajustes actuales, o «Personalizado».
+  const [selected, setSelected] = useState<string | null>(() =>
+    onboarded ? (matchPreset(catalog.presets, settings) ?? CUSTOM.id) : null,
+  );
+  const choose = (id: string, preset: Preset | null): void => {
+    setSelected(id);
+    if (preset) {
+      replaceSettings(applyPreset(preset));
+      announce(`Perfil ${preset.title} aplicado`);
     }
   };
   const finish = (): void => {
     if (!selected) return;
-    saveProfile(selected);
+    completeOnboarding();
     announce("Preferencias guardadas");
     void navigate(safeNext(params.get("next")) ?? "/biblioteca");
   };
@@ -230,7 +273,7 @@ export function OnboardingWizard(): ReactNode {
           ))}
         </ol>
         {step === 1 ? (
-          <ProfileStep selected={selected} onChoose={choose} onNext={() => setStep(2)} />
+          <ProfileStep catalog={catalog} selected={selected} onChoose={choose} onNext={() => setStep(2)} />
         ) : (
           <DetailsStep onBack={() => setStep(1)} onFinish={finish} />
         )}

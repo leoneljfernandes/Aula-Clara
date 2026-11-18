@@ -14,6 +14,33 @@ vi.mock("@/lib/http", async (original) => ({
 }));
 
 const MODEL = "gemini-3.5-flash-lite";
+// Los mismos 3 presets del seed del backend.
+const PRESETS = [
+  {
+    id: "dislexia",
+    title: "Dislexia",
+    icon: "Aa",
+    description: "Fuente especializada…",
+    tags: ["OpenDyslexic"],
+    settings: { font: "dyslexic", font_size: 21, line_height: 1.9, theme: "sepia", audio_focus: false },
+  },
+  {
+    id: "vision",
+    title: "Visión reducida",
+    icon: "A+",
+    description: "Alto contraste…",
+    tags: ["Texto 28 px"],
+    settings: { font: "atkinson", font_size: 28, line_height: 1.7, theme: "contraste", audio_focus: false },
+  },
+  {
+    id: "fatiga",
+    title: "Fatiga visual",
+    icon: "☾",
+    description: "Modo oscuro…",
+    tags: ["Audio destacado"],
+    settings: { font: "verdana", font_size: 20, line_height: 1.8, theme: "oscuro", audio_focus: true },
+  },
+];
 function fakeBackend({
   url,
   method,
@@ -23,6 +50,7 @@ function fakeBackend({
   method?: string;
   data?: { action?: string; message?: string };
 }) {
+  if (url === "/presets") return Promise.resolve(PRESETS);
   if (url === "/ai/session")
     return Promise.resolve(
       method === "DELETE" ? undefined : { provider: "gemini", remember: false, expires_in_seconds: 43_200 },
@@ -82,9 +110,7 @@ function renderAt(path: string) {
   return router;
 }
 
-const withProfile = (id = "custom"): void => {
-  window.localStorage.setItem("aulaclara.profile", JSON.stringify(id));
-};
+const withOnboarding = (): void => window.localStorage.setItem("aulaclara.onboarded", "true");
 
 const h1 = async () => screen.findByRole("heading", { level: 1 });
 
@@ -110,8 +136,10 @@ describe("onboarding", () => {
 
     await user.click(screen.getByRole("button", { name: "Guardar y continuar" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"));
-    expect(JSON.parse(window.localStorage.getItem("aulaclara.profile") ?? "null")).toBe("dislexia");
+    expect(window.localStorage.getItem("aulaclara.profile")).toBeNull(); // no se guarda la etiqueta (Ley 25.326)
+    expect(window.localStorage.getItem("aulaclara.onboarded")).toBe("true");
     expect(JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "{}")).toMatchObject({
+      schemaVersion: 2,
       settings: { font: "dyslexic", theme: "sepia" },
     });
   });
@@ -137,10 +165,56 @@ describe("onboarding", () => {
     await user.click(await screen.findByRole("button", { name: "Guardar y continuar" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"));
   });
+
+  it("pasar de un preset a otro no arrastra ajustes del anterior", async () => {
+    request.mockImplementation((c: { url: string }) =>
+      c.url === "/presets"
+        ? Promise.resolve([
+            {
+              id: "a",
+              title: "A",
+              icon: "A",
+              description: "",
+              tags: [],
+              settings: { audio_focus: true, theme: "oscuro" },
+            },
+            { id: "b", title: "B", icon: "B", description: "", tags: [], settings: { font: "dyslexic" } },
+          ])
+        : fakeBackend(c),
+    );
+    const user = userEvent.setup();
+    renderAt("/perfil");
+    await user.click(await screen.findByRole("radio", { name: /Perfil A/ }));
+    await user.click(screen.getByRole("radio", { name: /Perfil B/ }));
+    await user.click(screen.getByRole("button", { name: /Siguiente/ }));
+    expect(
+      await screen.findByRole("checkbox", { name: /Destacar la lectura en voz alta/ }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /Claro/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("sin backend ni caché ofrece solo «Personalizado» y lo explica", async () => {
+    request.mockRejectedValue(new Error("caído"));
+    renderAt("/perfil");
+    // findByText y no findByRole("status"): el Announcer global también tiene role="status".
+    expect(await screen.findByText(/No pudimos cargar los perfiles sugeridos/)).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(screen.getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual(["custom"]);
+  });
+
+  it("con el perfil guardado por la versión anterior entra directo a la biblioteca", async () => {
+    window.localStorage.setItem("aulaclara.profile", JSON.stringify("dislexia"));
+    const router = renderAt("/");
+    await h1();
+    expect(router.state.location.pathname).toBe("/biblioteca");
+    expect(window.localStorage.getItem("aulaclara.profile")).toBeNull();
+  });
 });
 
 describe("biblioteca", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   it("con perfil, la raíz muestra la biblioteca con los 3 documentos semilla y el aviso de privacidad", async () => {
     const router = renderAt("/");
@@ -192,7 +266,7 @@ describe("biblioteca", () => {
 
 describe("lector", () => {
   beforeEach(() => {
-    withProfile();
+    withOnboarding();
     withAI();
   });
 
@@ -270,7 +344,7 @@ describe("lector", () => {
 });
 
 describe("IA con la key de cada persona", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   it("sin key, el panel pide configurarla y una consulta no llega al servidor", async () => {
     const user = userEvent.setup();
@@ -380,7 +454,7 @@ describe("IA con la key de cada persona", () => {
 });
 
 describe("Configurar IA: respuestas tardías y filtro de gratuitos", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   it("una respuesta que llega después de cambiar de proveedor se descarta", async () => {
     let resolveGemini: (value: unknown) => void = () => undefined;
@@ -440,7 +514,7 @@ describe("Configurar IA: respuestas tardías y filtro de gratuitos", () => {
 });
 
 describe("key sellada en cookie: respaldo, reemplazo y borrado", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => withOnboarding());
 
   const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
     renderAt("/leer/d1");
@@ -587,7 +661,7 @@ describe("key sellada en cookie: respaldo, reemplazo y borrado", () => {
 
 describe("errores y avisos de la IA en pantalla", () => {
   beforeEach(() => {
-    withProfile();
+    withOnboarding();
     withAI();
   });
 
