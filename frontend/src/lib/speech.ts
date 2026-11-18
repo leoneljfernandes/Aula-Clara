@@ -99,6 +99,12 @@ export const speechBus = {
   },
 };
 
+/** Une un aviso a un texto para leerlos de corrido, con un punto de por medio si el texto no cierra la frase. */
+export function withNotice(text: string, notice: string): string {
+  const body = text.trimEnd();
+  return `${body}${/[.!?…:]$/.test(body) ? "" : "."} ${notice}`;
+}
+
 /** Lee un texto suelto (descripción de una imagen, respuesta del asistente). */
 export function speakOnce(text: string, rate = 1): boolean {
   if (!hasTTS) return false;

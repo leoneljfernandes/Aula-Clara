@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ReadAloudEngine, type ReadState } from "./speech";
+import { ReadAloudEngine, type ReadState, withNotice } from "./speech";
 
 // jsdom no tiene speechSynthesis: el motor corre en modo simulado, que es el que se prueba acá.
 describe("ReadAloudEngine (simulado)", () => {
@@ -59,5 +59,13 @@ describe("ReadAloudEngine (simulado)", () => {
     expect(states.at(-1)?.status).toBe("playing");
     vi.advanceTimersByTime(400);
     expect(states.at(-1)?.status).toBe("stopped");
+  });
+});
+
+describe("withNotice", () => {
+  it("agrega el aviso tras la frase, con un punto si el texto no lo trae", () => {
+    expect(withNotice("Segun", "Se cortó.")).toBe("Segun. Se cortó.");
+    expect(withNotice("Listo. ", "Se cortó.")).toBe("Listo. Se cortó.");
+    expect(withNotice("¿Seguro?", "Se cortó.")).toBe("¿Seguro? Se cortó.");
   });
 });

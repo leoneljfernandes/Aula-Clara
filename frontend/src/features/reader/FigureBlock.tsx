@@ -12,7 +12,7 @@ import {
   type Provider,
 } from "@/features/assistant";
 import { dataUrlToBlob, svgToJpeg } from "@/lib/extractors";
-import { hasTTS, speakOnce } from "@/lib/speech";
+import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { BarChart } from "./BarChart";
 
@@ -25,8 +25,12 @@ interface FigureBlockProps {
   buttonId?: string;
   /** Guía por voz: lee la descripción en voz alta apenas llega. */
   autoSpeak: boolean;
+  /** Velocidad de la voz elegida en los ajustes. */
+  rate: number;
   onAskAssistant: () => void;
 }
+
+const TRUNCATED_NOTICE = "La descripción se cortó porque el modelo llegó a su límite de largo.";
 
 interface Result {
   text: string;
@@ -41,6 +45,7 @@ export function FigureBlock({
   context,
   buttonId,
   autoSpeak,
+  rate,
   onAskAssistant,
 }: FigureBlockProps): ReactNode {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -70,9 +75,14 @@ export function FigureBlock({
       if (!blob) throw new ImageUnavailableError();
       const described = await describeImage(blob, context);
       setResult(described);
-      if (autoSpeak) speakOnce(described.text);
+      if (autoSpeak) {
+        speakOnce(described.truncated ? withNotice(described.text, TRUNCATED_NOTICE) : described.text, rate);
+      }
     } catch (error) {
-      setFailure({ message: describeApiError(error), needsSetup: needsAISetup(error) });
+      const message = describeApiError(error);
+      setFailure({ message, needsSetup: needsAISetup(error) });
+      // Quien se guía por voz tiene que enterarse de que falló, no esperar una descripción que no llega.
+      if (autoSpeak) speakOnce(message, rate);
     } finally {
       setLoading(false);
       setOpen(true);
@@ -136,16 +146,14 @@ export function FigureBlock({
               <div className="mb-6">
                 <ProviderBadge provider={result.provider} model={result.model} />
                 {result.truncated && (
-                  <p className="mt-2 text-sm text-[var(--muted)]">
-                    ⚠️ La descripción se cortó porque el modelo llegó a su límite de largo.
-                  </p>
+                  <p className="mt-2 text-sm text-[var(--muted)]">⚠️ {TRUNCATED_NOTICE}</p>
                 )}
               </div>
             </>
           )}
           <div className="flex flex-wrap gap-3">
             {result && hasTTS && (
-              <Button variant="primary" onClick={() => speakOnce(result.text)}>
+              <Button variant="primary" onClick={() => speakOnce(result.text, rate)}>
                 🔊 Escuchar descripción
               </Button>
             )}

@@ -145,6 +145,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             activeBlock={activeBlock}
             showListenButton={settings.audioFocus && audio.status === "stopped"}
             autoSpeak={settings.voiceGuide}
+            rate={settings.rate}
             onListen={audio.play}
             onAskAboutFigure={() => void chat.send("¿Qué muestra el Gráfico 1?", "free")}
             style={readingStyle(settings)}

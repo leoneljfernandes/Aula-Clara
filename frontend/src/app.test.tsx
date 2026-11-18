@@ -616,10 +616,10 @@ describe("lector", () => {
       await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
       await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
       expect(speakOnce).toHaveBeenCalledTimes(1);
-      expect(speakOnce).toHaveBeenCalledWith("Un gráfico de barras de prueba.");
+      expect(speakOnce).toHaveBeenCalledWith("Un gráfico de barras de prueba.", 1);
     });
 
-    it("un mensaje de error no se lee como respuesta", async () => {
+    it("un mensaje de error del asistente también se lee, para saber que el pedido falló", async () => {
       const { speakOnce } = await import("@/lib/speech");
       vi.mocked(speakOnce).mockClear();
       request.mockImplementation((req: Parameters<typeof fakeBackend>[0]) =>
@@ -628,9 +628,85 @@ describe("lector", () => {
       const user = userEvent.setup();
       renderAt("/leer/d1");
       await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
-      await waitFor(() => expect(screen.getByRole("log").textContent).not.toMatch(/prueba/));
-      await waitFor(() => expect(screen.queryByLabelText("El asistente está escribiendo")).toBeNull());
-      expect(speakOnce).not.toHaveBeenCalled();
+      await waitFor(() => expect(speakOnce).toHaveBeenCalledTimes(1));
+      const [spoken, rate] = vi.mocked(speakOnce).mock.calls[0] ?? [];
+      expect(rate).toBe(1);
+      expect(spoken).not.toMatch(/prueba/);
+      expect(screen.getByRole("log")).toHaveTextContent(spoken as string);
+    });
+
+    it("una respuesta cortada por el límite se lee con el aviso, en una sola lectura", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      request.mockResolvedValue({
+        answer: "1. Primera pregunta\n2. Segun",
+        provider: "gemini",
+        model: MODEL,
+        truncated: true,
+      });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Crear 3 preguntas de repaso" }));
+      await waitFor(() =>
+        expect(speakOnce).toHaveBeenCalledWith(
+          "1. Primera pregunta\n2. Segun. La respuesta se cortó porque el modelo llegó a su límite de largo.",
+          1,
+        ),
+      );
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+    });
+
+    it("una descripción cortada por el límite se lee con el aviso", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      request.mockResolvedValue({
+        description: "Un gráfico de barras que crece",
+        provider: "gemini",
+        model: MODEL,
+        truncated: true,
+      });
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+      expect(speakOnce).toHaveBeenCalledWith(
+        "Un gráfico de barras que crece. La descripción se cortó porque el modelo llegó a su límite de largo.",
+        1,
+      );
+    });
+
+    it("si la descripción de la figura falla, el aviso del diálogo también se lee", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      const extractors = await import("@/lib/extractors");
+      vi.mocked(speakOnce).mockClear();
+      vi.mocked(extractors.svgToJpeg).mockRejectedValueOnce(new Error("canvas roto"));
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+      const [spoken, rate] = vi.mocked(speakOnce).mock.calls[0] ?? [];
+      expect(spoken).toContain("No pudimos preparar la imagen");
+      expect(rate).toBe(1);
+      expect(within(dialog).getByRole("alert")).toHaveTextContent(spoken as string);
+    });
+
+    it("la guía por voz usa la velocidad elegida, también en las figuras", async () => {
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { voiceGuide: true, rate: 1.5 } }),
+      );
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledWith("Un gráfico de barras de prueba.", 1.5);
+      await user.keyboard("{Escape}");
+      await user.click(screen.getByRole("button", { name: "Resumir esta página" }));
+      await waitFor(() => expect(speakOnce).toHaveBeenCalledWith("Resumen de esta página (prueba)", 1.5));
     });
 
     it("tras pasar la figura, lee desde el índice leíble correcto (la figura no cuenta)", async () => {

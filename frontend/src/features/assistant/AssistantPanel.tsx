@@ -2,7 +2,7 @@ import { type ReactNode, type RefObject, useEffect, useRef, useState } from "rea
 import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
-import { hasTTS, speakOnce } from "@/lib/speech";
+import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { AISettingsDialog } from "./AISettingsDialog";
 import { useAICredentials } from "./credentials";
@@ -11,6 +11,8 @@ import { providerLabel } from "./providers";
 import { ProviderBadge } from "./ProviderBadge";
 import { QUICK_ACTIONS } from "./quickActions";
 import type { Chat } from "./useChat";
+
+const TRUNCATED_NOTICE = "La respuesta se cortó porque el modelo llegó a su límite de largo.";
 
 interface AssistantPanelProps {
   chat: Chat;
@@ -47,9 +49,9 @@ export function AssistantPanel({
     const grew = messages.length > seenCount.current;
     seenCount.current = messages.length;
     const last = messages[messages.length - 1];
-    // Los errores no traen proveedor: no son una respuesta del modelo y no se leen solos.
-    if (autoSpeak && grew && last?.role === "ai" && last.provider && !last.needsSetup) {
-      speakOnce(last.text, rate);
+    // También los errores: quien se guía por voz tiene que enterarse de que el pedido falló.
+    if (autoSpeak && grew && last?.role === "ai") {
+      speakOnce(last.truncated ? withNotice(last.text, TRUNCATED_NOTICE) : last.text, rate);
     }
   }, [messages, autoSpeak, rate]);
 
@@ -113,8 +115,7 @@ export function AssistantPanel({
               )}
               {m.truncated && (
                 <p className="mt-2 text-sm text-[var(--muted)]">
-                  ⚠️ La respuesta se cortó porque el modelo llegó a su límite de largo. Pedí algo más acotado,
-                  por ejemplo un fragmento más corto.
+                  ⚠️ {TRUNCATED_NOTICE} Pedí algo más acotado, por ejemplo un fragmento más corto.
                 </p>
               )}
               {m.needsSetup && (

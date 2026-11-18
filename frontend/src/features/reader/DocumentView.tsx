@@ -11,6 +11,8 @@ interface DocumentViewProps {
   showListenButton: boolean;
   /** Guía por voz: las figuras leen su descripción al recibirla. */
   autoSpeak: boolean;
+  /** Velocidad de la voz elegida en los ajustes. */
+  rate: number;
   onListen: () => void;
   onAskAboutFigure: () => void;
   style: React.CSSProperties;
@@ -23,6 +25,7 @@ export function DocumentView({
   activeBlock,
   showListenButton,
   autoSpeak,
+  rate,
   onListen,
   onAskAboutFigure,
   style,
@@ -66,6 +69,7 @@ export function DocumentView({
                 context={before?.type === "p" ? before.text : ""}
                 buttonId={`fig-btn-${i}`}
                 autoSpeak={autoSpeak}
+                rate={rate}
                 onAskAssistant={onAskAboutFigure}
               />
             </div>
