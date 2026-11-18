@@ -262,6 +262,7 @@ describe("onboarding", () => {
       rate: 1.5,
       audioFocus: true,
       singleKeyShortcuts: false,
+      voiceGuide: false,
     };
     const stored = (): unknown => JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "null");
 
@@ -461,6 +462,55 @@ describe("lector", () => {
     await h1();
     await user.keyboard("1");
     expect(calls("/ai/chat")).toHaveLength(0);
+  });
+
+  it("Alt+H salta al primer título, lo enfoca y anuncia la sección", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}h{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-0");
+    expect(await screen.findByText(/^Sección 1 de \d+: 1\. Introducción$/)).toBeInTheDocument();
+  });
+
+  it("Alt+↑ en el principio no se mueve y lo anuncia", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
+    expect(await screen.findByText("Principio del documento")).toBeInTheDocument();
+  });
+
+  it("Alt+G enfoca el botón del primer gráfico y lo anuncia", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}g{/Alt}");
+    expect(document.activeElement?.id).toMatch(/^fig-btn-\d+$/);
+    expect(await screen.findByText("Gráfico 1", { selector: "[role=status]" })).toBeInTheDocument();
+  });
+
+  it("Alt+↓ avanza de a un bloque y, pasado el último, anuncia el fin del documento", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-0");
+    const total = document.querySelectorAll("[id^='blk-']").length;
+    for (let i = 1; i < total; i++) await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe(`blk-${total - 1}`);
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(await screen.findByText("Fin del documento", { selector: "[role=status]" })).toBeInTheDocument();
+    expect(document.activeElement?.id).toBe(`blk-${total - 1}`);
+  });
+
+  it("con la lectura en marcha, moverse de bloque la continúa desde ese bloque", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
+    expect(await screen.findByText(/Leyendo · bloque 1 de/)).toBeInTheDocument();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}");
+    expect(await screen.findByText(/Leyendo · bloque 2 de/)).toBeInTheDocument();
   });
 
   it("la lectura en voz alta resalta el párrafo actual y se puede detener", async () => {

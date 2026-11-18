@@ -9,6 +9,7 @@ export interface ReadingSettings {
   rate: number;
   audioFocus: boolean;
   singleKeyShortcuts: boolean;
+  voiceGuide: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReadingSettings = {
@@ -19,6 +20,7 @@ export const DEFAULT_SETTINGS: ReadingSettings = {
   rate: 1,
   audioFocus: false,
   singleKeyShortcuts: false,
+  voiceGuide: false,
 };
 
 export const SETTINGS_SCHEMA_VERSION = 2;
@@ -37,6 +39,7 @@ const FIELDS: { [K in keyof ReadingSettings]: (v: unknown) => v is ReadingSettin
   rate: (v): v is number => typeof v === "number" && (RATES as readonly number[]).includes(v),
   audioFocus: (v): v is boolean => typeof v === "boolean",
   singleKeyShortcuts: (v): v is boolean => typeof v === "boolean",
+  voiceGuide: (v): v is boolean => typeof v === "boolean",
 };
 
 const isKnownField = (key: string): key is keyof ReadingSettings => Object.hasOwn(FIELDS, key);

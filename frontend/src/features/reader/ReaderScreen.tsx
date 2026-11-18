@@ -20,6 +20,7 @@ import { useReadAloud } from "@/lib/useReadAloud";
 
 import { DocumentView } from "./DocumentView";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
+import { useReaderNavigation } from "./useReaderNavigation";
 import { ToolsPanel } from "./ToolsPanel";
 
 export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: Article }): ReactNode {
@@ -46,6 +47,13 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     libraryApi.saveProgress(doc.id, p),
   );
 
+  const nav = useReaderNavigation({
+    blocks: article.blocks,
+    audio,
+    voiceGuide: settings.voiceGuide,
+    announce,
+  });
+
   useReaderHotkeys({
     singleKey: settings.singleKeyShortcuts,
     handlers: {
@@ -63,6 +71,10 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
       quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
       silence: () => speechBus.silence(),
+      nextBlock: () => nav.move("any", 1),
+      prevBlock: () => nav.move("any", -1),
+      nextHeading: () => nav.move("h2", 1),
+      nextFigure: () => nav.move("figure", 1),
     },
   });
 

@@ -61,6 +61,14 @@ export const CONTROLS: readonly ControlSpec[] = [
     group: "voz",
     inReader: true,
   },
+  {
+    key: "voiceGuide",
+    kind: "toggle",
+    label: "Guía por voz (si no usás lector de pantalla)",
+    help: "Lee en voz alta el bloque al que te movés y las respuestas del asistente. Si usás NVDA, JAWS o VoiceOver, dejalo apagado para no escuchar dos voces.",
+    group: "voz",
+    inReader: true,
+  },
 ];
 
 /** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */

@@ -21,6 +21,8 @@ interface FigureBlockProps {
   caption: string;
   /** Párrafo que rodea a la figura: le da contexto a la IA. */
   context: string;
+  /** id del botón «Interpretar con IA»: el cursor de bloque lo enfoca al llegar a la figura. */
+  buttonId?: string;
   onAskAssistant: () => void;
 }
 
@@ -31,7 +33,13 @@ interface Result {
   truncated: boolean;
 }
 
-export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: FigureBlockProps): ReactNode {
+export function FigureBlock({
+  dataUrl,
+  caption,
+  context,
+  buttonId,
+  onAskAssistant,
+}: FigureBlockProps): ReactNode {
   const svgRef = useRef<SVGSVGElement>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -82,6 +90,7 @@ export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: Figur
           {/* aria-disabled y no disabled: un botón deshabilitado pierde el foco (va a <body>) y el
               diálogo no podría devolverlo al cerrarse. */}
           <button
+            id={buttonId}
             type="button"
             onClick={() => void analyze()}
             aria-disabled={loading}
