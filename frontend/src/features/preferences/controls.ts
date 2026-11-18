@@ -15,13 +15,22 @@ interface BaseControl {
   inReader: boolean;
 }
 
+type ToggleKey = KeysOfType<boolean>;
+type ChoiceKey = KeysOfType<string>;
+
+/**
+ * Un control por clave: la unión se arma clave por clave para que las opciones de un `choice` tengan el
+ * tipo de su ajuste (`ThemeId` para `theme`). Un valor mal escrito no compila.
+ */
 export type ControlSpec =
-  | (BaseControl & { key: KeysOfType<boolean>; kind: "toggle" })
-  | (BaseControl & {
-      key: KeysOfType<string>;
-      kind: "choice";
-      options: readonly { value: string; label: string }[];
-    });
+  | { [K in ToggleKey]: BaseControl & { key: K; kind: "toggle" } }[ToggleKey]
+  | {
+      [K in ChoiceKey]: BaseControl & {
+        key: K;
+        kind: "choice";
+        options: readonly { value: ReadingSettings[K]; label: string }[];
+      };
+    }[ChoiceKey];
 
 /** Orden y título con que `SettingsControls` agrupa los controles. */
 export const CONTROL_GROUPS: readonly { id: ControlGroup; title: string }[] = [

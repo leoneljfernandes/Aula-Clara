@@ -1,6 +1,6 @@
 import { type ReactNode, useId } from "react";
 
-import { CONTROL_GROUPS, type ControlPlacement, type ControlSpec, controlsFor } from "./controls";
+import { CONTROL_GROUPS, type ControlPlacement, CONTROLS, type ControlSpec, controlsFor } from "./controls";
 import { usePreferences } from "./PreferencesProvider";
 import { sanitizePatch } from "./settings";
 
@@ -55,9 +55,18 @@ function Control({ spec }: { spec: ControlSpec }): ReactNode {
   );
 }
 
-/** Dibuja los controles de `CONTROLS`, un `fieldset` por grupo. En el lector, solo los marcados `inReader`. */
-export function SettingsControls({ placement }: { placement: ControlPlacement }): ReactNode {
-  const visible = controlsFor(placement);
+/**
+ * Dibuja los controles de `CONTROLS`, un `fieldset` por grupo. En el lector, solo los marcados `inReader`.
+ * `controls` permite pasar otro registro (los tests no dependen de lo que tenga hoy `CONTROLS`).
+ */
+export function SettingsControls({
+  placement,
+  controls = CONTROLS,
+}: {
+  placement: ControlPlacement;
+  controls?: readonly ControlSpec[];
+}): ReactNode {
+  const visible = controlsFor(placement, controls);
   return (
     <>
       {CONTROL_GROUPS.map((g) => {
