@@ -1,4 +1,4 @@
-"""Respuestas simuladas del prototipo (docs/mvp-referencia.html: `mockReply` e `IMAGE_ANALYSIS`)."""
+"""Respuestas simuladas del prototipo original (`mockReply` e `IMAGE_ANALYSIS`)."""
 
 from collections.abc import Sequence
 

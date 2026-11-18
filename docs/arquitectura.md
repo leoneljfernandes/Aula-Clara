@@ -1,7 +1,7 @@
 # Aula Clara · Arquitectura del MVP
 
 > Este documento adapta [`instructions.md`](../instructions.md) a las convenciones de [`.skills/`](../.skills/README.md). Cuando los dos se contradicen, gana la skill (regla 4.1 de las instrucciones), y cada desvío queda en la tabla de la sección 2.
-> Prototipo de referencia: [`docs/mvp-referencia.html`](mvp-referencia.html).
+> Prototipo original (UX, textos, flujos): disponible en el historial de git (commit 2940725).
 
 ## 1. Qué hace el prototipo
 
@@ -51,7 +51,7 @@ aula-clara/
 ├─ vercel.json                    # build del frontend, fallback de la SPA y ruteo de /api/* a la función
 ├─ api/index.py                   # entrypoint de Vercel: agrega backend/ al path e importa app.main
 ├─ .github/workflows/pages.yml    # despliegue opcional del frontend a GitHub Pages
-├─ docs/  (mvp-referencia.html · arquitectura.md · accesibilidad.md · adr/0001-spa.md)
+├─ docs/  (arquitectura.md · accesibilidad.md · adr/0001-spa.md)
 ├─ frontend/                      # React 19 + Vite 8 + TypeScript 6 + Tailwind 4
 │  ├─ vite.config.ts              # alias @/, React Compiler, envDir "..", base para Pages, proxy /api
 │  ├─ eslint.config.js            # dirección de dependencias + react-hooks recommended

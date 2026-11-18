@@ -1,4 +1,4 @@
-/** Temas, tipografías y perfiles: los mismos valores del prototipo (docs/mvp-referencia.html). */
+/** Temas, tipografías y perfiles: los mismos valores del prototipo original. */
 export interface ThemeDef {
   label: string;
   swatch: readonly [string, string];

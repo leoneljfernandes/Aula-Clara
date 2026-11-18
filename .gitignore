@@ -24,6 +24,7 @@ coverage/
 
 # Vercel
 .vercel/
+.vercel.json
 
 # Editor / SO
 .DS_Store

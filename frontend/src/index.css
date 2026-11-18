@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Base de accesibilidad del prototipo (docs/mvp-referencia.html). Los tokens de cada tema
+/* Base de accesibilidad del prototipo original. Los tokens de cada tema
    (--bg, --fg, --accent, --focus…) los fija el layout según las preferencias (fase 2). */
 :root {
   --bg: #ffffff;
