@@ -57,12 +57,12 @@ aula-clara/
 │  ├─ eslint.config.js            # dirección de dependencias + react-hooks recommended
 │  └─ src/
 │     ├─ main.tsx · router.tsx    # createRoot + reporte de errores · árbol de rutas (lazy, middleware)
-│     ├─ routes/                  # módulos de ruta finos: root-layout, profile, library, reader, route-error
+│     ├─ routes/                  # módulos de ruta finos: root-layout, profile, library, reader, ai-guide, route-error
 │     ├─ features/
 │     │  ├─ preferences/          # config (temas, fuentes, perfiles), provider, wizard de onboarding, guards
 │     │  ├─ library/              # api (localStorage + IndexedDB), importación por pasos, pantalla, subida
 │     │  ├─ reader/               # visor, herramientas, figuras con «Interpretar con IA», hooks (selección, progreso, atajos)
-│     │  └─ assistant/            # cliente de IA con respaldo al mock, chat, panel, indicador de proveedor
+│     │  └─ assistant/            # cliente de IA, chat, panel, indicador de proveedor
 │     ├─ components/              # Button, Dialog (trampa de foco), ProgressBar, Logo, SkipLink, KeysDialog, ErrorBoundary
 │     └─ lib/
 │        ├─ http/                 # axios solo acá: errores tipados (problem+json), reintento con backoff en GET
@@ -77,7 +77,7 @@ aula-clara/
    │  ├─ schemas/    profile · document (Page[T]) · ai
    │  ├─ services/   profile · document · ai · ai_rules (funciones puras) · prompts
    │  ├─ crud/       base (Repository[T]) · memory · seed · answer_cache
-   │  ├─ providers/llm/   base · gemini · groq · mock · factory
+   │  ├─ providers/llm/   base · gemini · openai_compatible (Groq, OpenRouter) · factory
    │  ├─ models/     dataclasses: Profile, Document, ChatMessage
    │  ├─ prompts/    study_assistant.md · image_description.md (versionados)
    │  ├─ seed/       profiles.json · documents.json
@@ -94,7 +94,7 @@ La dependencia va en un solo sentido: `api → services → (crud | providers) �
 | Capa | Hace | Nunca |
 |---|---|---|
 | `api/` | valida con schemas, resuelve dependencias, aplica el rate limit y devuelve `XRead` | lógica de negocio, llamadas a proveedores |
-| `services/` | reglas de negocio, recorte del texto, elección del prompt, caché y fallback; lanza `AppError` | `HTTPException`, `Request`, importar `fastapi` |
+| `services/` | reglas de negocio, recorte del texto, elección del prompt, caché y reintento; lanza `AppError` | `HTTPException`, `Request`, importar `fastapi` |
 | `crud/` | guarda y lee entidades (hoy en memoria) | reglas de negocio |
 | `providers/llm/` | traduce `LLMProvider` al SDK del proveedor; convierte un 429 o un fallo en `ProviderUnavailable` | reglas de negocio, elegir otro proveedor |
 | `models/` | entidades puras | importar capas superiores |
@@ -112,11 +112,17 @@ Los repositorios en memoria y la caché viven mientras viva el proceso: `deps.py
 | Método | Ruta | Respuesta |
 |---|---|---|
 | GET | `/api/health/live` | `{status}` |
-| GET | `/api/health/ready` | `{status, ai_provider: "gemini" \| "groq" \| "mock"}` |
+| GET | `/api/health/ready` | `{status, version}` (no depende de ninguna key) |
 | GET | `/api/v1/profiles` | los 4 perfiles (catálogo chico, sin paginar) |
 | GET · POST · PATCH · DELETE | `/api/v1/documents[/{id}]` | `DocumentRead`; el listado se pagina con `offset`/`limit` |
-| POST | `/api/v1/ai/chat` | `{action, message?, document_text, selection?}` → `{answer, provider}` |
-| POST | `/api/v1/ai/describe-image` | multipart (`image` + `context?`) → `{description, provider}` |
+| POST · GET · DELETE | `/api/v1/ai/session` | **Key sellada en cookie** ([ADR 0003](adr/0003-key-sellada-en-cookie.md)). `POST {provider, api_key, remember}` sella la key y la deja en la cookie `__Host-aula_ai`; `GET` comprueba que la cookie vuelve; `DELETE` la borra. Nunca devuelven la key. Todos exigen el header `X-Aula-Clara: 1`. Sin `SEALING_KEY` el `POST` responde 503 `ai_sessions_disabled` |
+| GET | `/api/v1/ai/models` | headers `X-AI-Provider` y `X-AI-Key` (o la cookie) → `{provider, key_verified, models: [{id, name, supports_images, free}]}`. Valida la key si el proveedor lo permite |
+| POST | `/api/v1/ai/chat` | headers `X-AI-Provider`, `X-AI-Model`, `X-AI-Key` + `{action, message?, document_text, selection?}` → `{answer, provider, model}` |
+| POST | `/api/v1/ai/describe-image` | los mismos headers + multipart (`image` + `context?`) → `{description, provider, model}` |
+
+**Dos formas de recibir la key** (`api/deps.py`, `resolve_credentials`): el header `X-AI-Key` (modo de headers) o la cookie sellada (modo de cookie, con `X-AI-Model` y `X-Aula-Clara`). Si llegan las dos, gana el header. Una cookie que no se puede abrir (vencida, manipulada, de otra `SEALING_KEY`) da 401 `ai_credentials_required` con `reason: session_expired`; la interfaz borra lo guardado y pide la key de nuevo.
+
+Las rutas de IA usan **la key y el modelo de cada persona** (ver [ADR 0002](adr/0002-api-key-por-usuario.md)). `api/deps.py` valida los headers y crea el proveedor en cada pedido (una dependencia con `yield` lo cierra al terminar, para liberar sus conexiones); la key no se guarda ni se loguea.
 
 `action` es un `Literal["free", "summarize", "key_concepts", "quiz", "simplify"]`. Todo esquema de entrada usa `extra="forbid"` y límites explícitos: el tamaño de `document_text` se valida contra `MAX_INPUT_CHARS` y la imagen, contra `MAX_IMAGE_BYTES`.
 
@@ -128,19 +134,40 @@ Los repositorios en memoria y la caché viven mientras viva el proceso: `deps.py
 | Se pasó el límite por IP | `RateLimitedError` (con el header `Retry-After`) | 429 `rate_limited` |
 | La imagen pesa más de 4 MB, o no es una imagen | `HTTPException` en `api/` (son errores de transporte) | 413 / 415 |
 | El payload no es válido | `RequestValidationError` | 422 `validation_error` |
-| El proveedor de IA da 429 o falla | **no es un error**: después de un reintento con backoff, el service usa el mock y responde 200 con `provider: "mock"` | 200 |
+| Faltan proveedor, key o modelo (o la sesión de la cookie venció: `reason: session_expired`) | `AICredentialsRequiredError` | 401 `ai_credentials_required` |
+| Pedido con la cookie sin el header `X-Aula-Clara` | `ForbiddenError` | 403 `forbidden` |
+| `POST /ai/session` sin `SEALING_KEY` en el servidor | `AISessionsDisabledError` | 503 `ai_sessions_disabled` |
+| El proveedor rechaza la key (o tiene un formato imposible) | `AIKeyInvalidError` | 401 `ai_key_invalid` |
+| Se agotó la cuota o el saldo de la key | `AIQuotaExceededError` (`reason`: `rate`, `daily` o `credit`; `retry_after_seconds` y el header `Retry-After` si el proveedor lo informa) | 429 `ai_quota_exceeded` |
+| La imagen o el texto superan el máximo del proveedor: 413, o la ventana de contexto del modelo | `AIInputTooLargeError` (`reason`: `size` o `context`) | 413 `ai_input_too_large` |
+| Los filtros de seguridad bloquearon el pedido o la respuesta | `AIContentBlockedError` | 422 `ai_content_blocked` |
+| El modelo contestó sin texto (`reason: length` = gastó todo el límite de salida «razonando») | `AIEmptyResponseError` | 502 `ai_response_empty` |
+| La cuenta no puede usar el modelo o la región (`reason`: `access` o `region`) | `AIPermissionDeniedError` | 403 `ai_permission_denied` |
+| El modelo no existe, fue dado de baja o la cuenta no tiene acceso | `AIModelNotFoundError` | 422 `ai_model_not_found` |
+| El modelo no lee la imagen o no admite su formato (solo al describir imágenes) | `AIImageRejectedError` | 422 `ai_image_rejected` |
+| Cualquier otro rechazo del proveedor (400/422) | `AIModelRejectedError` | 422 `ai_model_rejected` |
+| El proveedor no responde (`reason`: `overloaded`, `provider_error`, `unreachable`, `malformed`) | un reintento con backoff, **solo si falló en menos de 5 s**, y después `AIUnavailableError` | 503 `ai_unavailable` |
+| Se agotó `AI_TIMEOUT_SECONDS` (20 s) (`reason: timeout`) | sin reintento: otro intento igual de lento no entra en los 30 s de la función de Vercel | 503 `ai_unavailable` |
+| Un error de proveedor que nadie tradujo todavía | `AIUnavailableError` (nunca un 500 sin explicación) | 503 `ai_unavailable` |
 | Cualquier otra cosa | `Exception` | 500 `internal_error`, con `trace_id` |
 
+**Cómo se clasifican los errores de los proveedores** (`providers/llm/http_errors.py`, una sola vez para los cinco): manda el **código HTTP** y después el texto. Un 429 es cuota aunque el texto hable de la «API key», y un 403 que no es de la key es de permisos, no de credenciales. Si la clasificación falla, el error cae en una categoría genérica **con el mensaje del proveedor**, así la persona igual ve el motivo. Las clasificaciones por texto se basan en los mensajes que documentan los proveedores; no se probaron contra respuestas reales de cuota, modelo inexistente o contexto excedido (hacen falta keys con ese estado).
+
+**El mensaje del proveedor** (`provider_message`) se muestra a la persona solo después de pasar por `sanitize_message`: se reemplaza su key, se tachan restos que parezcan keys, se pasa a una sola línea y se corta a 300 caracteres. Para los 401 no se muestra ningún mensaje del proveedor.
+
+**Respuesta cortada:** si el modelo para por su límite de salida (2048 tokens) pero ya escribió algo, la respuesta llega con `truncated: true` y la interfaz lo avisa. Si no llegó a escribir nada, es `ai_response_empty`.
+
+**Qué no sale nunca en una respuesta de error:** la key. El `detail` es un texto fijo (proveedor, modelo y tipo de error, sin repetir el texto de la excepción) y el `reason` solo se reenvía si es una palabra simple. Como segunda barrera, la key del pedido en curso se tacha de cualquier línea de log (`observability/redaction.py`).
 ### 4.4 Configuración (`app/config.py`)
 
-`APP_ENV`, `APP_NAME`, `DOCS_ENABLED`, `LOG_LEVEL`, `CORS_ORIGINS`, `ERRORS_BASE_URL`, `AI_PROVIDER` (`auto | gemini | groq | mock`), `GEMINI_API_KEY: SecretStr | None`, `GEMINI_MODEL`, `GROQ_API_KEY: SecretStr | None`, `GROQ_MODEL`, `MAX_INPUT_CHARS`, `MAX_IMAGE_BYTES`, `RATE_LIMIT_PER_MIN`, `AI_CACHE_TTL_SECONDS`.
+`APP_ENV`, `APP_NAME`, `DOCS_ENABLED`, `LOG_LEVEL`, `CORS_ORIGINS`, `ERRORS_BASE_URL`, `MAX_INPUT_CHARS`, `MAX_IMAGE_BYTES`, `RATE_LIMIT_PER_MIN`, `AI_CACHE_TTL_SECONDS`, `AI_TIMEOUT_SECONDS` (20 s por defecto, máximo 25: con un posible reintento rápido, el peor caso es unos 26 s, dentro del `maxDuration` de 30 s), `SEALING_KEY` y `SEALING_KEY_PREVIOUS` (`SecretStr`, 32 bytes en base64: una clave mal formada hace fallar el arranque), `AI_SESSION_HOURS` (12) y `AI_SESSION_REMEMBER_DAYS` (30). En staging y prod, sin `SEALING_KEY` se registra una advertencia al arrancar.
 
-Las API keys son opcionales, a diferencia de lo que pide la skill para los secretos. Es una excepción a propósito: la definición de terminado exige que sin key todo siga andando en modo mock. Para que no falle en silencio, un `model_validator` exige la key y el modelo cuando `AI_PROVIDER` vale `gemini` o `groq`, y en staging y prod rechaza `*` en `CORS_ORIGINS`. Ningún identificador de modelo tiene default en el código.
+El servidor **no tiene API keys ni modelo de IA**: los trae cada persona en sus pedidos. Un `.env` viejo con `GEMINI_API_KEY` o `GROQ_MODEL` no rompe el arranque (`extra="ignore"`), pero esos valores ya no se usan. En staging y prod, un `model_validator` rechaza `*` en `CORS_ORIGINS`.
 
 ### 4.5 Tests
 
-- `tests/api/` usa `httpx.AsyncClient(transport=ASGITransport(app))`, con `AI_PROVIDER=mock` y `dependency_overrides` sobre el proveedor. Ningún test llama a un proveedor real.
-- `tests/unit/` cubre las funciones puras de `ai_rules.py` y prueba `AIService` con `create_autospec(LLMProvider, instance=True)`: un 429 del proveedor tiene que terminar en una respuesta del mock, y una respuesta en caché no debe volver a llamar al proveedor (`assert_not_awaited`).
+- `tests/api/` usa `httpx.AsyncClient(transport=ASGITransport(app))` y reemplaza `build_provider` por un proveedor falso: así se prueba la lectura real de los headers (falta de key, proveedor no admitido, modelo inválido) sin llamar a ningún modelo. Un test verifica que la key no aparece ni en la respuesta ni en los logs.
+- `tests/unit/` cubre las funciones puras de `ai_rules.py`, la clasificación de errores HTTP de cada proveedor (`httpx.MockTransport` y dobles del SDK de Gemini), el filtrado de modelos, y `AIService` con `create_autospec(LLMProvider, instance=True)`: un error transitorio se reintenta una vez, los errores de la persona (key, cuota, modelo) no se reintentan, y la caché se separa por key.
 - Todo eso corre junto con `uv run pytest`, `uv run mypy app`, `uv run ruff check` y `uv run lint-imports`.
 
 ## 5. Frontend
@@ -150,6 +177,7 @@ Las API keys son opcionales, a diferencia de lo que pide la skill para los secre
 ```text
 /                        → loader: redirige a /biblioteca si hay perfil guardado, si no a /perfil
 /perfil                  → wizard de onboarding (también se entra desde «👤 Perfil»)
+/ayuda/ia                → guía pública para conseguir la API key de cada proveedor (sin perfil)
 (pathless, middleware: requireProfile → sin perfil, redirige a /perfil?next=…)
   /biblioteca            → loader: documentos; action: subir, borrar
   /leer/:documentId      → loader: documento + contenido (404 si no existe)
@@ -170,7 +198,13 @@ Cada ruta es `lazy`, así que Vite genera un chunk por ruta: pdf.js y mammoth qu
 
 ### 5.3 IA en el cliente
 
-`features/assistant/api.ts` expone `chat()` y `describeImage()`, que pasan por `lib/http`. Si `VITE_AI_MODE=mock`, o si la request termina en `network`, `timeout` o `server`, usa `mock.ts`, que tiene las mismas respuestas del prototipo. Así, el build de Pages funciona 100 % estático. La respuesta siempre trae `provider`, y `ProviderBadge` muestra «respuesta simulada» cuando el valor es `mock`.
+`features/assistant/api.ts` expone `chat()`, `describeImage()` y `listModels()`, que pasan por `lib/http` y agregan los headers `X-AI-*` con lo que guarda `credentials.ts`. Sin credenciales, `chat()` lanza `MissingCredentialsError` sin llamar a la API.
+
+- **Credenciales** (`credentials.ts`): proveedor, key y modelo en `sessionStorage` (se borran al cerrar la pestaña) o en `localStorage` si la persona marca «Recordar en este dispositivo». Se leen con `useSyncExternalStore`.
+- **«Configurar IA»** (`AISettingsDialog.tsx`): elegir proveedor, pegar la key, «Probar key y ver modelos» (llama a `/ai/models`) y elegir el modelo. Solo se guarda una key que el proveedor aceptó. Al guardar, `session.ts` la **sella en la cookie** (`POST /ai/session`) y comprueba con `GET` que el navegador la devuelve; si no (servidor sin `SEALING_KEY`, cookie bloqueada, web y backend en sitios distintos), cae al modo de headers y lo explica. Con una key ya sellada, el diálogo no muestra nada secreto: deja cambiar el modelo (listando con la cookie), reemplazar la key o borrarla.
+- **Lo guardado en el navegador** (`credentials.ts`): en modo de cookie, solo `{provider, model, remember, sealed: true}`; en modo de headers, además `apiKey`. Una lectura nunca devuelve una key junto al aviso de sello.
+- **Errores:** `describeApiError` da un mensaje distinto para cada código (`ai_key_invalid`, `ai_quota_exceeded`, `ai_model_rejected`, …) y `needsAISetup` decide si se muestra el botón «Configurar IA» junto al mensaje. No hay respuestas simuladas.
+- `ProviderBadge` muestra proveedor y modelo de cada respuesta.
 
 ### 5.4 Accesibilidad (paridad con el prototipo)
 
@@ -178,34 +212,42 @@ Se mantiene todo lo del prototipo: el enlace "Saltar al contenido" en el layout,
 
 ## 6. Despliegue
 
+- **Headers de seguridad** (`vercel.json`): CSP estricta (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'`), `nosniff`, `Referrer-Policy: no-referrer` y `Permissions-Policy`. La CSP importa porque la key de cada persona vive en el navegador: un XSS podría robarla. Se probó en Chromium sirviendo `dist/` con los mismos headers: importar PDF y Word, chatear y describir imágenes no generan violaciones.
 - **Vercel**: FastAPI corre como Vercel Function y la SPA se sirve desde `frontend/dist`. Antes de escribir `vercel.json` hay que confirmar contra la guía oficial vigente tanto el entrypoint (`api/index.py` o `[tool.vercel] entrypoint` en `pyproject.toml`) como la instalación con `uv.lock`. `vercel-index` marca **tres cosas sin probar** que se validan en la fase 1 con un despliegue vacío: (1) el fallback de la SPA a `index.html`, (2) que `/api/*` llegue a FastAPI y (3) el rate limit, que en memoria es por instancia y por eso solo sirve como freno, no como límite estricto. Para operar Vercel se instala la skill oficial `vercel-cli`.
-- **GitHub Pages**: `pages.yml` hace el build con `base: '/<repo>/'` y `VITE_AI_MODE=mock`, y copia `index.html` a `404.html` para que funcionen las URLs profundas del router.
+- **GitHub Pages**: `pages.yml` hace el build con `base: '/<repo>/'` (y `VITE_API_URL` si está definida), y copia `index.html` a `404.html` para que funcionen las URLs profundas del router.
 
 ## 7. Plan por fases
 
 El plan sigue el de `instructions.md`, reordenado según el orden de construcción de `scaffolding-fastapi-backends`. Cada fase termina en verde antes de pasar a la siguiente.
 
 1. **Esqueleto** ✅. Monorepo, `.gitignore`, `.env`/`.env.example`, backend y frontend con sus chequeos. El despliegue vacío en Vercel quedó incluido en la fase 6, sin probar.
-2. **Frontend sin IA** ✅. Migración del prototipo a features y rutas con el mock local. Paridad visual y de accesibilidad, más un test de humo por ruta.
+2. **Frontend sin IA** ✅. Migración del prototipo a features y rutas. Paridad visual y de accesibilidad, más un test de humo por ruta.
 3. **Backend en capas** ✅. `profiles` y `documents`: schemas, models, repositorios en memoria, services y routers, con tests.
-4. **IA real** ✅ (probada con dobles; falta probar con keys reales). `LLMProvider` (Gemini, Groq y mock), prompts, rate limit, caché y fallback. Se conectan el chat y «Interpretar con IA». Los identificadores de modelo se verifican en la documentación oficial.
+4. **IA real** ✅. `LLMProvider` (Gemini, Groq y OpenRouter), prompts, rate limit, caché y reintento. Se conectan el chat y «Interpretar con IA».
+   - **4c. Key sellada en cookie, auditoría de dependencias** ✅ (2026-11-18). Ver ADR 0003. Probado en Chromium, contra el servidor de pruebas y contra el servidor de desarrollo de Vite.
+   - **4b. Key y modelo por persona** ✅ (2026-11-17). «Configurar IA», `/ai/models`, errores separados y CSP. Probado de punta a punta en Chromium con keys reales de Gemini (chat e imagen) y Groq (chat); OpenRouter, solo con dobles.
 5. **Documentos reales** ✅ (probada con un PDF y un DOCX generados; falta probar con archivos reales). pdf.js y mammoth en el cliente, imágenes embebidas con descripción por IA y un mensaje claro para PPTX y PDF escaneados.
-6. **Despliegue y cierre** ✅ (archivos escritos; el despliegue en Vercel y Pages no se probó). Vercel en producción, Pages en modo mock, README (incluido cómo pasar a PostgreSQL) y checklist de accesibilidad.
+6. **Despliegue y cierre** ✅ (archivos escritos; el despliegue en Vercel y Pages no se probó). Vercel en producción, Pages (necesita `VITE_API_URL` para la IA), README (incluido cómo pasar a PostgreSQL) y checklist de accesibilidad.
 
-## 8. Proveedor de IA (verificado el 2026-11-17)
+## 8. Proveedores de IA (actualizado el 2026-11-17)
 
-Se verificó en la documentación oficial de cada proveedor, no en sitios de terceros (regla 4.4 de las instrucciones).
+Cada persona elige proveedor y modelo y usa su propia key ([ADR 0002](adr/0002-api-key-por-usuario.md)). Los modelos **no se fijan en el código**: se listan en vivo desde la API del proveedor con la key de la persona, porque cambian seguido (por ejemplo, `llama-3.3-70b-versatile` ya no figura en Groq).
 
-| Rol | Proveedor y modelo | Por qué |
-|---|---|---|
-| **Principal** | Gemini API, `GEMINI_MODEL=gemini-3.5-flash-lite` | Es estable, gratuito, multimodal (cubre el chat y «Interpretar con IA») y no tiene fecha de baja anunciada. Es el reemplazo oficial de `gemini-2.5-flash` (que se da de baja el 1 de diciembre de 2026) y de `gemini-3.1-flash-lite` (que se da de baja el 7 de mayo de 2027). |
-| **Respaldo de texto** | Groq, `GROQ_MODEL=llama-3.3-70b-versatile` | Es un modelo de producción, compatible con la API de OpenAI y con buen español. La documentación no confirma que Groq tenga modelos con visión en producción, así que solo se usa para texto. |
-| **Último recurso** | Mock | Sin key, con `AI_PROVIDER=mock`, o si el proveedor da 429 o falla después de un reintento. Usa las respuestas del prototipo. |
+| Proveedor | Cliente | Lista de modelos | Imágenes |
+|---|---|---|---|
+| **Gemini** | SDK `google-genai` | `models.list`, filtrando los que soportan `generateContent` y descartando los de imagen, audio, embeddings y agentes | los `gemini-*` sí; de Gemma no hay dato |
+| **Groq** | `httpx`, API compatible con OpenAI | `GET /openai/v1/models`: solo entrada y salida de texto, activos y sin modelos de moderación (`guard`) | según `input_modalities` |
+| **OpenRouter** | `httpx`, API compatible con OpenAI | `GET /api/v1/models` (público: la key se valida antes con `GET /key`), marcando los gratuitos (precio 0); la interfaz los muestra primero | según `architecture.input_modalities` |
+| **Mistral AI** | `httpx`, API compatible con OpenAI | `GET /v1/models`, con `capabilities.completion_chat` | según `capabilities.vision`; la imagen va como texto en `image_url` |
+| **NVIDIA Build** | `httpx`, API compatible con OpenAI | `GET /v1/models` (público y sin modalidades): se descartan por nombre embeddings, moderación, rerankers y detectores. **No valida la key** (`key_verified: false`) | por nombre (`-vl`, `vision`, `omni`); si no, sin dato |
 
-- **Límites del free tier:** la documentación oficial no publica los números de requests por día del nivel gratuito de cada modelo. Se consultan en vivo en [AI Studio → Rate limit](https://aistudio.google.com/rate-limit) y en la página de límites de la cuenta de Groq. Un reporte del foro de Google habla de alrededor de 500 requests por día para Flash-Lite y de 20 para Flash. Por eso se eligió Flash-Lite, y por eso hacen falta el rate limit por IP y la caché.
-- **SDK:** `google-genai` (el SDK anterior, `google-generativeai`, está deprecado). La documentación recomienda la *Interactions API* para apps nuevas. Groq tiene su propio SDK y también acepta el cliente de OpenAI con `base_url=https://api.groq.com/openai/v1`. La elección final se confirma en la fase 4.
-- **Privacidad:** en el nivel gratuito de Gemini, el contenido enviado se usa para mejorar los productos de Google (en el nivel pago, no). Por eso la biblioteca muestra el aviso «No subas documentos con datos personales», y el README lo explica.
-- **Configuración:** las keys van solo en `.env`, que no se versiona (y en Vercel, en Environment Variables). Los identificadores de modelo van en `.env` y nunca en el código. Si hay una key sin modelo, el backend no arranca.
+- **Diferencias entre proveedores:** viven en `SPECS` (`openai_compatible.py`): URL base, cómo se valida la key, si informa modelos gratuitos y el formato de imagen.
+- **Guía para conseguir la key:** la ruta pública `/ayuda/ia` (`AIKeysGuide.tsx`) explica, para cada proveedor, cómo registrarse, iniciar sesión y crear la key. Los textos están en `providers.ts`, junto a la ficha de cada proveedor.
+- **URL base cerrada:** la persona elige un proveedor, nunca una URL. Así el backend no puede usarse para pedir otras direcciones (SSRF).
+- **Límites del free tier:** cada proveedor los muestra en la cuenta de la persona ([AI Studio](https://aistudio.google.com/rate-limit), Groq, OpenRouter). El límite por IP y la caché siguen, porque cada consulta también gasta tiempo de función en Vercel.
+- **SDK:** `google-genai` (el anterior, `google-generativeai`, está deprecado). Groq y OpenRouter comparten `OpenAICompatibleProvider`.
+- **Privacidad:** en los niveles gratuitos, el proveedor puede usar el contenido enviado para mejorar sus productos. Por eso la biblioteca muestra el aviso «No subas documentos con datos personales», y «Configurar IA» explica adónde viaja la key.
+- **Configuración:** el servidor no tiene keys ni modelos de IA. Tiene un secreto propio, `SEALING_KEY`, para sellar la key de cada persona en una cookie `HttpOnly`. Sin él, la key vive en el navegador y viaja en `X-AI-Key`. Ver [docs/seguridad.md](seguridad.md).
 
 ## 9. Chequeos obligatorios antes de integrar (no hay CI)
 
@@ -214,6 +256,9 @@ Se verificó en la documentación oficial de cada proveedor, no en sitios de ter
 uv run pytest && uv run mypy app tests && uv run ruff check && uv run ruff format --check && uv run lint-imports
 # frontend/
 npm run typecheck && npm run lint && npm run format:check && npm test && npm run build
+# dependencias (ver docs/seguridad.md)
+npm run audit:prod   # en frontend/
+uv export --no-dev --no-hashes --no-emit-project | uvx pip-audit -r /dev/stdin   # en backend/
 ```
 
 ## 10. Decisiones tomadas (2026-11-17)
@@ -222,18 +267,21 @@ npm run typecheck && npm run lint && npm run format:check && npm test && npm run
 2. **No hay CI.** Los chequeos de la sección 9 son obligatorios antes de integrar.
 3. **El texto extraído va en IndexedDB.** Las preferencias y los metadatos siguen en `localStorage`.
 4. **URLs limpias en GitHub Pages**, con `createBrowserRouter` y una copia de `index.html` como `404.html`.
-5. **Todo secreto y toda configuración de entorno van en `.env`**, con `.env.example` como referencia versionada.
+5. **Toda configuración de entorno va en `.env`**, con `.env.example` como referencia versionada. Desde la decisión 6, el servidor no tiene secretos de IA.
+6. **Cada persona usa su propia API key y elige el modelo** (Gemini, Groq, OpenRouter, Mistral o NVIDIA Build). Se retiraron las keys y los modelos del `.env`. Ver [ADR 0002](adr/0002-api-key-por-usuario.md).
+7. **La key va sellada en una cookie `HttpOnly`** (2026-11-18), con el modo de headers como respaldo. Ver [ADR 0003](adr/0003-key-sellada-en-cookie.md) y [docs/seguridad.md](seguridad.md).
 
 ## 11. Qué cambió respecto del plan inicial
 
 | Tema | Plan | Lo construido | Por qué |
 |---|---|---|---|
-| Error 429 del proveedor | cae al mock | cae al siguiente proveedor y, al final, al mock | Con Gemini y Groq configurados, probar Groq antes del mock da una respuesta real |
-| Límite por IP excedido (429 propio) | — | **no** cae al mock: el cliente muestra «esperá N segundos» | Si cayera al mock, el límite no frenaría nada y la persona no sabría por qué la respuesta es simulada |
+| Error 429 del proveedor | cae al mock | cae al siguiente proveedor; si no queda ninguno, 503 `ai_unavailable` | Se eliminó el mock a pedido: las respuestas siempre vienen de un modelo real |
+| Límite por IP excedido (429 propio) | — | el cliente muestra «esperá N segundos» | El límite protege la cuota gratuita y la persona sabe cuánto esperar |
 | Chat | `useActionState` | hook `useChat` con estado local | La mutación no cambia datos de ningún loader y necesita el historial de mensajes |
 | Importar y avanzar el progreso | `action` de ruta | funciones de `libraryApi` | La importación muestra el avance por pasos, y el progreso se guarda con cada scroll |
 | `GET /profiles` | lo consume el frontend | existe y funciona, pero el frontend usa su propia copia | Los perfiles tienen que funcionar sin backend (Pages); el endpoint demuestra la arquitectura |
-| Proveedor de Groq | SDK | `httpx` contra la API compatible con OpenAI | Un SDK menos que empaquetar en la función de Vercel |
+| Proveedor de Groq | SDK | `OpenAICompatibleProvider` con `httpx` (también sirve para OpenRouter) | Un SDK menos que empaquetar en la función de Vercel |
+| Keys de IA | en el `.env` del servidor, con cadena Gemini → Groq | la key y el modelo de cada persona, en headers | El servicio en Vercel no depende de una cuota única; ver ADR 0002 |
 | Contexto del asistente | «sección visible y selección» | el comienzo del documento (hasta `MAX_INPUT_CHARS`) y la selección | Elegir la sección visible agrega complejidad; queda como mejora |
 | Figuras de PDF | en su posición | al final de su página | pdf.js no entrega la posición exacta de las imágenes |
 | Entrypoint de Vercel | `api/index.py` importando `backend.app.main` | `api/index.py` agrega `backend/` al path | Los imports del backend son `app.*`, igual que en local |

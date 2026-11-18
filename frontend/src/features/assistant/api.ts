@@ -1,36 +1,51 @@
 import { isApiRequestError, request } from "@/lib/http";
 
-import { type ChatAction, mockChat, mockDescription } from "./mock";
+import { aiCredentials } from "./credentials";
+import { MissingCredentialsError } from "./errors";
+import { COOKIE_MODE_HEADER } from "./session";
+import type { ProviderId } from "./providers";
 
-export type Provider = "gemini" | "groq" | "mock";
+export type ChatAction = "free" | "summarize" | "key_concepts" | "quiz" | "simplify";
+export type Provider = ProviderId;
 
 export interface AIAnswer {
   text: string;
   provider: Provider;
+  model: string;
+  /** El modelo cortó la respuesta por su límite de largo: la interfaz lo avisa. */
+  truncated: boolean;
 }
 
-/** `mock` = sitio 100 % estático (GitHub Pages): ni siquiera se intenta llamar a la API. */
-const forcedMock = (): boolean => import.meta.env.VITE_AI_MODE === "mock";
-
-/** Si la API no responde (red, tiempo agotado, 5xx) se usa el mock local; el resto de errores sí se muestran. */
-function shouldFallBack(error: unknown): boolean {
-  if (!isApiRequestError(error)) return true;
-  return ["network", "timeout", "server", "unknown"].includes(error.error.kind);
+export interface ModelOption {
+  id: string;
+  name: string;
+  supportsImages: boolean | null;
+  free: boolean | null;
 }
 
-/** Mensaje claro para los errores que NO caen al mock (límite de uso, validación). */
-export function describeApiError(error: unknown): string {
-  if (isApiRequestError(error)) {
-    if (error.error.kind === "rate_limited") {
-      const wait = error.error.retryAfterMs
-        ? ` Probá de nuevo en ${Math.ceil(error.error.retryAfterMs / 1000)} segundos.`
-        : "";
-      return `Hiciste muchas consultas seguidas.${wait}`;
-    }
-    if (error.error.kind === "validation")
-      return "No pudimos procesar esa consulta. Probá con otra pregunta.";
+/** Headers de la consulta: en modo de cookie la key no va (la pone el servidor al abrir la cookie). */
+function credentialHeaders(): Record<string, string> {
+  const c = aiCredentials.get();
+  if (!c) throw new MissingCredentialsError();
+  if (c.sealed) return { ...COOKIE_MODE_HEADER, "X-AI-Model": c.model };
+  return { "X-AI-Provider": c.provider, "X-AI-Model": c.model, "X-AI-Key": c.apiKey ?? "" };
+}
+
+/**
+ * Si el servidor dice que la sesión de la cookie venció o no es válida, lo guardado acá ya no sirve: se
+ * borra, así el panel vuelve a pedir la key en vez de seguir mostrando una configuración que no anda.
+ */
+async function withSessionCheck<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    const lost =
+      isApiRequestError(error) &&
+      "problem" in error.error &&
+      error.error.problem?.code === "ai_credentials_required";
+    if (lost && aiCredentials.get()?.sealed) aiCredentials.clear();
+    throw error;
   }
-  return "Algo salió mal con el asistente. Probá de nuevo.";
 }
 
 interface ChatInput {
@@ -40,53 +55,101 @@ interface ChatInput {
   selection?: string | undefined;
 }
 
-export async function chat(input: ChatInput, signal?: AbortSignal): Promise<AIAnswer> {
-  const fallback = (): AIAnswer => ({
-    text: mockChat(input.action, input.selection ?? input.message ?? ""),
-    provider: "mock",
-  });
-  if (forcedMock()) return fallback();
-  try {
-    const data = await request<{ answer: string; provider: Provider }>({
-      method: "POST",
-      url: "/ai/chat",
-      data: {
-        action: input.action,
-        message: input.message,
-        document_text: input.documentText,
-        selection: input.selection,
-      },
-      ...(signal ? { signal } : {}),
-    });
-    return { text: data.answer, provider: data.provider };
-  } catch (error) {
-    if (shouldFallBack(error) && !(isApiRequestError(error) && error.error.kind === "canceled"))
-      return fallback();
-    throw error;
-  }
+export function chat(input: ChatInput, signal?: AbortSignal): Promise<AIAnswer> {
+  return withSessionCheck(() => doChat(input, signal));
 }
 
-export async function describeImage(
-  image: Blob,
-  context: string,
-  isSampleChart: boolean,
-  signal?: AbortSignal,
-): Promise<AIAnswer> {
-  const fallback = (): AIAnswer => ({ text: mockDescription(isSampleChart), provider: "mock" });
-  if (forcedMock()) return fallback();
+async function doChat(input: ChatInput, signal?: AbortSignal): Promise<AIAnswer> {
+  const headers = credentialHeaders();
+  const data = await request<{
+    answer: string;
+    provider: Provider;
+    model: string;
+    truncated?: boolean;
+  }>({
+    method: "POST",
+    url: "/ai/chat",
+    headers,
+    data: {
+      action: input.action,
+      message: input.message,
+      document_text: input.documentText,
+      selection: input.selection,
+    },
+    ...(signal ? { signal } : {}),
+  });
+  return {
+    text: data.answer,
+    provider: data.provider,
+    model: data.model,
+    truncated: data.truncated === true,
+  };
+}
+
+export function describeImage(image: Blob, context: string, signal?: AbortSignal): Promise<AIAnswer> {
+  return withSessionCheck(() => doDescribeImage(image, context, signal));
+}
+
+async function doDescribeImage(image: Blob, context: string, signal?: AbortSignal): Promise<AIAnswer> {
+  const headers = credentialHeaders();
   const form = new FormData();
   form.append("image", image, "imagen.jpg");
   form.append("context", context);
-  try {
-    const data = await request<{ description: string; provider: Provider }>({
-      method: "POST",
-      url: "/ai/describe-image",
-      data: form,
-      ...(signal ? { signal } : {}),
-    });
-    return { text: data.description, provider: data.provider };
-  } catch (error) {
-    if (shouldFallBack(error)) return fallback();
-    throw error;
-  }
+  const data = await request<{
+    description: string;
+    provider: Provider;
+    model: string;
+    truncated?: boolean;
+  }>({
+    method: "POST",
+    url: "/ai/describe-image",
+    headers,
+    data: form,
+    ...(signal ? { signal } : {}),
+  });
+  return {
+    text: data.description,
+    provider: data.provider,
+    model: data.model,
+    truncated: data.truncated === true,
+  };
+}
+
+export interface ModelCatalog {
+  models: ModelOption[];
+  /** false: el proveedor no permite comprobar la key de antemano (NVIDIA Build). */
+  keyVerified: boolean;
+}
+
+/**
+ * Valida la key (si el proveedor lo permite) y trae los modelos que puede usar, sin guardarla.
+ * Sin `apiKey` usa la key sellada en la cookie (la persona ya la guardó y la página no puede leerla).
+ */
+export async function listModels(
+  provider: Provider,
+  apiKey?: string,
+  signal?: AbortSignal,
+): Promise<ModelCatalog> {
+  const data = await request<{
+    key_verified: boolean;
+    models: Array<{ id: string; name: string; supports_images: boolean | null; free: boolean | null }>;
+  }>({
+    method: "GET",
+    url: "/ai/models",
+    // Cada intento consulta al proveedor (y cuenta para el límite por IP): un timeout no se repite solo.
+    retry: false,
+    headers: apiKey
+      ? { "X-AI-Provider": provider, "X-AI-Key": apiKey.trim() }
+      : { ...COOKIE_MODE_HEADER, "X-AI-Provider": provider },
+    ...(signal ? { signal } : {}),
+  });
+  return {
+    keyVerified: data.key_verified,
+    models: data.models.map((m) => ({
+      id: m.id,
+      name: m.name,
+      supportsImages: m.supports_images,
+      free: m.free,
+    })),
+  };
 }

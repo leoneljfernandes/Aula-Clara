@@ -55,8 +55,19 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  return (await fetch(dataUrl)).blob();
+/**
+ * Decodifica un `data:` URL sin `fetch`: la CSP de producción (`connect-src 'self'`) bloquea `fetch` de
+ * URLs `data:`, y así las figuras de Word y «Interpretar con IA» fallarían en Vercel.
+ */
+export function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const match = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(dataUrl);
+  if (!match) return Promise.reject(new Error("not a data URL"));
+  const [, mime = "", isBase64, payload = ""] = match;
+  if (!isBase64) return Promise.resolve(new Blob([decodeURIComponent(payload)], { type: mime }));
+  const binary = atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return Promise.resolve(new Blob([bytes], { type: mime }));
 }
 
 /** Rasteriza un <svg> del DOM (el gráfico del documento de ejemplo) para poder enviarlo a la IA. */

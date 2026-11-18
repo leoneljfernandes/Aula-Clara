@@ -7,9 +7,8 @@ async def test_live_responds_ok(client: AsyncClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
-async def test_ready_reports_mock_provider_without_keys(client: AsyncClient) -> None:
+async def test_ready_does_not_depend_on_ai_keys(client: AsyncClient) -> None:
     response = await client.get("/api/health/ready")
     assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "ok"
-    assert body["ai_provider"] == "mock"
+    assert response.json()["status"] == "ok"
+    assert "ai_provider" not in response.json()  # las keys son de cada usuario, no del servidor

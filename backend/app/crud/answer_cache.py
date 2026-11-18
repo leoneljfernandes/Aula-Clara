@@ -1,6 +1,8 @@
 import time
 from collections import OrderedDict
 
+from app.models import AIAnswer
+
 
 class AnswerCache:
     """Caché en memoria con TTL y tope de entradas (protege la cuota gratuita de IA)."""
@@ -8,10 +10,9 @@ class AnswerCache:
     def __init__(self, ttl_seconds: int, max_entries: int = 256) -> None:
         self._ttl = ttl_seconds
         self._max = max_entries
-        self._items: OrderedDict[str, tuple[float, tuple[str, str]]] = OrderedDict()
+        self._items: OrderedDict[str, tuple[float, AIAnswer]] = OrderedDict()
 
-    def get(self, key: str) -> tuple[str, str] | None:
-        """Devuelve (texto, proveedor que respondió)."""
+    def get(self, key: str) -> AIAnswer | None:
         entry = self._items.get(key)
         if entry is None:
             return None
@@ -21,7 +22,7 @@ class AnswerCache:
             return None
         return value
 
-    def set(self, key: str, value: tuple[str, str]) -> None:
+    def set(self, key: str, value: AIAnswer) -> None:
         if self._ttl <= 0:
             return
         self._items[key] = (time.monotonic() + self._ttl, value)

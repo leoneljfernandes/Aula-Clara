@@ -1,6 +1,6 @@
 # Despliegue opcional del FRONTEND a GitHub Pages.
-# Modo por defecto: demo 100 % estática (IA simulada). Para usar el backend de Vercel, definí la variable
-# de repositorio VITE_API_URL (Settings → Secrets and variables → Actions → Variables) y sumá el dominio de
+# Sin backend la interfaz carga, pero el asistente no responde: no hay IA simulada. Para usarlo definí la
+# variable de repositorio VITE_API_URL con la URL del backend (Settings → Secrets and variables → Actions → Variables) y sumá el dominio de
 # Pages (https://<usuario>.github.io) a CORS_ORIGINS en Vercel.
 name: Publicar en GitHub Pages
 
@@ -37,7 +37,6 @@ jobs:
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
           VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_AI_MODE: ${{ vars.VITE_API_URL != '' && 'api' || 'mock' }}
         run: |
           npm ci
           npm run build

@@ -3,9 +3,8 @@ import os
 # Antes de importar la app: Settings valida al importarse app.main.
 os.environ["APP_ENV"] = "test"  # asignación directa: un APP_ENV del shell no debe elegir otro stage
 os.environ.setdefault("ERRORS_BASE_URL", "https://errors.test.invalid")
-os.environ["AI_PROVIDER"] = "mock"  # ningún test llama a un proveedor real
-for key in ("GEMINI_API_KEY", "GEMINI_MODEL", "GROQ_API_KEY", "GROQ_MODEL"):
-    os.environ.pop(key, None)
+# Clave de prueba para la key sellada (la de producción va en el entorno del servidor).
+os.environ["SEALING_KEY"] = "KmtOxkU7J3d7ZtXbA3Nq0m1y9j5pQe2sVcHfWl8uRzk="
 
 from collections.abc import AsyncIterator
 

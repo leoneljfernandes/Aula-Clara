@@ -2,16 +2,14 @@ import "@testing-library/jest-dom/vitest";
 import "fake-indexeddb/auto";
 
 import { cleanup } from "@testing-library/react";
-import { afterEach, beforeEach, vi } from "vitest";
-
-// Sin backend en los tests: la IA responde con el mock local.
-beforeEach(() => {
-  vi.stubEnv("VITE_AI_MODE", "mock");
-});
+import { afterEach, vi } from "vitest";
 
 afterEach(() => {
   cleanup();
-  if (typeof window !== "undefined") window.localStorage.clear();
+  if (typeof window !== "undefined") {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  }
   vi.unstubAllEnvs();
   vi.useRealTimers();
 });

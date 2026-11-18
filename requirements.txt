@@ -24,7 +24,9 @@ charset-normalizer==3.5.2
 click==8.5.1
     # via uvicorn
 cryptography==50.0.2
-    # via google-auth
+    # via
+    #   aula-clara-api
+    #   google-auth
 distro==1.9.0
     # via google-genai
 fastapi==0.163.2

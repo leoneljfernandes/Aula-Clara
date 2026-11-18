@@ -5,51 +5,11 @@ from pydantic import ValidationError
 
 from app.config import ROOT_DIR, Settings
 
-# AI_PROVIDER explícito: el conftest exporta AI_PROVIDER=mock y el entorno le gana al default.
-BASE: dict[str, Any] = {"ERRORS_BASE_URL": "https://errors.test.invalid", "AI_PROVIDER": "auto"}
+BASE: dict[str, Any] = {"ERRORS_BASE_URL": "https://errors.test.invalid"}
 
 
 def _settings(**overrides: Any) -> Settings:
     return Settings(_env_file=None, **{**BASE, **overrides})
-
-
-def test_auto_without_keys_falls_back_to_mock() -> None:
-    assert _settings(AI_PROVIDER="auto").active_ai_provider == "mock"
-
-
-def test_auto_prefers_gemini_over_groq() -> None:
-    settings = _settings(
-        AI_PROVIDER="auto", GEMINI_API_KEY="g", GEMINI_MODEL="m1", GROQ_API_KEY="q", GROQ_MODEL="m2"
-    )
-    assert settings.active_ai_provider == "gemini"
-
-
-def test_auto_uses_groq_when_only_groq_is_configured() -> None:
-    assert _settings(GROQ_API_KEY="q", GROQ_MODEL="m2").active_ai_provider == "groq"
-
-
-def test_explicit_mock_wins_even_with_keys() -> None:
-    settings = _settings(AI_PROVIDER="mock", GEMINI_API_KEY="g", GEMINI_MODEL="m1")
-    assert settings.active_ai_provider == "mock"
-
-
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        {"GEMINI_API_KEY": "g"},  # key sin modelo
-        {"GROQ_API_KEY": "q"},
-        {"AI_PROVIDER": "gemini"},  # proveedor forzado sin configurar
-        {"AI_PROVIDER": "groq", "GROQ_MODEL": "m2"},
-    ],
-)
-def test_incomplete_ai_config_fails_at_startup(overrides: dict[str, Any]) -> None:
-    with pytest.raises(ValidationError):
-        _settings(**overrides)
-
-
-def test_api_keys_never_appear_in_repr() -> None:
-    settings = _settings(GEMINI_API_KEY="super-secret-key", GEMINI_MODEL="m1")
-    assert "super-secret-key" not in repr(settings)
 
 
 def test_prod_rejects_wildcard_cors() -> None:
@@ -57,10 +17,59 @@ def test_prod_rejects_wildcard_cors() -> None:
         _settings(APP_ENV="prod", CORS_ORIGINS=["*"])
 
 
-def test_env_example_is_valid_and_has_empty_secrets() -> None:
-    # El archivo de referencia versionado tiene que arrancar tal cual (modo mock, sin keys).
+def test_old_server_ai_keys_are_ignored() -> None:
+    # Un .env viejo con keys no rompe el arranque, pero el servidor ya no las usa.
+    settings = _settings(GEMINI_API_KEY="secreto", GEMINI_MODEL="m1", AI_PROVIDER="gemini")
+    assert not hasattr(settings, "GEMINI_API_KEY")
+    assert "secreto" not in repr(settings)
+
+
+def test_env_example_is_valid_and_has_no_ai_secrets() -> None:
+    # El archivo de referencia versionado tiene que arrancar tal cual y no pedir ninguna key.
     settings = Settings(_env_file=ROOT_DIR / ".env.example")
-    assert settings.GEMINI_API_KEY is None
-    assert settings.GROQ_API_KEY is None
-    assert settings.active_ai_provider == "mock"
     assert settings.CORS_ORIGINS == ["http://localhost:5173"]
+    example = (ROOT_DIR / ".env.example").read_text(encoding="utf-8")
+    for name in ("GEMINI_API_KEY=", "GROQ_API_KEY=", "GEMINI_MODEL=", "GROQ_MODEL=", "AI_PROVIDER="):
+        assert name not in example
+
+
+def test_ai_timeout_must_fit_in_the_vercel_function_duration() -> None:
+    assert _settings().AI_TIMEOUT_SECONDS == 20
+    with pytest.raises(ValidationError):
+        _settings(AI_TIMEOUT_SECONDS=30)
+
+
+VALID_SEAL = "KmtOxkU7J3d7ZtXbA3Nq0m1y9j5pQe2sVcHfWl8uRzk="
+
+
+def test_sealing_is_off_without_a_key_and_on_with_a_valid_one() -> None:
+    assert (
+        _settings(SEALING_KEY=None).sealing_enabled is False
+    )  # None explícito: el entorno de tests define una
+    assert _settings(SEALING_KEY=VALID_SEAL).sealing_enabled is True
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"SEALING_KEY": "demasiado-corta"},
+        {"SEALING_KEY": "no es base64 !!!"},
+        {"SEALING_KEY": VALID_SEAL, "SEALING_KEY_PREVIOUS": "mala"},
+        {"SEALING_KEY": None, "SEALING_KEY_PREVIOUS": VALID_SEAL},  # rotar sin tener la clave nueva
+    ],
+)
+def test_a_bad_sealing_key_fails_at_startup(overrides: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        _settings(**overrides)
+
+
+def test_the_sealing_key_never_appears_in_repr() -> None:
+    assert VALID_SEAL not in repr(_settings(SEALING_KEY=VALID_SEAL))
+
+
+def test_session_lifetimes_have_sane_bounds() -> None:
+    settings = _settings()
+    assert (settings.AI_SESSION_HOURS, settings.AI_SESSION_REMEMBER_DAYS) == (12, 30)
+    for bad in ({"AI_SESSION_HOURS": 0}, {"AI_SESSION_HOURS": 100}, {"AI_SESSION_REMEMBER_DAYS": 365}):
+        with pytest.raises(ValidationError):
+            _settings(**bad)

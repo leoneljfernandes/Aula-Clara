@@ -6,6 +6,70 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { routes } from "@/router";
 
+// Sin backend en los tests: el cliente HTTP devuelve respuestas fijas de "Gemini".
+const { request } = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock("@/lib/http", async (original) => ({
+  ...(await original<typeof import("@/lib/http")>()),
+  request,
+}));
+
+const MODEL = "gemini-3.5-flash-lite";
+function fakeBackend({
+  url,
+  method,
+  data,
+}: {
+  url: string;
+  method?: string;
+  data?: { action?: string; message?: string };
+}) {
+  if (url === "/ai/session")
+    return Promise.resolve(
+      method === "DELETE" ? undefined : { provider: "gemini", remember: false, expires_in_seconds: 43_200 },
+    );
+  if (url === "/ai/models")
+    return Promise.resolve({
+      provider: "gemini",
+      key_verified: true,
+      models: [{ id: MODEL, name: "Gemini 3.5 Flash Lite", supports_images: true, free: null }],
+    });
+  if (!data) return Promise.reject(new Error(`pedido inesperado: ${method} ${url}`));
+  if (url === "/ai/describe-image")
+    return Promise.resolve({
+      description: "Un gráfico de barras de prueba.",
+      provider: "gemini",
+      model: MODEL,
+    });
+  if (data.action === "summarize")
+    return Promise.resolve({ answer: "Resumen de esta página (prueba)", provider: "gemini", model: MODEL });
+  return Promise.resolve({ answer: `Respuesta a: ${data.message ?? ""}`, provider: "gemini", model: MODEL });
+}
+
+beforeEach(() => {
+  request.mockReset();
+  request.mockImplementation(fakeBackend);
+});
+
+const withAI = (): void => {
+  window.sessionStorage.setItem(
+    "aulaclara.ai",
+    JSON.stringify({ provider: "gemini", apiKey: "key-de-prueba-123", model: MODEL, remember: false }),
+  );
+};
+
+/** Una key ya sellada en la cookie: acá solo quedan proveedor y modelo. */
+const withSealedAI = (provider = "gemini"): void => {
+  window.sessionStorage.setItem(
+    "aulaclara.ai",
+    JSON.stringify({ provider, model: MODEL, remember: false, sealed: true }),
+  );
+};
+
+const calls = (url: string, method?: string) =>
+  request.mock.calls
+    .map(([c]) => c as { url: string; method?: string; headers?: Record<string, string>; data?: unknown })
+    .filter((c) => c.url === url && (method === undefined || c.method === method));
+
 // jsdom no rasteriza SVG: se simula la imagen que saldría del gráfico.
 vi.mock("@/lib/extractors", async (original) => ({
   ...(await original<typeof import("@/lib/extractors")>()),
@@ -116,12 +180,22 @@ describe("biblioteca", () => {
     await user.click(await screen.findByRole("button", { name: "Probar con un archivo de ejemplo" }));
     expect(await screen.findByText(/Extrayendo texto/)).toBeInTheDocument();
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/leer\/u/), { timeout: 5_000 });
-    expect(await h1()).toHaveTextContent("Accesibilidad digital en la educación superior");
+    // Se espera el título del lector por nombre: h1() podría devolver todavía el de la biblioteca
+    // mientras carga la ruta lazy del lector (carrera que hacía intermitente este test).
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: /Accesibilidad digital en la educación superior/,
+      }),
+    ).toBeInTheDocument();
   }, 10_000);
 });
 
 describe("lector", () => {
-  beforeEach(() => withProfile());
+  beforeEach(() => {
+    withProfile();
+    withAI();
+  });
 
   it("muestra las 3 columnas: accesibilidad, documento y asistente", async () => {
     renderAt("/leer/d1");
@@ -138,20 +212,20 @@ describe("lector", () => {
     expect(await h1()).toHaveTextContent("No encontramos esta página");
   });
 
-  it("«Resumir esta página» responde con el mock y lo indica", async () => {
+  it("«Resumir esta página» muestra la respuesta del modelo y su nombre", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");
     await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
     const log = screen.getByRole("log");
-    await waitFor(() => expect(log).toHaveTextContent("Resumen de esta página"));
-    expect(log).toHaveTextContent("Respuesta simulada");
+    await waitFor(() => expect(log).toHaveTextContent("Resumen de esta página (prueba)"));
+    expect(log).toHaveTextContent(`Respuesta de IA (Google Gemini · ${MODEL})`);
   });
 
-  it("una pregunta libre se contesta con el texto del documento", async () => {
+  it("una pregunta libre se envía al asistente y se muestra su respuesta", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");
     await user.type(await screen.findByLabelText("Escribí tu pregunta"), "¿Qué dice la ley?{Enter}");
-    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent(/Ley 26\.653 obliga/));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("Respuesta a: ¿Qué dice la ley?"));
   });
 
   it("«Interpretar con IA» abre un diálogo con la descripción, y Esc lo cierra devolviendo el foco", async () => {
@@ -161,7 +235,7 @@ describe("lector", () => {
     await user.click(trigger);
     const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
     expect(dialog).toHaveTextContent(/gráfico de barras/i);
-    expect(dialog).toHaveTextContent("Respuesta simulada");
+    expect(dialog).toHaveTextContent(`Respuesta de IA (Google Gemini · ${MODEL})`);
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
@@ -193,5 +267,435 @@ describe("lector", () => {
     window.localStorage.setItem("aulaclara.settings", JSON.stringify({ audioFocus: true }));
     renderAt("/leer/d1");
     expect(await screen.findByRole("button", { name: /Escuchar este documento/ })).toBeInTheDocument();
+  });
+});
+
+describe("IA con la key de cada persona", () => {
+  beforeEach(() => withProfile());
+
+  it("sin key, el panel pide configurarla y una consulta no llega al servidor", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    const log = screen.getByRole("log");
+    await waitFor(() => expect(log).toHaveTextContent("cargá tu API key"));
+    expect(within(log).getByRole("button", { name: "Configurar IA" })).toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("«Configurar IA» prueba la key, la sella en una cookie y la página no se queda con ella", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+    await user.click(within(dialog).getByRole("radio", { name: /Groq/ }));
+    await user.type(within(dialog).getByLabelText(/Tu API key de Groq/), "gsk_key-de-prueba");
+    await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
+    await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent("Key válida"));
+    // La prueba usa el modo de headers: la key viaja una vez, antes de guardarla.
+    expect(calls("/ai/models")[0]?.headers).toEqual({
+      "X-AI-Provider": "groq",
+      "X-AI-Key": "gsk_key-de-prueba",
+    });
+    expect(within(dialog).getByLabelText("3. Modelo")).toHaveValue(MODEL);
+    await user.click(within(dialog).getByRole("button", { name: "Guardar" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(`Groq · ${MODEL}`)).toBeInTheDocument();
+    // Se selló: POST con la key y GET para comprobar que la cookie vuelve.
+    expect(calls("/ai/session", "POST")[0]?.data).toEqual({
+      provider: "groq",
+      api_key: "gsk_key-de-prueba",
+      remember: false,
+    });
+    expect(calls("/ai/session", "GET")).toHaveLength(1);
+    // Lo guardado en el navegador no tiene la key.
+    const stored = window.sessionStorage.getItem("aulaclara.ai") ?? "";
+    expect(JSON.parse(stored)).toEqual({ provider: "groq", model: MODEL, remember: false, sealed: true });
+    expect(stored).not.toContain("gsk_key-de-prueba");
+    expect(window.localStorage.getItem("aulaclara.ai")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("Resumen de esta página (prueba)"));
+    // La consulta no lleva la key: la pone el servidor al abrir la cookie.
+    expect(calls("/ai/chat")[0]?.headers).toEqual({ "X-Aula-Clara": "1", "X-AI-Model": MODEL });
+  });
+
+  it("una key rechazada se explica sin guardar nada", async () => {
+    const { ApiRequestError } = await import("@/lib/http");
+    request.mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: "unauthorized",
+        problem: { title: "x", status: 401, code: "ai_key_invalid" },
+      }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+    await user.type(within(dialog).getByLabelText(/Tu API key de Google Gemini/), "key-mala-123");
+    await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
+    await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent("rechazó tu API key"));
+    expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeDisabled();
+    expect(window.sessionStorage.getItem("aulaclara.ai")).toBeNull();
+  });
+
+  it("NVIDIA no permite verificar la key: se avisa que el error aparecería en la primera consulta", async () => {
+    request.mockImplementation(({ url }: { url: string }) =>
+      url === "/ai/models"
+        ? Promise.resolve({
+            provider: "nvidia",
+            key_verified: false,
+            models: [
+              { id: "openai/gpt-oss-20b", name: "openai/gpt-oss-20b", supports_images: null, free: null },
+            ],
+          })
+        : Promise.reject(new Error("no esperado")),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+    await user.click(within(dialog).getByRole("radio", { name: /NVIDIA Build/ }));
+    await user.type(within(dialog).getByLabelText(/Tu API key de NVIDIA Build/), "nvapi-prueba-123");
+    await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent("no permite comprobar la key"),
+    );
+    expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeEnabled();
+  });
+
+  it("el diálogo explica paso a paso cómo conseguir la key del proveedor elegido y enlaza la guía", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+    await user.click(within(dialog).getByRole("radio", { name: /Mistral AI/ }));
+    await user.click(within(dialog).getByText(/Cómo conseguir tu key de Mistral AI, paso a paso/));
+    expect(within(dialog).getByText(/Verificá tu número de teléfono/)).toBeVisible();
+    expect(within(dialog).getByRole("link", { name: /Ver la guía completa/ })).toHaveAttribute(
+      "href",
+      "/ayuda/ia#mistral",
+    );
+  });
+});
+
+describe("Configurar IA: respuestas tardías y filtro de gratuitos", () => {
+  beforeEach(() => withProfile());
+
+  it("una respuesta que llega después de cambiar de proveedor se descarta", async () => {
+    let resolveGemini: (value: unknown) => void = () => undefined;
+    request.mockImplementation(({ headers }: { headers: Record<string, string> }) =>
+      headers["X-AI-Provider"] === "gemini"
+        ? new Promise((resolve) => {
+            resolveGemini = resolve;
+          })
+        : Promise.reject(new Error("no esperado")),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+    await user.type(within(dialog).getByLabelText(/Tu API key de Google Gemini/), "AIza-prueba-123");
+    await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
+    await user.click(within(dialog).getByRole("radio", { name: /Groq/ }));
+    await user.type(within(dialog).getByLabelText(/Tu API key de Groq/), "gsk_prueba-123");
+
+    resolveGemini({
+      provider: "gemini",
+      key_verified: true,
+      models: [{ id: MODEL, name: "Gemini", supports_images: true, free: null }],
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(within(dialog).queryByLabelText("3. Modelo")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("status")).not.toHaveTextContent("Key válida");
+    expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeDisabled();
+  });
+
+  it("con «solo gratuitos» se elige un modelo visible, nunca uno oculto por el filtro", async () => {
+    request.mockResolvedValue({
+      provider: "openrouter",
+      key_verified: true,
+      models: [
+        { id: "sin-precio", name: "Sin precio", supports_images: null, free: null },
+        { id: "pago", name: "Pago", supports_images: null, free: false },
+        { id: "gratis:free", name: "Gratis", supports_images: null, free: true },
+      ],
+    });
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+    await user.click(within(dialog).getByRole("radio", { name: /OpenRouter/ }));
+    await user.type(within(dialog).getByLabelText(/Tu API key de OpenRouter/), "sk-or-prueba-123");
+    await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
+    const select = await within(dialog).findByLabelText("3. Modelo");
+    expect(select).toHaveValue("gratis:free");
+
+    // Sin el filtro aparece todo; al volver a filtrar, un modelo pago elegido queda oculto y no se puede guardar.
+    await user.click(within(dialog).getByRole("checkbox", { name: "Mostrar solo modelos gratuitos" }));
+    await user.selectOptions(select, "pago");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Mostrar solo modelos gratuitos" }));
+    expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeDisabled();
+  });
+});
+
+describe("key sellada en cookie: respaldo, reemplazo y borrado", () => {
+  beforeEach(() => withProfile());
+
+  const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Configurar IA|Cambiar/ }));
+    return screen.findByRole("dialog", { name: "Configurar IA" });
+  };
+  const typeKeyAndTest = async (
+    user: ReturnType<typeof userEvent.setup>,
+    dialog: HTMLElement,
+    key = "AIza-key-de-prueba",
+  ) => {
+    await user.type(within(dialog).getByLabelText(/Tu API key de Google Gemini/), key);
+    await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
+    await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent("Key válida"));
+  };
+
+  it("si el servidor no tiene la key sellada activada, guarda la key en el navegador y lo explica", async () => {
+    const { ApiRequestError } = await import("@/lib/http");
+    request.mockImplementation((c: Parameters<typeof fakeBackend>[0]) =>
+      c.url === "/ai/session"
+        ? Promise.reject(
+            new ApiRequestError({
+              kind: "server",
+              status: 503,
+              problem: { title: "x", status: 503, code: "ai_sessions_disabled" },
+            }),
+          )
+        : fakeBackend(c),
+    );
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await typeKeyAndTest(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Guardar" }));
+
+    // El diálogo queda abierto para explicar dónde quedó la key.
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent("guardada en este navegador"),
+    );
+    expect(JSON.parse(window.sessionStorage.getItem("aulaclara.ai") ?? "{}")).toEqual({
+      provider: "gemini",
+      model: MODEL,
+      remember: false,
+      apiKey: "AIza-key-de-prueba",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Listo" }));
+    await user.click(screen.getByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("Resumen de esta página (prueba)"));
+    expect(calls("/ai/chat")[0]?.headers).toMatchObject({ "X-AI-Key": "AIza-key-de-prueba" });
+  });
+
+  it("si el navegador no devuelve la cookie (GET falla), no se queda con una key que no puede usar", async () => {
+    const { ApiRequestError } = await import("@/lib/http");
+    request.mockImplementation((c: Parameters<typeof fakeBackend>[0]) =>
+      c.url === "/ai/session" && c.method === "GET"
+        ? Promise.reject(
+            new ApiRequestError({
+              kind: "unauthorized",
+              problem: { title: "x", status: 401, code: "ai_credentials_required" },
+            }),
+          )
+        : fakeBackend(c),
+    );
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await typeKeyAndTest(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Guardar" }));
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent("guardada en este navegador"),
+    );
+    expect(JSON.parse(window.sessionStorage.getItem("aulaclara.ai") ?? "{}").apiKey).toBe(
+      "AIza-key-de-prueba",
+    );
+    expect(calls("/ai/session", "DELETE")).toHaveLength(1); // no deja una cookie a medias
+  });
+
+  it("«Recordar en este dispositivo» sella la cookie persistente y guarda el aviso en localStorage", async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await typeKeyAndTest(user, dialog);
+    await user.click(within(dialog).getByRole("checkbox", { name: /Recordar en este dispositivo/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Guardar" }));
+    expect(calls("/ai/session", "POST")[0]?.data).toMatchObject({ remember: true });
+    expect(JSON.parse(window.localStorage.getItem("aulaclara.ai") ?? "{}")).toEqual({
+      provider: "gemini",
+      model: MODEL,
+      remember: true,
+      sealed: true,
+    });
+    expect(window.sessionStorage.getItem("aulaclara.ai")).toBeNull();
+  });
+
+  it("con una key ya sellada no se muestra nada secreto y los modelos se listan con la cookie", async () => {
+    withSealedAI();
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    expect(dialog).toHaveTextContent("guardada de forma segura y no se puede ver");
+    expect(within(dialog).getByLabelText(/Tu API key de Google Gemini/)).toHaveValue("");
+    expect(within(dialog).getByRole("checkbox", { name: /Recordar en este dispositivo/ })).toBeDisabled();
+
+    await user.click(within(dialog).getByRole("button", { name: "Ver los modelos de mi key guardada" }));
+    await waitFor(() => expect(within(dialog).getByLabelText("3. Modelo")).toBeInTheDocument());
+    const [listing] = calls("/ai/models");
+    expect(listing?.headers).toEqual({ "X-Aula-Clara": "1", "X-AI-Provider": "gemini" }); // sin key
+    await user.click(within(dialog).getByRole("button", { name: "Guardar" }));
+    expect(calls("/ai/session", "POST")).toHaveLength(0); // solo cambia el modelo: no se vuelve a sellar
+    expect(JSON.parse(window.sessionStorage.getItem("aulaclara.ai") ?? "{}")).toMatchObject({ sealed: true });
+  });
+
+  it("pegar una key nueva reemplaza la sellada", async () => {
+    withSealedAI();
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await typeKeyAndTest(user, dialog, "AIza-key-nueva-9999");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar" }));
+    expect(calls("/ai/session", "POST")[0]?.data).toMatchObject({ api_key: "AIza-key-nueva-9999" });
+  });
+
+  it("«Borrar mi key» borra la cookie en el servidor y lo guardado acá", async () => {
+    withSealedAI();
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole("button", { name: "Borrar mi key" }));
+    await waitFor(() => expect(window.sessionStorage.getItem("aulaclara.ai")).toBeNull());
+    expect(calls("/ai/session", "DELETE")).toHaveLength(1);
+  });
+
+  it("si la sesión de la cookie venció, el panel lo dice y vuelve a pedir la key", async () => {
+    withSealedAI();
+    const { ApiRequestError } = await import("@/lib/http");
+    request.mockRejectedValue(
+      new ApiRequestError({
+        kind: "unauthorized",
+        problem: { title: "x", status: 401, code: "ai_credentials_required", reason: "session_expired" },
+      }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("Tu sesión de IA venció"));
+    expect(window.sessionStorage.getItem("aulaclara.ai")).toBeNull(); // ya no aparece como configurada
+    expect(screen.getAllByRole("button", { name: "Configurar IA" }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("errores y avisos de la IA en pantalla", () => {
+  beforeEach(() => {
+    withProfile();
+    withAI();
+  });
+
+  const failWith = async (code: string, status: number, extra: Record<string, unknown> = {}) => {
+    const { ApiRequestError } = await import("@/lib/http");
+    const p = { title: "x", status, code, provider: "gemini", model: MODEL, ...extra };
+    request.mockRejectedValue(
+      status === 429
+        ? new ApiRequestError({ kind: "rate_limited", retryAfterMs: null, problem: p })
+        : new ApiRequestError({ kind: "server", status, problem: p }),
+    );
+  };
+
+  it("cuota agotada: explica el motivo, cuánto esperar y ofrece «Configurar IA»", async () => {
+    await failWith("ai_quota_exceeded", 429, {
+      reason: "daily",
+      retry_after_seconds: 7_200,
+      provider_message: "Quota exceeded for requests per day",
+    });
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    const log = screen.getByRole("log");
+    await waitFor(() => expect(log).toHaveTextContent("límite diario de Google Gemini"));
+    expect(log).toHaveTextContent("más de una hora");
+    expect(log).toHaveTextContent("Detalle del proveedor: «Quota exceeded for requests per day»");
+    expect(within(log).getByRole("button", { name: "Configurar IA" })).toBeInTheDocument();
+  });
+
+  it("una respuesta cortada por el límite de largo se muestra y se avisa", async () => {
+    request.mockResolvedValue({
+      answer: "1. Primera pregunta\n2. Segun",
+      provider: "gemini",
+      model: MODEL,
+      truncated: true,
+    });
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Crear 3 preguntas de repaso" }));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("2. Segun"));
+    expect(screen.getByRole("log")).toHaveTextContent(
+      "La respuesta se cortó porque el modelo llegó a su límite",
+    );
+  });
+
+  it("la caja de la pregunta no deja escribir más de lo que acepta el servidor", async () => {
+    renderAt("/leer/d1");
+    expect(await screen.findByLabelText("Escribí tu pregunta")).toHaveAttribute("maxlength", "2000");
+  });
+
+  it("un error del servidor de Vercel sin cuerpo (504) también se explica", async () => {
+    const { ApiRequestError } = await import("@/lib/http");
+    request.mockRejectedValue(new ApiRequestError({ kind: "server", status: 504, problem: null }));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("30 segundos"));
+  });
+
+  it("«Interpretar con IA» con la imagen cortada por el límite avisa en el diálogo", async () => {
+    request.mockResolvedValue({
+      description: "Un gráfico de barras que crece",
+      provider: "gemini",
+      model: MODEL,
+      truncated: true,
+    });
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    expect(dialog).toHaveTextContent("La descripción se cortó");
+  });
+
+  it("«Interpretar con IA» con una imagen que no se puede armar lo dice y no culpa a la IA", async () => {
+    const extractors = await import("@/lib/extractors");
+    vi.mocked(extractors.svgToJpeg).mockRejectedValueOnce(new Error("canvas roto"));
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    expect(dialog).toHaveTextContent("No pudimos preparar la imagen");
+    expect(request).not.toHaveBeenCalled();
+  });
+});
+
+describe("guía de API keys", () => {
+  it("es pública y explica cada proveedor con su paso a paso", async () => {
+    renderAt("/ayuda/ia");
+    expect(await h1()).toHaveTextContent("Cómo conseguir tu API key gratuita");
+    for (const name of ["Google Gemini", "Groq", "OpenRouter", "Mistral AI", "NVIDIA Build"]) {
+      expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("table", { name: "Comparación de proveedores de IA" })).toBeInTheDocument();
+    // Recomendaciones para que una key perdida no pueda hacer daño.
+    const care = screen.getByRole("heading", { level: 2, name: "Cuidá tu key" }).closest("section");
+    expect(care).toHaveTextContent("Quedate en el plan gratuito, sin tarjeta ni saldo");
+    expect(care).toHaveTextContent("cookie cifrada");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "OpenRouter" }).closest("section"),
+    ).toHaveTextContent("Credit limit) en 0");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Google Gemini" }).closest("section"),
+    ).toHaveTextContent("No actives la facturación");
+    expect(screen.getAllByRole("link", { name: /Ir a crear la key/ })).toHaveLength(5);
+    expect(screen.getByRole("link", { name: /Ir a crear la key de NVIDIA Build/ })).toHaveAttribute(
+      "href",
+      "https://build.nvidia.com/settings/api-keys",
+    );
   });
 });

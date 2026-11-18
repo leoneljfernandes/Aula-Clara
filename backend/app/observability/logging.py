@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.config import Settings
+from app.observability.redaction import scrub
 from app.observability.tracing import current_span_id, current_trace_id
 
 # Atributos estándar de LogRecord: todo lo demás vino por extra={...}.
@@ -38,7 +39,7 @@ class JsonFormatter(logging.Formatter):
         )
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
-        return json.dumps(payload, default=str, ensure_ascii=False)
+        return scrub(json.dumps(payload, default=str, ensure_ascii=False))
 
 
 def configure_logging(settings: Settings) -> None:

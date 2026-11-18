@@ -13,6 +13,7 @@ Estado al 2026-11-17. **Automatizado** = lo verifica un test que corre con `npm 
 | Atajos Alt+T (tema) y Alt+= (tamaño) | `app.test.tsx` |
 | Lectura en voz alta: reproducir, pausar, detener, resaltado y simulación sin voces | `lib/speech.test.ts`, `app.test.tsx` |
 | `?next=` no permite redirigir a otro sitio | `app.test.tsx` |
+| «Configurar IA»: proveedor con botones de opción, key con etiqueta y ayuda, resultado de la prueba en `role="status"`, error de key con mensaje claro | `app.test.tsx` («IA con la key de cada persona») |
 | Diseño que no depende del color: el tema activo se indica con `aria-pressed` y borde | `app.test.tsx` |
 
 ## Implementado, sin prueba automática
@@ -32,4 +33,7 @@ Estado al 2026-11-17. **Automatizado** = lo verifica un test que corre con `npm 
 - [ ] Probar la **lectura en voz alta** en Chrome, Firefox y Safari: la calidad y la disponibilidad de la voz en español dependen del navegador y del sistema operativo.
 - [ ] Subir un **PDF y un Word reales** con imágenes y confirmar que el texto y las figuras se extraen bien (los tests usan archivos mínimos generados).
 - [ ] Probar el modo **Alto contraste** y **Sepia** con el contenido de un documento real.
+- [ ] Recorrer **«Configurar IA»** con teclado y lector de pantalla: el anuncio de «Key válida», el selector de modelos (OpenRouter puede listar muchos) y el enlace para crear la key, que abre una pestaña nueva.
+- [ ] Recorrer **«Configurar IA»** con una key ya sellada con lector de pantalla: el aviso «guardada de forma segura y no se puede ver», el botón «Ver los modelos de mi key guardada», la casilla «Recordar» deshabilitada y el aviso que queda al guardar en el modo de respaldo (botón «Listo»).
+- [ ] Leer la **guía de API keys** (`/ayuda/ia`) con lector de pantalla: la tabla comparativa, los pasos numerados y los enlaces que abren otra pestaña.
 - [ ] Correr una herramienta automática (axe DevTools o Lighthouse) sobre las 3 vistas.

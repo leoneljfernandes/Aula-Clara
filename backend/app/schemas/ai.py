@@ -18,8 +18,27 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     provider: str
+    model: str
+    # True si el modelo cortó la respuesta por el límite de largo: la interfaz lo avisa.
+    truncated: bool = False
 
 
 class ImageDescriptionResponse(BaseModel):
     description: str
     provider: str
+    model: str
+    truncated: bool = False
+
+
+class ModelRead(BaseModel):
+    id: str
+    name: str
+    supports_images: bool | None
+    free: bool | None
+
+
+class ModelListResponse(BaseModel):
+    provider: str
+    # False: el proveedor no permite comprobar la key sin gastar una consulta (NVIDIA Build).
+    key_verified: bool
+    models: list[ModelRead]

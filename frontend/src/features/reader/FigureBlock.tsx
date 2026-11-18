@@ -2,15 +2,21 @@ import { type ReactNode, useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
-import { describeImage, ProviderBadge, type Provider } from "@/features/assistant";
-import { SAMPLE_FIGURE_ID } from "@/features/library";
+import {
+  AISettingsDialog,
+  describeApiError,
+  describeImage,
+  ImageUnavailableError,
+  needsAISetup,
+  ProviderBadge,
+  type Provider,
+} from "@/features/assistant";
 import { dataUrlToBlob, svgToJpeg } from "@/lib/extractors";
 import { hasTTS, speakOnce } from "@/lib/speech";
 
 import { BarChart } from "./BarChart";
 
 interface FigureBlockProps {
-  id: string;
   dataUrl: string | undefined;
   caption: string;
   /** Párrafo que rodea a la figura: le da contexto a la IA. */
@@ -21,29 +27,38 @@ interface FigureBlockProps {
 interface Result {
   text: string;
   provider: Provider;
+  model: string;
+  truncated: boolean;
 }
 
-export function FigureBlock({ id, dataUrl, caption, context, onAskAssistant }: FigureBlockProps): ReactNode {
+export function FigureBlock({ dataUrl, caption, context, onAskAssistant }: FigureBlockProps): ReactNode {
   const svgRef = useRef<SVGSVGElement>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<{ message: string; needsSetup: boolean } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /** La imagen a enviar, o null si no se pudo armar (distinto de un error de la IA). */
+  const prepareImage = async (): Promise<Blob | null> => {
+    try {
+      if (dataUrl) return await dataUrlToBlob(dataUrl);
+      return svgRef.current ? await svgToJpeg(svgRef.current) : null;
+    } catch {
+      return null;
+    }
+  };
 
   const analyze = async (): Promise<void> => {
     if (result) return setOpen(true);
     setLoading(true);
-    setFailed(false);
+    setFailure(null);
     try {
-      const blob = dataUrl
-        ? await dataUrlToBlob(dataUrl)
-        : svgRef.current
-          ? await svgToJpeg(svgRef.current)
-          : null;
-      if (!blob) throw new Error("no image");
-      setResult(await describeImage(blob, context, id === SAMPLE_FIGURE_ID));
-    } catch {
-      setFailed(true);
+      const blob = await prepareImage();
+      if (!blob) throw new ImageUnavailableError();
+      setResult(await describeImage(blob, context));
+    } catch (error) {
+      setFailure({ message: describeApiError(error), needsSetup: needsAISetup(error) });
     } finally {
       setLoading(false);
       setOpen(true);
@@ -92,9 +107,9 @@ export function FigureBlock({ id, dataUrl, caption, context, onAskAssistant }: F
       </figcaption>
       {open && (
         <Dialog title="Interpretación de la imagen" onClose={() => setOpen(false)} labelId="img-title">
-          {failed || !result ? (
+          {failure || !result ? (
             <p role="alert" className="mb-6 text-lg">
-              No pudimos analizar esta imagen. Probá de nuevo en unos segundos.
+              {failure?.message ?? "No pudimos analizar esta imagen. Probá de nuevo en unos segundos."}
             </p>
           ) : (
             <>
@@ -102,7 +117,12 @@ export function FigureBlock({ id, dataUrl, caption, context, onAskAssistant }: F
                 {result.text}
               </p>
               <div className="mb-6">
-                <ProviderBadge provider={result.provider} />
+                <ProviderBadge provider={result.provider} model={result.model} />
+                {result.truncated && (
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    ⚠️ La descripción se cortó porque el modelo llegó a su límite de largo.
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -122,10 +142,22 @@ export function FigureBlock({ id, dataUrl, caption, context, onAskAssistant }: F
                 Preguntarle al asistente
               </Button>
             )}
+            {failure?.needsSetup && (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setOpen(false);
+                  setSettingsOpen(true);
+                }}
+              >
+                Configurar IA
+              </Button>
+            )}
             <Button onClick={() => setOpen(false)}>Cerrar</Button>
           </div>
         </Dialog>
       )}
+      {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
     </figure>
   );
 }

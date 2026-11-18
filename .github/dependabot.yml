@@ -1,0 +1,32 @@
+# Dependabot: avisa de actualizaciones y de vulnerabilidades en las dependencias. No es CI: no corre
+# tests ni despliega, solo abre pull requests que se revisan a mano.
+# Los PR de seguridad se abren aparte de estos, siempre que Dependabot security updates esté activo en el
+# repo (Settings → Code security).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # typescript-eslint todavía no admite TypeScript 7: el proyecto fija ~6.0 a propósito.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

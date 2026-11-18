@@ -1,7 +1,7 @@
 import type { Article, LibraryDocument } from "./types";
 
 /** Documento de ejemplo: el mismo texto y gráfico del prototipo. */
-export const SAMPLE_FIGURE_ID = "sample-chart";
+const SAMPLE_FIGURE_ID = "sample-chart";
 
 export const SAMPLE_ARTICLE: Article = {
   title: "Accesibilidad digital en la educación superior: barreras y oportunidades",

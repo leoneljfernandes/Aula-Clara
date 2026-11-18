@@ -1,5 +1,6 @@
 """Factory de la app FastAPI (skill layering-fastapi-apps)."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -8,9 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.router import api_router
-from app.config import get_settings
+from app.config import Stage, get_settings
 from app.errors import register_exception_handlers
 from app.observability.logging import configure_logging
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -29,13 +32,15 @@ def create_app() -> FastAPI:
         docs_url="/api/docs" if settings.DOCS_ENABLED else None,
         openapi_url="/api/openapi.json" if settings.DOCS_ENABLED else None,
     )
+    if settings.APP_ENV in (Stage.STAGING, Stage.PROD) and not settings.sealing_enabled:
+        logger.warning("SEALING_KEY is not set: API keys travel in headers and live in the browser")
     register_exception_handlers(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=False,  # no hay cookies ni sesión en el MVP
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "X-AI-Provider", "X-AI-Model", "X-AI-Key", "X-Aula-Clara"],
     )
     app.include_router(health_router)
     app.include_router(api_router, prefix="/api/v1")

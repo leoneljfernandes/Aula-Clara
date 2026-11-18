@@ -29,3 +29,6 @@ coverage/
 # Editor / SO
 .DS_Store
 .idea/
+
+# Salidas locales de herramientas
+graphify-out/

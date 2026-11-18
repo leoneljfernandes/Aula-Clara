@@ -1,11 +1,16 @@
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
 import { hasTTS, speakOnce } from "@/lib/speech";
 
+import { AISettingsDialog } from "./AISettingsDialog";
+import { useAICredentials } from "./credentials";
+import { LIMITS } from "./errors";
+import { providerLabel } from "./providers";
 import { ProviderBadge } from "./ProviderBadge";
+import type { ChatAction } from "./api";
 import type { Chat } from "./useChat";
-import { MOCK_NOTE, type ChatAction } from "./mock";
 
 const SHORTCUTS: ReadonlyArray<readonly [string, ChatAction]> = [
   ["Resumir esta página", "summarize"],
@@ -22,6 +27,8 @@ interface AssistantPanelProps {
 
 export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPanelProps): ReactNode {
   const [draft, setDraft] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const credentials = useAICredentials();
   const logRef = useRef<HTMLDivElement>(null);
   const { messages, typing, send } = chat;
 
@@ -40,7 +47,35 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
           <span aria-hidden="true">✦</span> Asistente inteligente
         </h2>
         <p className="text-base text-[var(--muted)]">Preguntá sobre este documento</p>
+        {credentials ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="min-w-0 text-base break-words">
+              <span className="text-[var(--muted)]">IA: </span>
+              {providerLabel(credentials.provider)} · {credentials.model}
+            </p>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="min-h-10 text-base font-bold underline underline-offset-4"
+            >
+              Cambiar<span className="sr-only"> proveedor o modelo de IA</span>
+            </button>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl border-2 border-[var(--accent)] p-3">
+            <p className="mb-2 text-base">
+              Para usar el asistente, cargá tu API key gratuita de Gemini, Groq, OpenRouter, Mistral o NVIDIA.{" "}
+              <Link to="/ayuda/ia" target="_blank" className="font-bold underline">
+                ¿Cómo consigo una? <span className="sr-only">(se abre en una pestaña nueva)</span>
+              </Link>
+            </p>
+            <Button variant="primary" className="w-full" onClick={() => setSettingsOpen(true)}>
+              Configurar IA
+            </Button>
+          </div>
+        )}
       </div>
+      {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
 
       <div
         ref={logRef}
@@ -57,12 +92,25 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
             >
               <span className="sr-only">{m.role === "user" ? "Vos dijiste: " : "Asistente: "}</span>
               {m.text}
-              {m.role === "ai" && m.provider && <ProviderBadge provider={m.provider} />}
+              {m.role === "ai" && m.provider && m.model && (
+                <ProviderBadge provider={m.provider} model={m.model} />
+              )}
+              {m.truncated && (
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  ⚠️ La respuesta se cortó porque el modelo llegó a su límite de largo. Pedí algo más acotado,
+                  por ejemplo un fragmento más corto.
+                </p>
+              )}
+              {m.needsSetup && (
+                <div className="mt-2">
+                  <Button onClick={() => setSettingsOpen(true)}>Configurar IA</Button>
+                </div>
+              )}
               {m.role === "ai" && i > 0 && hasTTS && (
                 <div className="mt-2">
                   <button
                     type="button"
-                    onClick={() => speakOnce(m.text.replace(MOCK_NOTE, ""), rate)}
+                    onClick={() => speakOnce(m.text, rate)}
                     className="min-h-10 text-base font-bold underline underline-offset-4"
                   >
                     🔊 Escuchar respuesta
@@ -127,6 +175,7 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             autoComplete="off"
+            maxLength={LIMITS.message}
             placeholder="Escribí tu pregunta y presioná Enter"
             className="min-h-[52px] min-w-0 flex-1 rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] px-4 text-[var(--fg)] placeholder:text-[var(--muted)]"
           />

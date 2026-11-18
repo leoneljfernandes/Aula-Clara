@@ -68,6 +68,110 @@ class RateLimitedError(AppError):
     title = "Too many requests"
 
 
+class AICredentialsRequiredError(AppError):
+    """El pedido no trae proveedor, key o modelo: cada usuario usa su propia API key."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    code = "ai_credentials_required"
+    title = "AI credentials required"
+
+
+class ForbiddenError(AppError):
+    """El pedido no cumple una protección del servicio (por ejemplo, falta el header anti-CSRF)."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "forbidden"
+    title = "Forbidden"
+
+
+class AISessionsDisabledError(AppError):
+    """Sin `SEALING_KEY` el servidor no guarda keys selladas en cookie (queda el modo de headers)."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "ai_sessions_disabled"
+    title = "Sealed AI sessions are not enabled"
+
+
+class AIKeyInvalidError(AppError):
+    """El proveedor rechazó la key del usuario (o la key tiene un formato imposible)."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    code = "ai_key_invalid"
+    title = "AI key rejected"
+
+
+class AIQuotaExceededError(AppError):
+    """La cuota o el saldo de la key del usuario se agotaron en el proveedor."""
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    code = "ai_quota_exceeded"
+    title = "AI quota exceeded"
+
+
+class AIModelRejectedError(AppError):
+    """El modelo elegido no existe para esa key o no acepta el pedido (por ejemplo, imágenes)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    code = "ai_model_rejected"
+    title = "AI model rejected the request"
+
+
+class AIModelNotFoundError(AppError):
+    """El modelo elegido no existe, fue dado de baja o la cuenta no tiene acceso."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    code = "ai_model_not_found"
+    title = "AI model not found"
+
+
+class AIImageRejectedError(AppError):
+    """El modelo no lee imágenes, o no admite ese formato o tamaño de imagen."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    code = "ai_image_rejected"
+    title = "AI model cannot read this image"
+
+
+class AIPermissionDeniedError(AppError):
+    """La cuenta del proveedor no puede usar el modelo, la región o la función pedida."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "ai_permission_denied"
+    title = "AI provider denied access"
+
+
+class AIContentBlockedError(AppError):
+    """Los filtros de seguridad del modelo o del proveedor bloquearon el pedido o la respuesta."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    code = "ai_content_blocked"
+    title = "AI content blocked"
+
+
+class AIEmptyResponseError(AppError):
+    """El modelo contestó sin texto (por ejemplo, gastó todo el límite de salida razonando)."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    code = "ai_response_empty"
+    title = "AI model returned an empty response"
+
+
+class AIInputTooLargeError(AppError):
+    """El proveedor rechazó el pedido por tamaño (la imagen o el texto superan su máximo)."""
+
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+    code = "ai_input_too_large"
+    title = "AI input too large"
+
+
+class AIUnavailableError(AppError):
+    """El proveedor no respondió después de un reintento (caído, sin red, tiempo agotado)."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "ai_unavailable"
+    title = "AI provider unavailable"
+
+
 def problem(
     request: Request,
     *,

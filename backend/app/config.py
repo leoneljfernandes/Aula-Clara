@@ -1,9 +1,9 @@
 """Configuración por stage: única fuente de configuración (skill configuring-fastapi-settings).
 
-Nadie más lee `os.environ`. Los secretos (API keys) son `SecretStr` y solo se leen con
-`.get_secret_value()` en el punto de uso (los proveedores de IA).
+Nadie más lee `os.environ`. El servidor no guarda API keys de IA: las trae cada usuario en sus pedidos.
 """
 
+import base64
 import os
 from enum import StrEnum
 from functools import lru_cache
@@ -26,7 +26,11 @@ class Stage(StrEnum):
     PROD = "prod"
 
 
-AIProviderName = Literal["auto", "gemini", "groq", "mock"]
+def _is_fernet_key(value: str) -> bool:
+    try:
+        return len(base64.urlsafe_b64decode(value.encode())) == 32
+    except ValueError:
+        return False
 
 
 class Settings(BaseSettings):
@@ -45,14 +49,20 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = []  # en el entorno, JSON: '["https://app.example.com"]'
     ERRORS_BASE_URL: str = Field(min_length=1)  # prefijo del campo "type" de problem+json
 
-    # IA. Las keys son opcionales a propósito: sin key, todo funciona en modo mock
-    # (definición de terminado del MVP). Los modelos no tienen default en el código.
-    AI_PROVIDER: AIProviderName = "auto"
-    GEMINI_API_KEY: SecretStr | None = None
-    GEMINI_MODEL: str | None = None
-    GROQ_API_KEY: SecretStr | None = None
-    GROQ_MODEL: str | None = None
-    AI_TIMEOUT_SECONDS: float = Field(default=30.0, gt=0, le=120)
+    # IA. El servidor no tiene API keys ni modelo: cada usuario manda los suyos en cada pedido
+    # (headers X-AI-Provider, X-AI-Model y X-AI-Key). Ver docs/adr/0002-api-key-por-usuario.md.
+    # Tope por llamada al proveedor. Debe entrar en el `maxDuration` de 30 s de vercel.json, junto con un
+    # posible reintento de una falla rápida (ver services/ai.py): por eso el máximo es 25.
+    AI_TIMEOUT_SECONDS: float = Field(default=20.0, gt=0, le=25)
+
+    # Key sellada: si se define, la API key de cada persona puede viajar en una cookie HttpOnly cifrada con
+    # esta clave (el JavaScript de la página no puede leerla). Sin ella se usa el modo de headers, con la
+    # key guardada en el navegador. Para generarla: `python -c "from cryptography.fernet import Fernet;
+    # print(Fernet.generate_key().decode())"`.
+    SEALING_KEY: SecretStr | None = None
+    SEALING_KEY_PREVIOUS: SecretStr | None = None  # para rotar: se acepta para leer, ya no para sellar
+    AI_SESSION_HOURS: int = Field(default=12, ge=1, le=72)  # vida de la cookie si no se pide recordar
+    AI_SESSION_REMEMBER_DAYS: int = Field(default=30, ge=1, le=90)  # vida con «Recordar en este dispositivo»
 
     # Protección de la cuota gratuita.
     MAX_INPUT_CHARS: int = Field(default=12_000, ge=500, le=200_000)
@@ -61,35 +71,18 @@ class Settings(BaseSettings):
     AI_CACHE_TTL_SECONDS: int = Field(default=3_600, ge=0)
 
     @property
-    def gemini_configured(self) -> bool:
-        return self.GEMINI_API_KEY is not None and self.GEMINI_MODEL is not None
-
-    @property
-    def groq_configured(self) -> bool:
-        return self.GROQ_API_KEY is not None and self.GROQ_MODEL is not None
-
-    @property
-    def active_ai_provider(self) -> Literal["gemini", "groq", "mock"]:
-        """Proveedor principal según la configuración (el fallback a mock en runtime es aparte)."""
-        if self.AI_PROVIDER != "auto":
-            return self.AI_PROVIDER
-        if self.gemini_configured:
-            return "gemini"
-        if self.groq_configured:
-            return "groq"
-        return "mock"
+    def sealing_enabled(self) -> bool:
+        return self.SEALING_KEY is not None
 
     @model_validator(mode="after")
-    def _guard_ai(self) -> Self:
-        # Una key sin modelo es una configuración a medias: falla al arrancar, no en la primera request.
-        if self.GEMINI_API_KEY is not None and self.GEMINI_MODEL is None:
-            raise ValueError("GEMINI_API_KEY is set but GEMINI_MODEL is empty")
-        if self.GROQ_API_KEY is not None and self.GROQ_MODEL is None:
-            raise ValueError("GROQ_API_KEY is set but GROQ_MODEL is empty")
-        if self.AI_PROVIDER == "gemini" and not self.gemini_configured:
-            raise ValueError("AI_PROVIDER=gemini requires GEMINI_API_KEY and GEMINI_MODEL")
-        if self.AI_PROVIDER == "groq" and not self.groq_configured:
-            raise ValueError("AI_PROVIDER=groq requires GROQ_API_KEY and GROQ_MODEL")
+    def _guard_sealing(self) -> Self:
+        # Una clave mal formada falla al arrancar, no en el primer intento de guardar una key.
+        for name in ("SEALING_KEY", "SEALING_KEY_PREVIOUS"):
+            secret: SecretStr | None = getattr(self, name)
+            if secret is not None and not _is_fernet_key(secret.get_secret_value()):
+                raise ValueError(f"{name} must be 32 random bytes encoded as url-safe base64")
+        if self.SEALING_KEY_PREVIOUS is not None and self.SEALING_KEY is None:
+            raise ValueError("SEALING_KEY_PREVIOUS requires SEALING_KEY")
         return self
 
     @model_validator(mode="after")

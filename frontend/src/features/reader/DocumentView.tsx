@@ -58,7 +58,6 @@ export function DocumentView({
           return (
             <FigureBlock
               key={block.id}
-              id={block.id}
               dataUrl={block.dataUrl}
               caption={`Gráfico ${figureNumberAt(i)}`}
               context={before?.type === "p" ? before.text : ""}

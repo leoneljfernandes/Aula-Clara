@@ -1,4 +1,4 @@
-import { blobToDataUrl, isUsefulSize, toJpeg } from "./image";
+import { blobToDataUrl, dataUrlToBlob, isUsefulSize, toJpeg } from "./image";
 import { type Block, type ExtractedDocument, ImportError } from "./types";
 
 /** HTML que genera mammoth → bloques. Pura (recibe el HTML): se prueba sin archivos. */
@@ -53,7 +53,7 @@ async function compressFigures(blocks: Block[]): Promise<Block[]> {
       continue;
     }
     try {
-      const bitmap = await createImageBitmap(await (await fetch(block.dataUrl)).blob());
+      const bitmap = await createImageBitmap(await dataUrlToBlob(block.dataUrl));
       if (isUsefulSize(bitmap.width, bitmap.height)) {
         const jpeg = await toJpeg(bitmap, bitmap.width, bitmap.height);
         result.push({ ...block, dataUrl: await blobToDataUrl(jpeg) });

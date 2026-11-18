@@ -1,52 +1,100 @@
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+import math
+import re
+import time
+from collections.abc import Awaitable, Callable
 from functools import partial
 
 from app.crud.answer_cache import AnswerCache
-from app.errors import BusinessRuleError
-from app.models import ChatAction, ChatMessage
-from app.providers.llm.base import LLMProvider, ProviderUnavailable
+from app.errors import (
+    AIContentBlockedError,
+    AIEmptyResponseError,
+    AIImageRejectedError,
+    AIInputTooLargeError,
+    AIKeyInvalidError,
+    AIModelNotFoundError,
+    AIModelRejectedError,
+    AIPermissionDeniedError,
+    AIQuotaExceededError,
+    AIUnavailableError,
+    AppError,
+    BusinessRuleError,
+)
+from app.models import AIAnswer, ChatAction, ChatMessage, Completion, ModelInfo
+from app.providers.llm.base import (
+    LLMProvider,
+    ProviderAuthError,
+    ProviderContentBlocked,
+    ProviderEmptyResponse,
+    ProviderError,
+    ProviderImageRejected,
+    ProviderModelNotFound,
+    ProviderPayloadTooLarge,
+    ProviderPermissionDenied,
+    ProviderQuotaError,
+    ProviderRejected,
+    ProviderTimeout,
+    ProviderUnavailable,
+)
 from app.services import ai_rules
 from app.services.prompts import IMAGE_PROMPT, STUDY_PROMPT
 
 logger = logging.getLogger(__name__)
 Sleep = Callable[[float], Awaitable[None]]
+Clock = Callable[[], float]
+# Solo se reintenta una falla rápida (un 503 inmediato). Con AI_TIMEOUT_SECONDS=20, el peor caso es
+# 5 + 0,6 + 20 ≈ 26 s: entra en el `maxDuration` de 30 s de la función de Vercel.
+RETRY_ONLY_IF_FAILED_WITHIN_SECONDS = 5.0
 
 
 class AIService:
-    """Arma el contexto, elige el prompt y recorre la cadena de proveedores (principal → respaldo → mock)."""
+    """Arma el contexto, elige el prompt y llama al proveedor que trajo el usuario (con su key).
+
+    El service es único por proceso (caché compartida); el proveedor llega en cada llamada.
+    """
 
     def __init__(
         self,
         *,
-        chat_chain: Sequence[LLMProvider],
-        image_chain: Sequence[LLMProvider],
         cache: AnswerCache,
         max_input_chars: int,
         retry_delay: float = 0.6,
         sleep: Sleep = asyncio.sleep,
+        clock: Clock = time.monotonic,
     ) -> None:
-        self._chat_chain = chat_chain
-        self._image_chain = image_chain
         self._cache = cache
         self._max_chars = max_input_chars
         self._retry_delay = retry_delay
         self._sleep = sleep
+        self._clock = clock
 
-    async def _with_retry[T](self, provider: LLMProvider, call: Callable[[], Awaitable[T]]) -> T:
-        """Un reintento con backoff; el mock nunca falla, no hace falta reintentarlo."""
+    async def _call[T](self, provider: LLMProvider, call: Callable[[], Awaitable[T]]) -> T:
+        """Un reintento con backoff ante una falla transitoria y rápida; el resto se traduce a errores de
+        dominio. Un timeout no se reintenta (ver RETRY_ONLY_IF_FAILED_WITHIN_SECONDS)."""
+        started = self._clock()
         try:
-            return await call()
-        except ProviderUnavailable:
-            if provider.name == "mock":
+            try:
+                return await call()
+            except ProviderTimeout:
                 raise
-            await self._sleep(self._retry_delay)
-            return await call()
+            except ProviderUnavailable:
+                if self._clock() - started > RETRY_ONLY_IF_FAILED_WITHIN_SECONDS:
+                    raise
+                await self._sleep(self._retry_delay)
+                return await call()
+        except ProviderError as exc:
+            raise _domain_error(provider, exc) from exc
 
     async def chat(
-        self, *, action: ChatAction, message: str | None, document_text: str, selection: str | None
-    ) -> tuple[str, str]:
+        self,
+        *,
+        provider: LLMProvider,
+        action: ChatAction,
+        message: str | None,
+        document_text: str,
+        selection: str | None,
+    ) -> AIAnswer:
         message = (message or "").strip() or None
         selection = (selection or "").strip() or None
         if action == "free" and message is None:
@@ -57,38 +105,79 @@ class AIService:
         focus = selection or (message if action == "simplify" else None)
         context = ai_rules.build_context(document_text, focus, self._max_chars)
         user_message = ai_rules.build_user_message(action, message, context)
-        key = ai_rules.cache_key("chat", action, message, selection, document_text[: self._max_chars])
+        # `scope` incluye la huella de la key: un usuario nunca recibe lo que pagó la cuota de otro.
+        key = ai_rules.cache_key(
+            "chat", provider.scope, action, message, selection, document_text[: self._max_chars]
+        )
         if (cached := self._cache.get(key)) is not None:
             return cached
 
         messages = [ChatMessage(role="user", content=user_message)]
-        for provider in self._chat_chain:
-            try:
-                answer = await self._with_retry(
-                    provider, partial(provider.chat, STUDY_PROMPT, messages, action=action)
-                )
-            except ProviderUnavailable:
-                logger.warning("provider failed, trying next", extra={"provider": provider.name})
-                continue
-            if provider.name != "mock":  # lo simulado no se cachea: cuando el proveedor vuelva, se usa
-                self._cache.set(key, (answer, provider.name))
-            return answer, provider.name
-        raise RuntimeError("chat chain must end with a provider that cannot fail")  # pragma: no cover
+        done = await self._call(provider, partial(provider.chat, STUDY_PROMPT, messages))
+        answer = _answer(provider, done)
+        self._cache.set(key, answer)
+        return answer
 
-    async def describe_image(self, *, image: bytes, mime: str, context: str) -> tuple[str, str]:
+    async def describe_image(
+        self, *, provider: LLMProvider, image: bytes, mime: str, context: str
+    ) -> AIAnswer:
         context = ai_rules.trim_text(context.strip(), 500)
-        key = ai_rules.cache_key("image", mime, image, context)
+        key = ai_rules.cache_key("image", provider.scope, mime, image, context)
         if (cached := self._cache.get(key)) is not None:
             return cached
-        for provider in self._image_chain:
-            try:
-                description = await self._with_retry(
-                    provider, partial(provider.describe_image, image, mime, context, system=IMAGE_PROMPT)
-                )
-            except ProviderUnavailable:
-                logger.warning("provider failed, trying next", extra={"provider": provider.name})
-                continue
-            if provider.name != "mock":
-                self._cache.set(key, (description, provider.name))
-            return description, provider.name
-        raise RuntimeError("image chain must end with a provider that cannot fail")  # pragma: no cover
+        done = await self._call(
+            provider, partial(provider.describe_image, image, mime, context, system=IMAGE_PROMPT)
+        )
+        answer = _answer(provider, done)
+        self._cache.set(key, answer)
+        return answer
+
+    async def list_models(self, provider: LLMProvider) -> list[ModelInfo]:
+        models = await self._call(provider, provider.list_models)
+        return sorted(models, key=lambda m: (m.free is False, m.name.lower()))
+
+
+_SAFE_REASON = re.compile(r"[a-z0-9_]{1,40}")
+
+
+def _answer(provider: LLMProvider, done: Completion) -> AIAnswer:
+    return AIAnswer(text=done.text, provider=provider.name, model=provider.model, truncated=done.truncated)
+
+
+def _domain_error(provider: LLMProvider, exc: ProviderError) -> AppError:
+    """Traduce un error del proveedor al error de dominio que la interfaz sabe explicar.
+
+    El orden importa: de lo más específico a lo más general (las subclases de `ProviderRejected` primero).
+    """
+    extra: dict[str, object] = {"provider": provider.name, "model": provider.model}
+    if exc.reason and _SAFE_REASON.fullmatch(exc.reason):  # viene del proveedor: solo palabras simples
+        extra["reason"] = exc.reason
+    headers: dict[str, str] = {}
+    if exc.retry_after is not None:
+        seconds = max(1, math.ceil(exc.retry_after))
+        extra["retry_after_seconds"] = seconds
+        headers["Retry-After"] = str(seconds)
+    if exc.provider_message and not isinstance(exc, ProviderAuthError):
+        extra["provider_message"] = exc.provider_message  # ya limpio de la key y acotado
+    name = provider.name
+    # Texto fijo: nunca se repite en la respuesta lo que dijo la excepción (podría traer datos ajenos).
+    detail = f"{name} ({provider.model or 'no model'}): {type(exc).__name__}"
+
+    mapping: list[tuple[type[ProviderError], type[AppError]]] = [
+        (ProviderAuthError, AIKeyInvalidError),
+        (ProviderQuotaError, AIQuotaExceededError),
+        (ProviderPayloadTooLarge, AIInputTooLargeError),
+        (ProviderContentBlocked, AIContentBlockedError),
+        (ProviderEmptyResponse, AIEmptyResponseError),
+        (ProviderPermissionDenied, AIPermissionDeniedError),
+        (ProviderModelNotFound, AIModelNotFoundError),
+        (ProviderImageRejected, AIImageRejectedError),
+        (ProviderRejected, AIModelRejectedError),
+        (ProviderUnavailable, AIUnavailableError),
+    ]
+    for provider_error, domain_error in mapping:
+        if isinstance(exc, provider_error):
+            if domain_error is AIUnavailableError:
+                logger.warning("provider unavailable", extra={"provider": name, "reason": exc.reason})
+            return domain_error(detail, extra=extra, headers=headers)
+    return AIUnavailableError(detail, extra=extra, headers=headers)  # error nuevo sin traducir

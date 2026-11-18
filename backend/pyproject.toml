@@ -12,6 +12,7 @@ dependencies = [
   "google-genai>=3.4.0",
   "python-multipart>=0.0.34",
   "httpx>=0.28.1",
+  "cryptography>=50.0.2",
 ]
 
 [dependency-groups]
@@ -42,7 +43,6 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
 # El entorno de test se fija ANTES de importar la app (Settings valida al importarse).
 "tests/conftest.py" = ["E402"]
 # Textos largos en español (respuestas simuladas del prototipo): ruff format no parte strings.
-"app/providers/llm/mock.py" = ["E501"]
 
 # Las capas se hacen cumplir (ver docs/arquitectura.md §4.1 y la skill layering-fastapi-apps).
 # crud y providers son capas hermanas: no se importan entre sí.

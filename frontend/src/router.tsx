@@ -15,6 +15,8 @@ export const routes: RouteObject[] = [
       // Con perfil guardado → /biblioteca; sin perfil → /perfil.
       { index: true, loader: homeLoader },
       { path: "perfil", lazy: () => import("@/routes/profile") },
+      // La guía de API keys es pública: se puede leer antes de elegir un perfil.
+      { path: "ayuda/ia", lazy: () => import("@/routes/ai-guide") },
       {
         // Sin perfil guardado, biblioteca y lector pasan antes por el onboarding.
         middleware: [requireProfile],

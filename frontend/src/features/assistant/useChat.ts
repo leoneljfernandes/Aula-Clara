@@ -1,12 +1,17 @@
 import { useState } from "react";
 
-import { chat, describeApiError, type Provider } from "./api";
-import type { ChatAction } from "./mock";
+import { type ChatAction, chat, type Provider } from "./api";
+import { describeApiError, LIMITS, needsAISetup } from "./errors";
 
 export interface ChatMessage {
   role: "user" | "ai";
   text: string;
   provider?: Provider;
+  model?: string;
+  /** El modelo cortó la respuesta por su límite de largo. */
+  truncated?: boolean;
+  /** El error se resuelve en «Configurar IA»: el panel muestra el botón junto al mensaje. */
+  needsSetup?: boolean;
 }
 
 const GREETING: ChatMessage = {
@@ -38,13 +43,25 @@ export function useChat(documentText: string): Chat {
     try {
       const answer = await chat({
         action,
-        message: extra?.message ?? (action === "free" ? shown : undefined),
+        message: (extra?.message ?? (action === "free" ? shown : undefined))?.slice(0, LIMITS.message),
         documentText: documentText.slice(0, MAX_CONTEXT_CHARS),
-        selection: extra?.selection,
+        selection: extra?.selection?.slice(0, LIMITS.selection),
       });
-      setMessages((m) => [...m, { role: "ai", text: answer.text, provider: answer.provider }]);
+      setMessages((m) => [
+        ...m,
+        {
+          role: "ai",
+          text: answer.text,
+          provider: answer.provider,
+          model: answer.model,
+          truncated: answer.truncated,
+        },
+      ]);
     } catch (error) {
-      setMessages((m) => [...m, { role: "ai", text: describeApiError(error) }]);
+      setMessages((m) => [
+        ...m,
+        { role: "ai", text: describeApiError(error), needsSetup: needsAISetup(error) },
+      ]);
     } finally {
       setTyping(false);
     }

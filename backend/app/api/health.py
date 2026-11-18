@@ -17,7 +17,6 @@ class LiveStatus(BaseModel):
 class ReadyStatus(BaseModel):
     status: Literal["ok"]
     version: str
-    ai_provider: Literal["gemini", "groq", "mock"]
 
 
 @router.get("/live")
@@ -27,5 +26,5 @@ async def live() -> LiveStatus:
 
 @router.get("/ready")
 async def ready(settings: SettingsDep) -> ReadyStatus:
-    # No llama al proveedor de IA (gastaría cuota): informa cuál está configurado.
-    return ReadyStatus(status="ok", version=settings.APP_VERSION, ai_provider=settings.active_ai_provider)
+    # No llama a ningún proveedor de IA: las keys son de cada usuario, no del servidor.
+    return ReadyStatus(status="ok", version=settings.APP_VERSION)

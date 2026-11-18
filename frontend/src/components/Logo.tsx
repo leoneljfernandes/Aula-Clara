@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
 
+import logoUrl from "@/assets/logo.png";
+
 export function Logo(): ReactNode {
   return (
     <div className="flex items-center gap-3">
-      <span
-        aria-hidden="true"
-        className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--accent)] text-xl font-bold text-[var(--onAccent)]"
-      >
-        A
-      </span>
+      {/* Decorativo: el nombre de la app va escrito al lado. */}
+      <img src={logoUrl} alt="" width={44} height={44} className="h-11 w-11" />
       <span className="text-xl font-bold tracking-tight">Aula Clara</span>
     </div>
   );

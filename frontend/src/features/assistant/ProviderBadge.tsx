@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 
 import type { Provider } from "./api";
+import { providerLabel } from "./providers";
 
-/** Indicador discreto de qué respondió: simulado, o el proveedor real. */
-export function ProviderBadge({ provider }: { provider: Provider }): ReactNode {
-  const simulated = provider === "mock";
+/** Indicador discreto de qué proveedor y modelo respondió. */
+export function ProviderBadge({ provider, model }: { provider: Provider; model: string }): ReactNode {
   return (
-    <span className="mt-2 block text-sm text-[var(--muted)]">
-      {simulated ? "Respuesta simulada" : `Respuesta de IA (${provider === "gemini" ? "Gemini" : "Groq"})`}
+    <span className="mt-2 block text-sm break-words text-[var(--muted)]">
+      Respuesta de IA ({providerLabel(provider)} · {model})
     </span>
   );
 }
