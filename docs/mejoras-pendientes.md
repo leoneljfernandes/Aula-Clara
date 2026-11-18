@@ -145,3 +145,15 @@ Los vectores se guardan en IndexedDB (`Float32Array`), junto con **el nombre del
 - **Respuestas en streaming** (SSE): menos espera percibida y menos riesgo de pasar el `maxDuration` de 30 s. Para accesibilidad, anunciar la respuesta por `aria-live` al final, no de a pedazos.
 - **Caché y límite por IP compartidos:** en Vercel cada instancia tiene los suyos. Si hace falta un límite estricto, Upstash Redis tiene nivel gratuito.
 - **Llamada directa desde el navegador** al proveedor, como modo opcional, para quien no quiera que su key pase por el servidor (ver ADR 0002).
+
+---
+
+## Pendientes de los perfiles de accesibilidad (planes 01 y 02)
+
+- **Ir a `/perfil` desde la biblioteca o el lector** espera hasta 5 s al backend sin ningún indicador (`hydrateFallbackElement` solo cubre la primera carga). Devolver primero la caché y refrescar en segundo plano, o mostrar un indicador de navegación.
+- **Arranque en frío del backend:** si tarda más de 5 s y no hay caché, el onboarding ofrece solo «Personalizado». Evaluar un reintento.
+- **`docs/arquitectura.md` §1** («Qué hace el prototipo») ya describe el comportamiento actual y no el del prototipo.
+- **Guía por voz:** el texto de ayuda sugiere que lee solo el bloque al que te movés, pero sigue leyendo los siguientes.
+- **`Esc` silencia la lectura aunque se use para cerrar un desplegable**, y con atajos de una tecla, `Espacio` sobre un registro con `tabindex=0` reemplaza el desplazamiento.
+- **Verificaciones manuales en navegador real:** ver la lista en [accesibilidad.md](accesibilidad.md).
+- Lo que quedó asignado a un plan concreto está al final de [Braille](new_profiles/2026-11-18-perfiles-03-braille.md), [motriz](new_profiles/2026-11-18-perfiles-04-motriz.md) y [sordera](new_profiles/2026-11-18-perfiles-05-sordera.md).

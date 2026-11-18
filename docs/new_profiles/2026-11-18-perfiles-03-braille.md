@@ -559,3 +559,14 @@ git commit -m "feat(braille): impresión en relieve con medidas reales en milím
 git add backend/ frontend/ docs/ graphify-out/
 git commit -m "feat(perfiles): Braille en el preset Ceguera"
 ```
+
+---
+
+## Pendientes heredados del plan 02
+
+Cosas que el plan 02 dejó a propósito para este plan:
+
+- **`openBraille()` es una sola función** en `ReaderScreen` y hoy solo anuncia «El Braille todavía no está disponible». La usan el atajo `Alt+B` / `B` y el comando de voz «braille». Reemplazá su cuerpo para abrir el `BrailleDialog`; no agregues un segundo handler.
+- **`CAPABILITIES.braille` de `ToolsPanel` está fijo en `false`.** Hacelo depender de `settings.brailleTools`.
+- **Textos a actualizar:** `docs/new_profiles/01-perfil-ceguera.md` y `docs/accesibilidad.md` dicen que el Braille «todavía no está disponible»; ajustalos cuando exista.
+- **`KeysDialog` no filtra por capacidades:** muestra `Alt+B` aunque las herramientas de Braille estén apagadas. Decidí si se filtra.

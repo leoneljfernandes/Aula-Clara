@@ -384,3 +384,14 @@ git commit -m "feat(motriz): barra simplificada fija con navegación, lectura, v
 git add backend/ frontend/ docs/ graphify-out/
 git commit -m "feat(perfiles): preset Discapacidad motriz"
 ```
+
+---
+
+## Pendientes heredados del plan 02
+
+Cosas que el plan 02 dejó a propósito para este plan:
+
+- **Reproducir desde el cursor en todos los controles.** `Alt+P`, `Espacio` y la voz («leer», «continuar») arrancan desde el bloque del cursor con `startReading()` (en `ReaderScreen`), pero el botón ▶ de `ToolsPanel` sigue arrancando desde el principio. Usá `startReading` en ese botón y en «▶ Leer» de la barra simplificada, para que coincidan. «Escuchar este documento» sigue desde el principio, como dice su etiqueta.
+- **Tecla `4` (`simplifyBlock`).** Hoy explica más simple el bloque donde está el cursor y avisa «Elegí un párrafo primero (Alt+↓ o J).» si no hay ninguno. Este plan la extiende: primero el bloque elegido con un clic (`selectedBlock`) y, si no hay, el del cursor.
+- **Cursor después de leer todo.** Al terminar la lectura o con `Alt+S`, el cursor queda en el último bloque leído y `Alt+P` vuelve a leer solo ese. Evaluá reiniciarlo en «Lectura finalizada».
+- **`KeysDialog` no filtra por capacidades** (muestra atajos de funciones apagadas). `ToolsPanel` sí filtra.

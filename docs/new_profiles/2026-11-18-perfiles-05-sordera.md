@@ -405,3 +405,17 @@ git commit -m "feat(sordera): subtítulos en vivo de la clase con consentimiento
 git add backend/ frontend/ docs/ graphify-out/
 git commit -m "feat(perfiles): preset Sordera e hipoacusia"
 ```
+
+---
+
+## Pendientes heredados del plan 02
+
+Los subtítulos en vivo reutilizan `createRecognizer`, `micLock`, el consentimiento y `speechBus`. El plan 02 dejó para este plan:
+
+- **Vigilante de `onend` faltante.** Chrome con voces remotas puede dejar de hablar a los ~15 s sin disparar `onend`. El árbitro (`speechBus`) queda «hablando», el micrófono en pausa y solo `Esc` lo recupera. Agregá un temporizador o una consulta a `speechSynthesis.speaking` en `speakOnce` y en `ReadAloudEngine.speakFrom`.
+- **Consentimiento y `micLock` viven en los hooks, no en `createRecognizer`.** `useLiveCaptions` tiene que pedir el consentimiento de tipo `captions` y tomar el `micLock`. Lo más seguro es mover ambos al reconocedor, con una opción `consent`, para que nadie pueda omitirlos.
+- **La pausa mientras habla la app es incondicional.** Ofrecé una opción (por ejemplo `pauseWhileAppSpeaks: false`) para los subtítulos, y decidí qué corresponde en clase.
+- **Revocar el consentimiento.** `aulaclara.voiceConsent` no se puede borrar desde la interfaz. `captions: true` sugiere una pérdida auditiva (dato sensible, Ley 25.326): agregá un botón para revocarlo y no lo guardes nunca en el servidor.
+- **`FakeRecognition` es limitado:** emite un solo resultado en el índice 0 y no tiene `SpeechRecognition.available()`. Sumá ayudantes de varios resultados y provisorios (`interim`), y `available`.
+- **Contador de errores de red.** Solo se reinicia con un resultado no vacío. En sesiones largas y silenciosas, errores esporádicos pueden sumar 5 y apagar el micrófono. Reinicialo también en un `end` limpio.
+- **Carrera menor:** `stop()` y `start()` seguidos en modo «tocar para hablar» pueden cortar la sesión nueva con el `end` tardío de la anterior.
