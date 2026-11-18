@@ -1,7 +1,14 @@
 import { expect, it } from "vitest";
 
 import { deltaE2000, relativeLuminance, rgbToLab } from "./convert";
-import { applyMatrix, daltonizeMatrix, feColorMatrixValues, sampleAverage, simulate } from "./cvd";
+import {
+  applyMatrix,
+  daltonizeMatrix,
+  enhancementKind,
+  feColorMatrixValues,
+  sampleAverage,
+  simulate,
+} from "./cvd";
 
 it.each(["protan", "deutan", "tritan", "achromat"] as const)("%s conserva el blanco y el negro", (kind) => {
   expect(simulate([255, 255, 255], kind)).toEqual([255, 255, 255]);
@@ -52,4 +59,12 @@ it("promedia una ventana de 3 × 3 y recorta en los bordes", () => {
   for (let i = 0; i < 9; i++) data.set([i === 4 ? 90 : 0, 0, 0, 255], i * 4);
   expect(sampleAverage(data, 3, 3, 1, 1)).toEqual([10, 0, 0]);
   expect(sampleAverage(data, 3, 3, 0, 0)).toEqual([23, 0, 0]); // 90 / 4 píxeles, redondeado
+});
+
+it("el realce depende del tipo: sin daltonismo y con acromatopsia no hay, y «no sé» usa deuteranopía", () => {
+  expect(enhancementKind("none")).toBeNull();
+  expect(enhancementKind("achromat")).toBeNull();
+  expect(enhancementKind("unsure")).toBe("deutan");
+  expect(enhancementKind("protan")).toBe("protan");
+  expect(enhancementKind("tritan")).toBe("tritan");
 });

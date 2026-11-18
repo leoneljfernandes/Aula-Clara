@@ -5,6 +5,7 @@ import { RouterProvider } from "react-router/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_SETTINGS, type ReadingSettings } from "@/features/preferences";
+import { daltonizeMatrix, feColorMatrixValues } from "@/lib/color/cvd";
 import { routes } from "@/router";
 import { ReadAloudEngine, speechBus } from "@/lib/speech";
 import { FakeRecognition, installFakeRecognition } from "@/test/fakeSpeechRecognition";
@@ -2512,6 +2513,54 @@ describe("daltonismo", () => {
     await user.keyboard("{Escape}");
     expect(toggle).toHaveFocus();
     expect(toggle).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("«Realzar colores» aplica el filtro de realce y se puede apagar", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const toggle = await screen.findByRole("button", { name: /Realzar colores/ });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    // jsdom descarta la propiedad `filter` del estilo: se prueba la marca que la acompaña.
+    expect(document.querySelector("[data-enhanced='true']")).not.toBeNull();
+    expect(
+      document.querySelector("#cvd-enhance feColorMatrix")?.getAttribute("values")?.split(" "),
+    ).toHaveLength(20);
+    await user.click(toggle);
+    expect(document.querySelector("[data-enhanced='true']")).toBeNull();
+  });
+
+  it("con acromatopsia el realce se explica y no se ofrece", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { cvdType: "achromat" } }),
+    );
+    renderAt("/leer/d1");
+    expect(await screen.findByRole("button", { name: /Realzar colores/ })).toBeDisabled();
+    expect(screen.getByText(/Con acromatopsia, el realce de colores no ayuda/)).toBeInTheDocument();
+    expect(document.querySelector("#cvd-enhance")).toBeNull();
+  });
+
+  it("si no sé de qué tipo es, el realce usa el de deuteranopía", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { cvdType: "unsure" } }),
+    );
+    renderAt("/leer/d1");
+    await screen.findByRole("button", { name: /Realzar colores/ });
+    expect(document.querySelector("#cvd-enhance feColorMatrix")?.getAttribute("values")).toBe(
+      feColorMatrixValues(daltonizeMatrix("deutan")),
+    );
+  });
+
+  it("sin daltonismo no se monta ningún filtro", async () => {
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { cvdType: "none" } }),
+    );
+    renderAt("/leer/d1");
+    await screen.findByRole("button", { name: /Interpretar con IA/ });
+    expect(document.querySelector("#cvd-enhance")).toBeNull();
   });
 
   it("sin daltonismo no hay botón de identificar colores", async () => {

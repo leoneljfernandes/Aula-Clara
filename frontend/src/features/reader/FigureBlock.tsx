@@ -15,6 +15,7 @@ import type { ReadingSettings } from "@/features/preferences";
 import type { Block } from "@/lib/extractors";
 import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
+import { enhancementKind } from "@/lib/color/cvd";
 import { figureImageBlob } from "@/lib/figureImage";
 
 import { BarChart } from "./BarChart";
@@ -80,6 +81,9 @@ export function FigureBlock({
   const [inspectorImage, setInspectorImage] = useState<Blob | null>(null);
   const [inspectorFailed, setInspectorFailed] = useState(false);
   const inspectButton = useRef<HTMLButtonElement>(null);
+  const [enhanced, setEnhanced] = useState(false);
+  // Con acromatopsia no hay realce que ayude: el botón se deshabilita y se explican las alternativas.
+  const canEnhance = enhancementKind(cvdType) !== null;
 
   const closeInspector = (): void => {
     setInspecting(false);
@@ -136,18 +140,23 @@ export function FigureBlock({
   return (
     <figure className="my-10">
       <div className="relative rounded-2xl border-2 border-[var(--border)] bg-[var(--bg)] p-4">
-        {dataUrl ? (
-          <img
-            src={dataUrl}
-            alt={
-              alt ??
-              "Imagen del documento original sin descripción alternativa. Usá el botón Interpretar con IA para escuchar o leer su contenido."
-            }
-            className="mx-auto h-auto max-h-[420px] max-w-full"
-          />
-        ) : (
-          <BarChart />
-        )}
+        <div
+          data-enhanced={enhanced && canEnhance ? "true" : undefined}
+          style={enhanced && canEnhance ? { filter: "url(#cvd-enhance)" } : undefined}
+        >
+          {dataUrl ? (
+            <img
+              src={dataUrl}
+              alt={
+                alt ??
+                "Imagen del documento original sin descripción alternativa. Usá el botón Interpretar con IA para escuchar o leer su contenido."
+              }
+              className="mx-auto h-auto max-h-[420px] max-w-full"
+            />
+          ) : (
+            <BarChart />
+          )}
+        </div>
         {inspectorImage && <ColorInspector image={inspectorImage} onClose={closeInspector} />}
         <div className="absolute top-3 right-3">
           {/* aria-disabled y no disabled: un botón deshabilitado pierde el foco (va a <body>) y el
@@ -186,6 +195,19 @@ export function FigureBlock({
           <Button ref={inspectButton} aria-pressed={inspecting} onClick={() => void toggleInspector()}>
             <span aria-hidden="true">🔍</span> Identificar colores
           </Button>
+          <Button
+            aria-pressed={enhanced && canEnhance}
+            disabled={!canEnhance}
+            onClick={() => setEnhanced((on) => !on)}
+          >
+            <span aria-hidden="true">🎨</span> Realzar colores
+          </Button>
+          {!canEnhance && (
+            <p className="basis-full text-base">
+              Con acromatopsia, el realce de colores no ayuda. Usá «Identificar colores» o «Interpretar con
+              IA».
+            </p>
+          )}
           {inspectorFailed && (
             <p role="alert" className="text-base">
               No pudimos armar la imagen para identificar sus colores.

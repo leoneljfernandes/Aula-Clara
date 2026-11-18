@@ -117,3 +117,14 @@ export function sampleAverage(
   }
   return sum.map((total) => Math.round(total / count)) as unknown as RGB;
 }
+
+/**
+ * Qué realce corresponde a cada «Visión de los colores»: sin daltonismo y con acromatopsia no hay (no ayuda), y
+ * quien no sabe de qué tipo es usa el de deuteranopía, el más frecuente.
+ */
+export function enhancementKind(
+  type: "none" | "unsure" | "protan" | "deutan" | "tritan" | "achromat",
+): Exclude<CvdKind, "achromat"> | null {
+  if (type === "none" || type === "achromat") return null;
+  return type === "unsure" ? "deutan" : type;
+}

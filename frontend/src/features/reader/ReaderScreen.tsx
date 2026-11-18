@@ -24,6 +24,7 @@ import {
   usePreferences,
 } from "@/features/preferences";
 import { useAnnounce } from "@/lib/announcer";
+import { enhancementKind } from "@/lib/color/cvd";
 import { KEYMAP, type ShortcutId } from "@/lib/keymap";
 import { speechBus } from "@/lib/speech";
 import { useReadAloud } from "@/lib/useReadAloud";
@@ -31,6 +32,7 @@ import type { VoiceCommand } from "@/lib/voice/commands";
 
 import { findBlock, readableIndex } from "./blockNav";
 import { BrailleDialog } from "./braille/BrailleDialog";
+import { ColorFilterDefs } from "./ColorFilterDefs";
 import { DocumentView } from "./DocumentView";
 import { ReaderBottomBar } from "./ReaderBottomBar";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
@@ -58,6 +60,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const [toolsOpen, setToolsOpen] = useToggle();
   // Pantalla simplificada: con la interfaz grande las herramientas quedan plegadas a cualquier ancho.
   const simplified = settings.uiScale === "large";
+  // Realce de colores de las figuras según el tipo de daltonismo (null: no corresponde).
+  const enhancement = enhancementKind(settings.cvdType);
   // Párrafo elegido con un clic o Enter (`clickToSelect`): las acciones están en la barra de abajo.
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
   // Descripciones de figuras hechas en esta sesión. Mapa aparte: cambiar `article` reiniciaría el motor de lectura.
@@ -268,6 +272,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   return (
     <div className="flex flex-col lg:h-screen">
       <title>{`${doc.title} · Aula Clara`}</title>
+      {enhancement && <ColorFilterDefs kind={enhancement} />}
       <header className="flex flex-wrap items-center gap-3 border-b-2 border-[var(--border)] bg-[var(--panel)] px-4 py-3 lg:px-5">
         <Link
           to="/biblioteca"
