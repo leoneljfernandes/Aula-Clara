@@ -20,6 +20,7 @@ async def test_presets_catalog_lists_the_seed_presets(client: AsyncClient) -> No
     assert presets["motriz"]["settings"]["ui_scale"] == "large"
     assert presets["sordera"]["settings"]["ai_language"] == "plain"
     assert presets["daltonismo"]["settings"]["cvd_type"] == "unsure"
+    assert presets["daltonismo"]["settings"]["theme"] == "okabe"
 
 
 async def test_old_profiles_endpoint_is_gone(client: AsyncClient) -> None:

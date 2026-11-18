@@ -79,10 +79,28 @@ export const THEMES = {
       focus: "#FF4FD8",
     },
   },
+  // Paleta de Okabe e Ito, pensada para que se distinga con cualquier tipo de daltonismo.
+  okabe: {
+    label: "Daltonismo · Okabe-Ito",
+    swatch: ["#FAFAFA", "#0072B2"],
+    vars: {
+      bg: "#FAFAFA",
+      fg: "#0F172A",
+      panel: "#F1F5F9",
+      muted: "#334155",
+      border: "#64748B",
+      accent: "#0072B2",
+      onAccent: "#FFFFFF",
+      soft: "#E0F2FE",
+      hl: "#F0E442",
+      hlFg: "#0F172A",
+      focus: "#D55E00",
+    },
+  },
 } as const satisfies Record<string, ThemeDef>;
 
 export type ThemeId = keyof typeof THEMES;
-export const THEME_ORDER: readonly ThemeId[] = ["claro", "sepia", "oscuro", "contraste"];
+export const THEME_ORDER: readonly ThemeId[] = ["claro", "sepia", "oscuro", "contraste", "okabe"];
 
 export interface FontDef {
   label: string;

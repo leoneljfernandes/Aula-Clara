@@ -754,6 +754,19 @@ describe("lector", () => {
     });
   });
 
+  it("Alt+T recorre los cinco temas, también el de Okabe-Ito, y vuelve al primero", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    for (let i = 0; i < 4; i++) await user.keyboard("{Alt>}t{/Alt}");
+    expect(screen.getByRole("button", { name: /Daltonismo · Okabe-Ito/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.keyboard("{Alt>}t{/Alt}");
+    expect(screen.getByRole("button", { name: /Claro/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("Alt+T cambia el tema y Alt+= agranda el texto", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");

@@ -10,7 +10,7 @@ export function ThemeButtons({ compact = false }: { compact?: boolean }): ReactN
   const announce = useAnnounce();
   return (
     <div
-      className={`grid ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"} gap-2`}
+      className={`grid ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"} gap-2`}
       role="group"
       aria-label="Tema de color"
     >

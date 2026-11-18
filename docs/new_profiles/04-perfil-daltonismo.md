@@ -93,7 +93,7 @@ Además del requisito WCAG 1.4.1 que ya cumple el selector de temas, se refuerza
 ### Paso 5: Temas verificados e indicadores sin color (hecho, plan 06)
 - **Los cuatro temas se verificaron bajo simulación** de protanopía, deuteranopía y tritanopía: el texto, el texto sobre el color de acento y sobre el resaltado, y el foco mantienen el contraste (4,5:1 y 3:1) y el resaltado se distingue del fondo (ΔE2000 ≥ 10). Ningún tema necesitó cambios.
 - **Cero dependencia exclusiva del color (1.4.1):** el bloque que se lee en voz alta lleva un **borde izquierdo de 4 px** además del fondo (y `aria-current`), el bloque elegido con un clic lleva un contorno de 4 px y los estados de «Configurar IA» empiezan con **✓** o **✕**.
-- **Tema `okabe` (opcional):** ver la nota al final.
+- **Tema «Daltonismo · Okabe-Ito» (`okabe`):** es el quinto tema (`Alt+T` lo recorre) y el que usa el preset. Paleta de Okabe e Ito: fondo `#FAFAFA`, acento azul `#0072B2`, resaltado amarillo `#F0E442` y foco naranja `#D55E00`. Pasa los mismos contrastes AA y las tres simulaciones que los otros temas, sin ajustes.
 
 ---
 

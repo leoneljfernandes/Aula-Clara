@@ -382,16 +382,19 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
               }
             />
           )}
-          <AssistantPanel
-            chat={chat}
-            inputRef={chatInput}
-            selection={assistantSelection}
-            rate={settings.rate}
-            canListen={!settings.hideAudio}
-            autoSpeak={settings.voiceGuide}
-            dictation={voiceOn}
-            handsFree={settings.voiceCommands === "continuous"}
-          />
+          {/* Con subtítulos arriba, el panel ocupa el resto de la columna; sin ellos el contenedor no genera caja. */}
+          <div className={settings.liveCaptions ? "flex min-h-0 flex-1 flex-col" : "contents"}>
+            <AssistantPanel
+              chat={chat}
+              inputRef={chatInput}
+              selection={assistantSelection}
+              rate={settings.rate}
+              canListen={!settings.hideAudio}
+              autoSpeak={settings.voiceGuide}
+              dictation={voiceOn}
+              handsFree={settings.voiceCommands === "continuous"}
+            />
+          </div>
         </aside>
       </div>
 

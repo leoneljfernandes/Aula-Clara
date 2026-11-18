@@ -31,6 +31,6 @@
   {"id": "daltonismo", "title": "Daltonismo", "icon": "◑",
    "description": "Nombres de los colores y realce en los gráficos, y descripciones con IA que dicen dónde está cada color.",
    "tags": ["Identificar colores", "Realce de colores", "IA con guía de color"],
-   "settings": {"font": "atkinson", "font_size": 20, "line_height": 1.7, "theme": "claro", "audio_focus": false,
+   "settings": {"font": "atkinson", "font_size": 20, "line_height": 1.7, "theme": "okabe", "audio_focus": false,
                 "cvd_type": "unsure"}}
 ]
