@@ -10,7 +10,7 @@ import {
   RATES,
   ThemeButtons,
   clamp,
-  CONTROLS,
+  controlsFor,
   LINE_HEIGHT,
   SettingsControls,
   usePreferences,
@@ -92,7 +92,7 @@ export function ToolsPanel({ audio, total }: { audio: ReadAloud; total: number }
     updateSettings({ fontSize: next });
     announce(`Tamaño ${next} píxeles`);
   };
-  const hasReaderControls = CONTROLS.some((c) => c.inReader);
+  const hasReaderControls = controlsFor("reader").length > 0;
   const audioSection = <AudioSection audio={audio} total={total} />;
 
   return (

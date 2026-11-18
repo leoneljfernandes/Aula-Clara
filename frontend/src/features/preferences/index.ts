@@ -11,7 +11,13 @@ export {
   THEMES,
   type ThemeId,
 } from "./config";
-export { CONTROLS, type ControlGroup, type ControlSpec } from "./controls";
+export {
+  CONTROLS,
+  type ControlGroup,
+  type ControlPlacement,
+  controlsFor,
+  type ControlSpec,
+} from "./controls";
 export { homeLoader, requireOnboarding, safeNext } from "./guards";
 export { OnboardingWizard } from "./OnboardingWizard";
 export { applyPreset, loadPresetCatalog, matchPreset, type Preset, type PresetCatalog } from "./presets";

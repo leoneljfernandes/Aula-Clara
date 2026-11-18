@@ -45,3 +45,13 @@ export const CONTROLS: readonly ControlSpec[] = [
     inReader: false,
   },
 ];
+
+/** Dónde se dibujan los controles: el onboarding los muestra todos; el lector, solo los `inReader`. */
+export type ControlPlacement = "onboarding" | "reader";
+
+export function controlsFor(
+  placement: ControlPlacement,
+  controls: readonly ControlSpec[] = CONTROLS,
+): readonly ControlSpec[] {
+  return controls.filter((c) => placement === "onboarding" || c.inReader);
+}

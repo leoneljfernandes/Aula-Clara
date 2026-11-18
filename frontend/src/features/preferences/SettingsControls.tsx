@@ -1,6 +1,6 @@
 import { type ReactNode, useId } from "react";
 
-import { CONTROL_GROUPS, CONTROLS, type ControlSpec } from "./controls";
+import { CONTROL_GROUPS, type ControlPlacement, type ControlSpec, controlsFor } from "./controls";
 import { usePreferences } from "./PreferencesProvider";
 import { sanitizePatch } from "./settings";
 
@@ -56,8 +56,8 @@ function Control({ spec }: { spec: ControlSpec }): ReactNode {
 }
 
 /** Dibuja los controles de `CONTROLS`, un `fieldset` por grupo. En el lector, solo los marcados `inReader`. */
-export function SettingsControls({ placement }: { placement: "onboarding" | "reader" }): ReactNode {
-  const visible = CONTROLS.filter((c) => placement === "onboarding" || c.inReader);
+export function SettingsControls({ placement }: { placement: ControlPlacement }): ReactNode {
+  const visible = controlsFor(placement);
   return (
     <>
       {CONTROL_GROUPS.map((g) => {
