@@ -1,6 +1,6 @@
 # 01 · Perfil Ceguera (`id: "ceguera"`)
 
-> **Estado:** documento de propuesta inicial. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+> **Estado:** documento de propuesta inicial, actualizado en §2.1, §2.2, §3 (pasos 1, 4 y 5) y §4 con lo que el [plan 02](./2026-11-18-perfiles-02-teclado-y-voz.md) dejó construido: teclado, voz y preset. El Braille (§2.3 y pasos 2 y 3 de §3) sigue sin construir: es el plan 03. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
 
 ## 1. Motivos y objetivos del perfil
 
@@ -21,48 +21,89 @@ Existen dos escenarios reales para un estudiante con ceguera y la app debe resol
 | Escenario | Qué usa la persona | Cómo debe comportarse Aula Clara |
 | :--- | :--- | :--- |
 | **Escenario A: Usa su propio lector de pantalla (NVDA / VoiceOver / JAWS)** | El sistema operativo ya lee cada elemento enfocado y las regiones `aria-live`. | La app **no debe superponer** su propia voz sobre la del lector al mover el foco con `Tab`. Debe ofrecer *landmarks* impecables, encabezados jerárquicos (`h1`, `h2`), `aria-live="polite"` para respuestas del asistente y botones con etiquetas explícitas. |
-| **Escenario B: Computadora sin lector de pantalla instalado (ej. biblioteca o laboratorio universitario)** | No tiene NVDA/JAWS activo; depende del sintetizador integrado del navegador (`SpeechSynthesis`). | Con la opción **«Guía de navegación por voz» (`voiceGuide: true`)**, la app anuncia en voz alta (`speakOnce`) el cambio de pantalla, el control que recibe el foco (`focusin`), el párrafo al que se salta con el teclado y lee automáticamente las respuestas del asistente de IA apenas llegan. |
+| **Escenario B: Computadora sin lector de pantalla instalado (ej. biblioteca o laboratorio universitario)** | No tiene NVDA/JAWS activo; depende del sintetizador integrado del navegador (`SpeechSynthesis`). | Con la opción **«Guía de navegación por voz» (`voiceGuide: true`)**, la app lee en voz alta (`speakOnce`) el párrafo al que se salta con el teclado y las respuestas del asistente de IA apenas llegan. No lee el cambio de pantalla ni cada control que recibe el foco: eso quedó fuera. |
 
-**Regla de oro para evitar colisión de voces:**
-- `voiceGuide` incluye un atajo rápido de silencio instantáneo (**tecla `Control` o `Escape`** cancela cualquier locución en curso con `window.speechSynthesis.cancel()`, igual que hacen NVDA y JAWS) y se puede encender/apagar en cualquier momento con `Alt+G`.
+**Cómo quedó resuelto (plan 02):**
+- **Un árbitro de voz (`speechBus`, en `lib/speech.ts`).** Habla una sola voz a la vez: quien empieza a hablar interrumpe a la anterior y le avisa. Si lo interrumpido era la lectura del documento, queda **en pausa en el mismo párrafo** y «Continuar» sigue desde ahí. Una lectura en pausa cuenta como «no está hablando»: por eso el micrófono en manos libres vuelve a escuchar y «continuar» se entiende.
+- **`Esc` silencia toda voz** (`speechBus.silence()`), sin importar dónde esté el foco, y **además sigue cerrando diálogos** y desplegables: no se le quita ese uso. Con un diálogo modal abierto, es la única tecla del lector que sigue activa.
+- **`voiceGuide` («Guía por voz») viene apagada**, también en el preset Ceguera. Quien usa NVDA, JAWS o VoiceOver tiene que dejarla apagada para no escuchar dos voces; la persona sin lector de pantalla la prende en Preferencias o en el lector. Con la guía encendida, la app lee:
+  - el bloque al que se mueve el cursor (con `Alt+↓`/`Alt+↑`, `Alt+H`, `Alt+G` o las teclas sueltas);
+  - las respuestas del asistente y las descripciones de figuras apenas llegan;
+  - **también los errores** de esos pedidos (key inválida, cuota, sin conexión), para que nadie espere una respuesta que no va a llegar;
+  - **el aviso de corte** cuando la respuesta de la IA llegó truncada.
+- **`Alt+G` ya no enciende o apaga la guía:** salta al gráfico siguiente (ver §2.2). La guía se maneja desde el control «Guía por voz».
+- **Límite conocido:** la política de reproducción automática de los navegadores puede bloquear la voz hasta que la página recibió un gesto de la persona (un toque o una tecla). Una respuesta que llega de forma asíncrona, sin gesto reciente, puede quedar muda.
 
 ### 2.2. Navegación por teclado y por comandos de voz
 
 #### A. Navegación estructural por teclado en el documento
-Hoy el lector (`ReaderScreen.tsx`) solo permite reproducir todo el texto de corrido (`Alt+P`) o detenerlo (`Alt+S`). Para estudiar un apunte universitario, una persona ciega necesita moverse por el texto como quien hojea páginas y secciones:
 
-- **Cursor de bloque activo (`focusedBlockIndex`):** independiente o sincronizado con la reproducción de voz.
-- **Atajos de lectura y navegación:**
-  - `Alt+P` (o `Espacio` fuera de inputs): Reproducir / Pausar desde el bloque actual.
-  - `Alt+→` / `J`: Ir al **siguiente párrafo** y leerlo.
-  - `Alt+←` / `K`: Ir al **párrafo anterior** y leerlo.
-  - `Alt+H` / `H`: Saltar al **siguiente título o sección (`h2`)** del documento y anunciarlo («Sección 3 de 6: Redes neuronales»).
-  - `Alt+I` / `G`: Saltar a la **siguiente figura/gráfico** y disparar (o leer si ya está en caché) su descripción por IA.
-  - `Alt+A`: Llevar el foco al cuadro de consulta del asistente de IA.
-  - `Alt+M`: Activar/desactivar micrófono para dictar comando o pregunta.
-  - `Alt+B`: Abrir el panel de traducción e impresión **Braille**.
+El lector tiene un **cursor de bloque** (`useReaderNavigation`). Mueve el foco real a párrafos, títulos y gráficos, y los bloques son `tabIndex=-1`: **no agrega paradas de `Tab`**. El cursor sigue a la lectura (si el audio avanza solo, «bloque siguiente» sale de donde se está leyendo) y al foco (tocar o tabular a un bloque lo vuelve el actual). Al llegar al borde se anuncia «Fin del documento» o «Principio del documento» y el cursor no se mueve. Al llegar a un título se anuncia «Sección 3 de 6: …».
 
-#### B. Navegación y dictado por voz (`Web Speech API - SpeechRecognition`)
-- **Tecnología:** `window.SpeechRecognition || window.webkitSpeechRecognition`, nativo en Chrome, Edge y Safari, configurado con `lang = "es-AR"`, `interimResults = false`, `continuous = false` (modo *Push-to-Talk* con sonido corto de inicio/fin generado con `AudioContext` Web Audio API para que la persona ciega sepa que el micrófono empezó y terminó de escuchar).
-- **Señal auditiva (*earcons* con `AudioContext`):**
-  - Una persona ciega no ve el ícono rojo de «Grabando». Se generan dos tonos suaves de 80 ms con `OscillatorNode` (sin archivos MP3 externos): tono ascendente (`440 Hz → 660 Hz`) al abrir micrófono y tono descendente (`660 Hz → 440 Hz`) al cerrar.
-- **Intérprete local de intenciones (`lib/voiceControl.ts`):**
-  Normaliza el texto reconocido (minúsculas, sin tildes) y evalúa comandos sin gastar llamadas a la IA:
-  - `"leer"` | `"reproducir"` | `"continuar"` → `audio.play()`
-  - `"pausar"` | `"pausa"` → `audio.pause()`
-  - `"detener"` | `"parar"` → `audio.stop()`
-  - `"siguiente"` | `"siguiente parrafo"` → avanza un bloque y lo lee
-  - `"anterior"` | `"parrafo anterior"` → retrocede un bloque y lo lee
-  - `"siguiente seccion"` | `"siguiente titulo"` → salta al próximo `h2`
-  - `"mas rapido"` / `"mas lento"` → ajusta `settings.rate`
-  - `"resumir"` | `"resumen"` → ejecuta acción rápida `summarize` en el asistente
-  - `"conceptos clave"` → ejecuta acción `key_concepts`
-  - `"preguntas"` | `"preguntas de repaso"` → ejecuta acción `quiz`
-  - `"describir imagen"` | `"interpretar grafico"` → ejecuta descripción de la figura activa
-  - `"braille"` | `"traducir a braille"` → abre el diálogo Braille
-  - `"preguntar ..."` (cualquier frase que empiece con *"preguntar"* o *"asistente"*) → envía el resto de la frase como consulta libre al asistente de IA y lee la respuesta en voz alta al recibirla.
+Todos los atajos salen de una tabla única, `frontend/src/lib/keymap.ts`, que leen el lector, el diálogo de atajos y el panel de herramientas. Es la tabla de la [hoja de ruta §5](./2026-11-18-perfiles-00-hoja-de-ruta.md#5-atajos-de-teclado-tabla-única):
 
----
+| Acción | Con Alt | Una tecla (si «Atajos de una sola tecla» está activo) |
+|---|---|---|
+| Leer / pausar | `Alt+P` | `Espacio` |
+| Detener | `Alt+S` | — |
+| Agrandar / achicar texto | `Alt+=` / `Alt+−` | — |
+| Cambiar tema | `Alt+T` | — |
+| Ir al asistente | `Alt+A` | — |
+| Bloque siguiente / anterior | `Alt+↓` / `Alt+↑` | `J` / `K` |
+| Título siguiente | `Alt+H` | `H` |
+| Gráfico siguiente | `Alt+G` | `G` |
+| Micrófono (comandos o dictado) | `Alt+M` | `M` |
+| Braille | `Alt+B` | `B` |
+| Resumir · Conceptos · Preguntas · Explicar el bloque | — | `1` · `2` · `3` · `4` |
+| Silenciar la voz | `Esc` (siempre) | — |
+
+`Alt+←` y `Alt+→` no se usan: son «Atrás» y «Adelante» en todos los navegadores. Respecto de la propuesta inicial de este documento cambiaron: `Alt+→`/`Alt+←` (ahora `Alt+↓`/`Alt+↑`), `Alt+I` (ahora `Alt+G`) y `Alt+G` como interruptor de la guía (ahora salta al gráfico).
+
+Reglas de los atajos de una sola tecla (`singleKeyShortcuts`, apagado por defecto, también en el preset Ceguera):
+- Solo cuentan sin `Ctrl`, `Meta`, `Alt` ni `Shift`, y con el foco **fuera de un campo de escritura** (`input` de texto, `textarea`, `select`, `[contenteditable]`, `role="textbox"` o `role="combobox"`). Escribir «j», «1» o un espacio en el chat no dispara nada.
+- `Espacio` se ignora si el foco está en un control que ya se activa con Espacio (botón, enlace, casilla, `summary`, roles `button`, `link`, `checkbox`, `radio`, `switch`, `menuitem`, `option`, `tab`).
+- `Alt+↑` y `Alt+↓` se ignoran en campos de escritura, porque abren el desplegable del `select`.
+- `Alt+B` hoy solo avisa «El Braille todavía no está disponible» (llega con el plan 03), y el atajo no aparece en la ayuda hasta que exista.
+- Con un lector de pantalla en modo navegación, `H` y `G` los resuelve el lector, no la app. Por eso las teclas sueltas son opcionales y los atajos con `Alt` existen siempre.
+
+#### B. Comandos y dictado por voz (`SpeechRecognition`)
+
+- **Tecnología:** `SpeechRecognition` / `webkitSpeechRecognition`, con `lang = "es-AR"` e `interimResults = false`. Funciona en Chrome, Edge y Safari; **en Firefox no existe**: no aparece el botón de micrófono, la barra de voz explica «Tu navegador no permite comandos por voz. Probá Chrome, Edge o Safari.» y no hay errores.
+- **Dos modos** (ajuste `voiceCommands`: `off`, `push` o `continuous`; el preset Ceguera trae `push`):
+  - **Al tocar el micrófono (`push`):** `continuous = false`. La app se calla (`speechBus.silence()`) antes de abrir el micrófono para no oírse a sí misma, escucha una frase y se apaga.
+  - **Manos libres (`continuous`):** `continuous = true`. El reconocimiento se reinicia 300 ms después de cada `end` mientras siga activo, y **se pausa mientras la app habla**.
+- **Un solo micrófono a la vez.** Los comandos y el dictado de preguntas comparten un candado (`micLock`): quien pide el micrófono corta al anterior. El dictado le gana a los comandos, así lo que se dicta no se interpreta como un comando; si los comandos estaban en manos libres, se reanudan al terminar el dictado.
+- **Errores:** `not-allowed`, `service-not-allowed`, `language-not-supported` y la falta de micrófono lo apagan sin reintentar. En manos libres, `no-speech` se reinicia sin avisar y los errores de red se reintentan con espera creciente (300 ms hasta 5 s) y se rinde tras 5 seguidos.
+- **Consentimiento** (`lib/voice/consent.ts`, clave `aulaclara.voiceConsent` = `{ "commands"?: true, "captions"?: true }`). Antes de la primera vez aparece un diálogo, una sola vez por tipo de uso:
+  - Título: «Antes de usar el micrófono».
+  - Texto: «Para entender tu voz, el navegador envía el audio a su servicio de reconocimiento (Google en Chrome, Microsoft en Edge, Apple en Safari), salvo que pueda procesarlo en tu dispositivo. Aula Clara no graba ni guarda el audio.»
+  - Botones: «Ahora no» y «Usar el micrófono».
+  - Para el subtitulado en vivo (`captions`, plan 05) se suma un párrafo sobre pedir permiso al docente y avisar a los compañeros.
+- **Nota de privacidad:** el audio va al servicio de reconocimiento del navegador. Solo se procesa en el dispositivo si el navegador ofrece `processLocally` y el paquete de idioma `es-AR` ya está instalado; en ese caso se prefiere. Aula Clara no guarda audio ni transcripciones.
+- **Cabecera HTTP:** `vercel.json` sirve `Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()`. El micrófono queda permitido solo para el propio sitio.
+- **Earcons** (`lib/voice/earcons.ts`): dos tonos de 80 ms y ganancia 0,15, generados con `AudioContext` (sin archivos). Inicio: 440 → 660 Hz. Fin: 660 → 440 Hz, que suena cuando el micrófono se apaga de verdad (no en los reinicios automáticos). Sin `AudioContext`, no suena nada y no falla.
+- **Barra de voz** (`VoiceCommandBar`): una región `role="status"` con «Escuchando…» o «Micrófono apagado» y la última frase con ✓ o ✗. No anuncia lo que dice la app, para no duplicar voces.
+
+**Intérprete local de comandos** (`lib/voice/commands.ts`, puro, sin llamadas a la IA). Normaliza el texto (minúsculas, sin tildes, sin puntuación) y solo entiende frases completas, salvo «preguntar …». Incluye las formas de voseo; como se normalizan sin tilde, «leé» y «lee» son la misma frase:
+
+| Comando | Frases |
+|---|---|
+| Leer | «leer», «lee», «leé», «reproducir», «continuar» |
+| Pausar | «pausar», «pausa», «pausá» |
+| Detener | «detener», «detene», «detené», «parar», «para», «pará» |
+| Bloque siguiente | «siguiente», «siguiente párrafo», «bajar», «baja», «bajá» |
+| Bloque anterior | «anterior», «párrafo anterior», «subir», «subí» |
+| Título siguiente | «siguiente sección», «siguiente título» |
+| Gráfico siguiente | «siguiente gráfico», «siguiente imagen» |
+| Velocidad | «más rápido», «más lento» |
+| Resumir | «resumir», «resumí», «resumen» |
+| Conceptos clave | «conceptos clave» |
+| Preguntas de repaso | «preguntas», «preguntas de repaso» |
+| Describir la figura | «describir imagen», «interpretar gráfico» |
+| Braille | «braille», «traducir a braille» (hoy avisa que no está disponible) |
+| Pregunta libre | «preguntar …» o «asistente …»: el resto de la frase va al asistente |
+
+**Regla del modo continuo.** En manos libres el micrófono está siempre abierto y puede oír voces ajenas (un titular, un video, otra persona). Por eso las acciones que **gastan cuota de la IA** (resumir, conceptos clave, preguntas, describir imagen y preguntar) exigen decir antes el prefijo **«asistente»** («asistente resumí»), y la pregunta libre además necesita **al menos 3 palabras** después del prefijo. En cambio la navegación y la lectura van sin prefijo y no gastan cuota: **«para», «lee» o «baja» sueltos sí disparan detener, leer y bloque siguiente** en manos libres. En modo `push` todo va sin prefijo.
 
 ### 2.3. Traducción a Braille, vista en pantalla e impresión física
 
@@ -125,32 +166,29 @@ Las impresoras Braille reales (*embossers* como **Index Braille Basic-D / Everes
 
 ## 3. Plan de implementación paso a paso
 
-### Paso 1: Preset `ceguera` en Preferencias y Backend
-- **Archivos a modificar:**
-  - [`frontend/src/features/preferences/config.ts`](../../frontend/src/features/preferences/config.ts)
-  - [`backend/app/seed/profiles.json`](../../backend/app/seed/profiles.json)
-  - [`backend/app/models/profile.py`](../../backend/app/models/profile.py) y [`backend/app/schemas/profile.py`](../../backend/app/schemas/profile.py)
-- **Configuración del preset:**
+### Paso 1: Preset `ceguera` en el catálogo del backend (hecho, plan 02)
+- **Dónde vive:** [`backend/app/seed/presets.json`](../../backend/app/seed/presets.json). El frontend lo recibe por `GET /api/v1/presets`; un test de contrato (`presets.contract.test.ts`) falla si un preset usa un ajuste que el frontend no conoce.
+- **Preset tal como quedó:**
   ```json
   {
     "id": "ceguera",
     "title": "Ceguera",
     "icon": "⠿",
-    "description": "Navegación total por teclado y voz, guía hablada y traducción e impresión en Braille.",
-    "tags": ["Guía por voz", "Comandos de voz", "Braille (.BRF e impresión)"],
-    "preset": {
+    "description": "Navegación por teclado y por voz, y lectura en voz alta del documento y de las respuestas.",
+    "tags": ["Teclado y voz", "Lectura en voz alta", "Guía por voz opcional"],
+    "settings": {
       "font": "atkinson",
       "font_size": 24,
       "line_height": 1.8,
       "theme": "contraste",
       "audio_focus": true,
-      "voice_guide": true,
-      "voice_commands": true,
-      "braille_enabled": true,
-      "single_key_shortcuts": true
+      "voice_guide": false,
+      "voice_commands": "push",
+      "single_key_shortcuts": false
     }
   }
   ```
+- **Diferencias con la propuesta inicial:** `voice_guide` y `single_key_shortcuts` vienen en `false` (se prenden a propósito: la guía pisaría a un lector de pantalla y las teclas sueltas chocan con las del lector), `voice_commands` es un modo (`"push"`) y no un booleano, y no hay `braille_enabled`: el Braille es del plan 03.
 
 ### Paso 2: Motor de traducción Braille y exportador `.BRF` (`frontend/src/lib/braille/`)
 - **Archivos nuevos:**
@@ -170,24 +208,24 @@ Las impresoras Braille reales (*embossers* como **Index Braille Basic-D / Everes
   - Botón **«⬇ Descargar archivo .BRF (para impresora Braille)»**.
   - Botón **«🖨 Imprimir en relieve / Papel microcápsula»** (invoca `window.print()` con la hoja `#braille-print-sheet`).
 
-### Paso 4: Guía por voz y control por voz (`frontend/src/lib/voiceControl.ts`)
-- Implementar `VoiceController` sobre `SpeechRecognition` con tonos auditivos de inicio/fin (`AudioContext`).
-- Agregar botón y estado de micrófono en el encabezado del lector y en el panel del asistente (`Alt+M` para hablar).
-- En `useChat` / `AssistantPanel.tsx`: cuando `settings.voiceGuide` es `true`, al completarse una respuesta del asistente o una descripción de imagen, invocar `speakOnce(answer, settings.rate)` automáticamente.
+### Paso 4: Guía por voz y control por voz (hecho, plan 02)
+- Reconocimiento: `frontend/src/lib/voice/` (`recognizer.ts` envuelve el navegador, `commands.ts` interpreta, `earcons.ts` genera los tonos, `consent.ts` guarda el consentimiento, `micLock.ts` reparte el micrófono). No existe `lib/voiceControl.ts`.
+- En el lector: `useVoiceCommands` y `VoiceCommandBar` (estado del micrófono y última frase); `Alt+M` o el botón de micrófono. El dictado de preguntas en el asistente usa el mismo candado de micrófono.
+- Con `voiceGuide` encendido, `AssistantPanel` y `FigureBlock` leen con `speakOnce` las respuestas, las descripciones, los avisos de corte y los errores. Detalle en §2.1 y §2.2.
 
-### Paso 5: Navegación por bloques y figuras en el lector (`ReaderScreen.tsx` y `hooks.ts`)
-- Mantener un índice de bloque enfocado (`cursorBlock`), navegable con `J`/`K` o `Alt+↓`/`Alt+↑`, y salto de encabezados con `H` / `Alt+H`.
-- Al describir una imagen con IA en `FigureBlock.tsx`, persistir la descripción en el bloque del documento en IndexedDB (`libraryApi.saveFigureDescription(docId, blockId, description)`) para que tanto el lector de pantalla como el traductor Braille la incluyan automáticamente.
+### Paso 5: Navegación por bloques y figuras en el lector (hecho, plan 02)
+- `useReaderNavigation` mantiene el cursor de bloque; `blockNav.ts` calcula el siguiente bloque, título o figura. `J`/`K` o `Alt+↓`/`Alt+↑` mueven por bloques y `H` / `Alt+H` por títulos; `G` / `Alt+G` por gráficos.
+- Pendiente (no se hizo en el plan 02): persistir la descripción de una figura en el documento guardado (`libraryApi.saveFigureDescription`) para que el traductor Braille la incluya. Va con el plan 03.
 
 ---
 
 ## 4. Criterios de aceptación y pruebas automatizadas
 
-1. **`lib/braille/translator.test.ts`:**
-   - Verifica palabras simples, vocales con tilde (`educación`), la `ñ` (`español`), la `ü` (`pingüino`), prefijo de mayúscula simple (`Aula` → `⠨⠁⠥⠇⠁`), palabra en mayúsculas (`IA` → `⠨⠨⠊⠁`) y números (`2026` → `⠼⠃⠚⠃⠋`).
-2. **`lib/braille/brfExporter.test.ts`:**
-   - Verifica que ninguna línea supere las 40 celdas, que cada página tenga como máximo 25 líneas y que las páginas estén separadas por `\f`.
-3. **`lib/voiceControl.test.ts`:**
-   - Con un doble (`vi.fn()`) de `SpeechRecognition`, verifica que frases como *"siguiente párrafo"*, *"pausar"*, *"resumir"* y *"preguntar qué es la mitosis"* disparen las acciones esperadas.
-4. **Accesibilidad manual y con test de integración (`app.test.tsx`):**
-   - Seleccionar el perfil **Ceguera** en `/perfil`, abrir un documento, navegar entre bloques con el teclado, abrir el visor Braille con `Alt+B` y comprobar la generación del `.brf`.
+Lo que hoy cubren los tests (`npm test` y `pytest`):
+1. **`lib/keymap.test.ts` y `app.test.tsx`:** atajos con `Alt` y de una tecla, campos de escritura, `Espacio` sobre controles, `Esc` que silencia y cierra diálogos.
+2. **`lib/speech.bus.test.ts` y `lib/speech.test.ts`:** un solo hablante a la vez, lectura que queda en pausa y se retoma.
+3. **`lib/voice/commands.test.ts`:** frases, voseo y regla del modo continuo; `recognizer.test.ts`, `consent.test.ts`, `earcons.test.ts` y `micLock.test.ts` con dobles de las APIs del navegador.
+4. **`features/reader/blockNav.test.ts`:** cursor por bloques, títulos y figuras, y los bordes del documento.
+5. **Backend:** `tests/api/test_presets.py` y `tests/unit/test_seed.py` verifican que el catálogo incluye `ceguera`, con `voice_guide` en `false` y `voice_commands` en `"push"`; el contrato del frontend verifica que conoce esos tres ajustes.
+
+La prueba manual con navegador real y lector de pantalla sigue pendiente: ver la lista en [`docs/accesibilidad.md`](../accesibilidad.md). Los tests del Braille (`translator.test.ts`, `brfExporter.test.ts`) son del plan 03.

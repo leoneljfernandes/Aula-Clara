@@ -210,7 +210,14 @@ Cada ruta es `lazy`, así que Vite genera un chunk por ruta: pdf.js y mammoth qu
 
 ### 5.4 Accesibilidad (paridad con el prototipo)
 
-Se mantiene todo lo del prototipo: el enlace "Saltar al contenido" en el layout, el foco al `h1` al abrir el lector, el `Dialog` con trampa de foco y cierre con Esc, `aria-live` mediante `Announcer`, el chat con `role="log"`, objetivos táctiles de 48 px como mínimo, `prefers-reduced-motion`, los atajos con `useHotkeys` (Alt+P/S/=/−/T/A) y contraste AA en los 4 temas, que se verifica con un test de los pares de `THEMES`.
+Se mantiene todo lo del prototipo: el enlace "Saltar al contenido" en el layout, el foco al `h1` al abrir el lector, el `Dialog` con trampa de foco y cierre con Esc, `aria-live` mediante `Announcer`, el chat con `role="log"`, objetivos táctiles de 48 px como mínimo, `prefers-reduced-motion`, los atajos y contraste AA en los 4 temas, que se verifica con un test de los pares de `THEMES`.
+
+**Atajos y voz (plan 02).**
+- `lib/keymap.ts` es la única tabla de atajos (Alt+P/S/=/−/T/A/↑/↓/H/G/M/B, más las teclas sueltas J/K/H/G/M/B/Espacio/1 a 4 si «Atajos de una sola tecla» está activo): `useReaderHotkeys` despacha por id y el diálogo de atajos y el panel de herramientas leen las mismas filas. Las teclas sueltas se ignoran dentro de campos de escritura y `Esc` silencia la voz sin dejar de cerrar diálogos. La tabla completa está en [accesibilidad.md](accesibilidad.md#atajos-de-teclado).
+- `lib/speech.ts` tiene un árbitro (`speechBus`): habla una voz a la vez y quien interrumpe deja a la anterior en pausa, de modo que la lectura del documento se retoma en el mismo párrafo.
+- `lib/voice/` agrupa el reconocimiento de voz: `recognizer.ts` (envoltorio de `SpeechRecognition`, `es-AR`, modos `push` y `continuous`), `commands.ts` (intérprete puro de frases; en manos libres las acciones de IA exigen el prefijo «asistente»), `earcons.ts` (tonos con `AudioContext`), `consent.ts` (consentimiento en `aulaclara.voiceConsent`) y `micLock.ts` (un solo micrófono a la vez). El `Permissions-Policy` de `vercel.json` permite el micrófono solo al propio sitio.
+- `useReaderNavigation` es el cursor de bloque: mueve el foco a bloques con `tabIndex=-1`, sin paradas de `Tab` extra.
+- Los ajustes `singleKeyShortcuts`, `voiceGuide` y `voiceCommands` salen del registro `CONTROLS` y el preset Ceguera del catálogo del backend los usa ([ADR 0004](adr/0004-catalogo-de-presets.md)).
 
 Ajustes de lectura sin arrastrar (WCAG 2.5.7): el tamaño y el interlineado usan `Stepper` (botones «−» y «+»), no controles deslizantes. La interfaz de ajustes, en el onboarding y en el lector, sale del registro `CONTROLS` (`controls.ts`) vía `SettingsControls`. En la biblioteca **ya no hay una caja «Perfil activo»**: mostrar el preset elegido exponía una categoría sensible, y es una decisión de producto, no un faltante ([ADR 0004](adr/0004-catalogo-de-presets.md)).
 
