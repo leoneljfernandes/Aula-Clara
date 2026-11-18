@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, type waitForOptions, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
@@ -113,16 +113,17 @@ function renderAt(path: string) {
 
 const withOnboarding = (): void => window.localStorage.setItem("aulaclara.onboarded", "true");
 
-const h1 = async () => screen.findByRole("heading", { level: 1 });
+const h1 = async (options?: waitForOptions) => screen.findByRole("heading", { level: 1 }, options);
 
 describe("onboarding", () => {
   it("sin perfil, la raíz lleva al wizard con el enlace «Saltar al contenido»", async () => {
     const router = renderAt("/");
-    expect(await h1()).toHaveTextContent(/Personalizá tu experiencia/);
+    // Primera carga del chunk lazy de /perfil: con toda la suite en paralelo puede pasar de 1 s.
+    expect(await h1({ timeout: 5_000 })).toHaveTextContent(/Personalizá tu experiencia/);
     expect(router.state.location.pathname).toBe("/perfil");
     expect(screen.getByRole("link", { name: "Saltar al contenido" })).toHaveAttribute("href", "#contenido");
     expect(screen.getByRole("button", { name: /Siguiente/ })).toBeDisabled();
-  });
+  }, 10_000);
 
   it("elegir un perfil aplica su preset, se ajusta en el paso 2 y se guarda", async () => {
     const user = userEvent.setup();
