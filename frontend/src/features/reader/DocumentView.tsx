@@ -9,6 +9,8 @@ interface DocumentViewProps {
   /** Índice (en article.blocks) del bloque que se está leyendo en voz alta, o -1. */
   activeBlock: number;
   showListenButton: boolean;
+  /** Guía por voz: las figuras leen su descripción al recibirla. */
+  autoSpeak: boolean;
   onListen: () => void;
   onAskAboutFigure: () => void;
   style: React.CSSProperties;
@@ -20,6 +22,7 @@ export function DocumentView({
   article,
   activeBlock,
   showListenButton,
+  autoSpeak,
   onListen,
   onAskAboutFigure,
   style,
@@ -62,6 +65,7 @@ export function DocumentView({
                 caption={`Gráfico ${figureNumberAt(i)}`}
                 context={before?.type === "p" ? before.text : ""}
                 buttonId={`fig-btn-${i}`}
+                autoSpeak={autoSpeak}
                 onAskAssistant={onAskAboutFigure}
               />
             </div>

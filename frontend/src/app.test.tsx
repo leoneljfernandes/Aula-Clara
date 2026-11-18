@@ -105,6 +105,12 @@ vi.mock("@/lib/extractors", async (original) => ({
   svgToJpeg: vi.fn().mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" })),
 }));
 
+// En jsdom no hay voz: speakOnce se simula, y el resto del módulo (árbitro, motor) queda real.
+vi.mock("@/lib/speech", async (original) => ({
+  ...(await original<typeof import("@/lib/speech")>()),
+  speakOnce: vi.fn(() => true),
+}));
+
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   render(<RouterProvider router={router} />);
@@ -419,6 +425,28 @@ describe("lector", () => {
     expect(log).toHaveTextContent(`Respuesta de IA (Google Gemini · ${MODEL})`);
   });
 
+  it("con la guía por voz, la respuesta del asistente se lee sola; sin ella, no", async () => {
+    const { speakOnce } = await import("@/lib/speech");
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceGuide: true } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(speakOnce).toHaveBeenCalledWith("Resumen de esta página (prueba)", 1));
+  });
+
+  it("sin guía por voz no se lee nada solo", async () => {
+    const { speakOnce } = await import("@/lib/speech");
+    vi.mocked(speakOnce).mockClear();
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+    await waitFor(() => expect(screen.getByRole("log")).toHaveTextContent("Resumen de esta página (prueba)"));
+    expect(speakOnce).not.toHaveBeenCalled();
+  });
+
   it("una pregunta libre se envía al asistente y se muestra su respuesta", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");
@@ -566,6 +594,44 @@ describe("lector", () => {
         JSON.stringify({ schemaVersion: 2, settings: { voiceGuide: true } }),
       ),
     );
+
+    it("la respuesta del asistente se lee sola al llegar, una sola vez", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+      await waitFor(() => expect(speakOnce).toHaveBeenCalledWith("Resumen de esta página (prueba)", 1));
+      // El saludo del asistente no se lee, y volver a renderizar no relee la respuesta.
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+    });
+
+    it("la descripción de una figura se lee sola al llegar", async () => {
+      withAI();
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+      await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+      expect(speakOnce).toHaveBeenCalledTimes(1);
+      expect(speakOnce).toHaveBeenCalledWith("Un gráfico de barras de prueba.");
+    });
+
+    it("un mensaje de error no se lee como respuesta", async () => {
+      const { speakOnce } = await import("@/lib/speech");
+      vi.mocked(speakOnce).mockClear();
+      request.mockImplementation((req: Parameters<typeof fakeBackend>[0]) =>
+        req.url === "/ai/chat" ? Promise.reject(new Error("caído")) : fakeBackend(req),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Resumir esta página" }));
+      await waitFor(() => expect(screen.getByRole("log").textContent).not.toMatch(/prueba/));
+      await waitFor(() => expect(screen.queryByLabelText("El asistente está escribiendo")).toBeNull());
+      expect(speakOnce).not.toHaveBeenCalled();
+    });
 
     it("tras pasar la figura, lee desde el índice leíble correcto (la figura no cuenta)", async () => {
       const user = userEvent.setup();

@@ -23,6 +23,8 @@ interface FigureBlockProps {
   context: string;
   /** id del botón «Interpretar con IA»: el cursor de bloque lo enfoca al llegar a la figura. */
   buttonId?: string;
+  /** Guía por voz: lee la descripción en voz alta apenas llega. */
+  autoSpeak: boolean;
   onAskAssistant: () => void;
 }
 
@@ -38,6 +40,7 @@ export function FigureBlock({
   caption,
   context,
   buttonId,
+  autoSpeak,
   onAskAssistant,
 }: FigureBlockProps): ReactNode {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -65,7 +68,9 @@ export function FigureBlock({
     try {
       const blob = await prepareImage();
       if (!blob) throw new ImageUnavailableError();
-      setResult(await describeImage(blob, context));
+      const described = await describeImage(blob, context);
+      setResult(described);
+      if (autoSpeak) speakOnce(described.text);
     } catch (error) {
       setFailure({ message: describeApiError(error), needsSetup: needsAISetup(error) });
     } finally {

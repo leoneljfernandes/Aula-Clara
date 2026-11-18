@@ -17,9 +17,17 @@ interface AssistantPanelProps {
   inputRef: RefObject<HTMLInputElement | null>;
   selection: string;
   rate: number;
+  /** Guía por voz: lee en voz alta cada respuesta nueva de la IA al llegar. */
+  autoSpeak: boolean;
 }
 
-export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPanelProps): ReactNode {
+export function AssistantPanel({
+  chat,
+  inputRef,
+  selection,
+  rate,
+  autoSpeak,
+}: AssistantPanelProps): ReactNode {
   const [draft, setDraft] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const credentials = useAICredentials();
@@ -30,6 +38,20 @@ export function AssistantPanel({ chat, inputRef, selection, rate }: AssistantPan
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, typing]);
+
+  // «Respuesta nueva» = la lista creció desde el render anterior. Así volver a renderizar no relee, y
+  // el saludo (que ya está en la lista al montar) no cuenta. La referencia se actualiza siempre, también
+  // con la guía apagada: si se prende después, no se lee lo que ya estaba.
+  const seenCount = useRef(messages.length);
+  useEffect(() => {
+    const grew = messages.length > seenCount.current;
+    seenCount.current = messages.length;
+    const last = messages[messages.length - 1];
+    // Los errores no traen proveedor: no son una respuesta del modelo y no se leen solos.
+    if (autoSpeak && grew && last?.role === "ai" && last.provider && !last.needsSetup) {
+      speakOnce(last.text, rate);
+    }
+  }, [messages, autoSpeak, rate]);
 
   const explain = (): void =>
     void send(`Explicame este párrafo con palabras más simples: «${selection}»`, "simplify", { selection });

@@ -144,6 +144,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             article={article}
             activeBlock={activeBlock}
             showListenButton={settings.audioFocus && audio.status === "stopped"}
+            autoSpeak={settings.voiceGuide}
             onListen={audio.play}
             onAskAboutFigure={() => void chat.send("¿Qué muestra el Gráfico 1?", "free")}
             style={readingStyle(settings)}
@@ -157,7 +158,13 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
           aria-label="Panel de asistencia IA"
           className="flex flex-col border-t-2 border-[var(--border)] bg-[var(--panel)] lg:overflow-hidden lg:border-t-0 lg:border-l-2"
         >
-          <AssistantPanel chat={chat} inputRef={chatInput} selection={selection} rate={settings.rate} />
+          <AssistantPanel
+            chat={chat}
+            inputRef={chatInput}
+            selection={selection}
+            rate={settings.rate}
+            autoSpeak={settings.voiceGuide}
+          />
         </aside>
       </div>
 
