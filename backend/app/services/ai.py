@@ -21,7 +21,7 @@ from app.errors import (
     AppError,
     BusinessRuleError,
 )
-from app.models import AIAnswer, ChatAction, ChatMessage, Completion, ModelInfo
+from app.models import AIAnswer, AnswerLanguage, ChatAction, ChatMessage, Completion, ModelInfo
 from app.providers.llm.base import (
     LLMProvider,
     ProviderAuthError,
@@ -94,6 +94,7 @@ class AIService:
         message: str | None,
         document_text: str,
         selection: str | None,
+        language: AnswerLanguage = "standard",
     ) -> AIAnswer:
         message = (message or "").strip() or None
         selection = (selection or "").strip() or None
@@ -104,10 +105,10 @@ class AIService:
 
         focus = selection or (message if action == "simplify" else None)
         context = ai_rules.build_context(document_text, focus, self._max_chars)
-        user_message = ai_rules.build_user_message(action, message, context)
+        user_message = ai_rules.build_user_message(action, message, context, language)
         # `scope` incluye la huella de la key: un usuario nunca recibe lo que pagó la cuota de otro.
         key = ai_rules.cache_key(
-            "chat", provider.scope, action, message, selection, document_text[: self._max_chars]
+            "chat", provider.scope, action, language, message, selection, document_text[: self._max_chars]
         )
         if (cached := self._cache.get(key)) is not None:
             return cached

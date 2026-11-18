@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Literal
 
-ChatAction = Literal["free", "summarize", "key_concepts", "quiz", "simplify"]
+ChatAction = Literal["free", "summarize", "key_concepts", "quiz", "simplify", "glossary", "visual_outline"]
+# Nivel de lenguaje de la respuesta: estándar, lenguaje claro (ISO 24495-1) o Lectura Fácil.
+AnswerLanguage = Literal["standard", "plain", "easy"]
 AIProviderName = Literal["gemini", "groq", "openrouter", "mistral", "nvidia"]
 
 

@@ -282,3 +282,23 @@ async def test_the_exception_text_is_never_repeated_in_the_error_detail() -> Non
     with pytest.raises(AIUnavailableError) as caught:
         await _ask(service, _provider(failure=ProviderUnavailable("texto interno con datos")))
     assert "texto interno" not in caught.value.detail
+
+
+async def test_language_is_part_of_the_cache_key() -> None:
+    service, _ = _service()
+    provider = _provider(answer="respuesta")
+    await service.chat(provider=provider, action="summarize", message=None, document_text="t", selection=None)
+    await service.chat(
+        provider=provider,
+        action="summarize",
+        message=None,
+        document_text="t",
+        selection=None,
+        language="plain",
+    )
+    assert provider.chat.await_count == 2  # type: ignore[attr-defined]
+
+
+async def test_glossary_does_not_require_a_selection() -> None:
+    service, _ = _service()
+    assert (await _ask(service, _provider(), action="glossary")).text == "respuesta"

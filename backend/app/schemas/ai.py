@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import ChatAction
+from app.models import AnswerLanguage, ChatAction
 
 
 class ChatRequest(BaseModel):
@@ -13,6 +13,8 @@ class ChatRequest(BaseModel):
     # Tope duro de transporte; el recorte fino por MAX_INPUT_CHARS lo hace el service.
     document_text: Annotated[str, Field(max_length=500_000)]
     selection: Annotated[str, Field(max_length=20_000)] | None = None
+    # Cualquier otro valor da 422.
+    language: AnswerLanguage = "standard"
 
 
 class ChatResponse(BaseModel):

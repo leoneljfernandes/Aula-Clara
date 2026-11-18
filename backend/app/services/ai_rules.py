@@ -2,7 +2,7 @@
 
 import hashlib
 
-from app.models import ChatAction
+from app.models import AnswerLanguage, ChatAction
 
 ACTION_INSTRUCTIONS: dict[ChatAction, str] = {
     "free": "Respondé la pregunta de la persona usando solo el documento.",
@@ -11,6 +11,22 @@ ACTION_INSTRUCTIONS: dict[ChatAction, str] = {
     "quiz": "Escribí exactamente 3 preguntas de repaso numeradas sobre el documento.",
     "simplify": "Reformulá el fragmento seleccionado con palabras más simples, sin perder el significado "
     "y sin agregar información.",
+    "glossary": "Elegí hasta 8 términos difíciles del fragmento seleccionado o, si no hay selección, del "
+    "documento. Para cada uno escribí tres líneas: «Término: …», «Qué significa: …» (una oración simple) "
+    "y «Ejemplo: …» (un ejemplo de la vida real). Dejá una línea en blanco entre términos.",
+    "visual_outline": "Armá un esquema del documento en texto, sin tablas: el tema principal en la primera "
+    "línea y debajo las ideas clave, una por línea, empezando con «→». Si una idea tiene una causa o una "
+    "consecuencia, escribila en la línea siguiente empezando con «   ⇒».",
+}
+# Cuánto se simplifica el lenguaje de la respuesta; «standard» no agrega nada.
+LANGUAGE_INSTRUCTIONS: dict[AnswerLanguage, str] = {
+    "standard": "",
+    "plain": "Escribí en lenguaje claro (ISO 24495-1): una idea por oración, oraciones de 20 palabras como "
+    "máximo, voz activa, palabras de uso común y sin metáforas ni dobles negaciones. Si usás un término "
+    "técnico, explicalo en la misma oración.",
+    "easy": "Escribí en Lectura Fácil: oraciones muy cortas, de 15 palabras como máximo, una idea por "
+    "oración, palabras de uso diario, un ejemplo concreto para cada idea difícil y sin metáforas, ironías "
+    "ni números que no hagan falta.",
 }
 _CUT_MARK = "\n[…texto recortado…]"
 
@@ -35,9 +51,17 @@ def build_context(document_text: str, selection: str | None, max_chars: int) -> 
     return "\n\n".join(parts)
 
 
-def build_user_message(action: ChatAction, message: str | None, context: str) -> str:
+def build_user_message(
+    action: ChatAction,
+    message: str | None,
+    context: str,
+    language: AnswerLanguage = "standard",
+) -> str:
+    """La instrucción de la acción, la del nivel de lenguaje (si hay), la pregunta y el contexto."""
     asked = f"Pregunta: {message}\n\n" if message else ""
-    return f"{ACTION_INSTRUCTIONS[action]}\n\n{asked}{context}"
+    level = LANGUAGE_INSTRUCTIONS[language]
+    level_block = f"{level}\n\n" if level else ""
+    return f"{ACTION_INSTRUCTIONS[action]}\n\n{level_block}{asked}{context}"
 
 
 def cache_key(*parts: str | bytes | None) -> str:

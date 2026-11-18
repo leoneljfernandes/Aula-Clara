@@ -26,7 +26,9 @@ def test_build_context_puts_selection_first() -> None:
     assert context.index("<seleccion>") < context.index("<documento>")
 
 
-@pytest.mark.parametrize("action", ["free", "summarize", "key_concepts", "quiz", "simplify"])
+@pytest.mark.parametrize(
+    "action", ["free", "summarize", "key_concepts", "quiz", "simplify", "glossary", "visual_outline"]
+)
 def test_every_action_has_an_instruction(action: ChatAction) -> None:
     assert ai_rules.ACTION_INSTRUCTIONS[action]
 
@@ -39,3 +41,25 @@ def test_cache_key_differs_by_action_and_is_stable() -> None:
     a = ai_rules.cache_key("chat", "summarize", None, None, "texto")
     assert a == ai_rules.cache_key("chat", "summarize", None, None, "texto")
     assert a != ai_rules.cache_key("chat", "quiz", None, None, "texto")
+
+
+def test_plain_language_adds_its_rules_and_standard_adds_nothing() -> None:
+    plain = ai_rules.build_user_message("summarize", None, "<documento>x</documento>", "plain")
+    assert ai_rules.LANGUAGE_INSTRUCTIONS["plain"] in plain
+    standard = ai_rules.build_user_message("summarize", None, "<documento>x</documento>")
+    assert "lenguaje claro" not in standard and "Lectura Fácil" not in standard
+
+
+def test_glossary_and_outline_have_their_own_instructions() -> None:
+    assert "«Término: …»" in ai_rules.build_user_message("glossary", None, "ctx")
+    assert "«→»" in ai_rules.build_user_message("visual_outline", None, "ctx")
+
+
+def test_language_instruction_goes_after_the_action_and_before_the_context() -> None:
+    message = ai_rules.build_user_message("summarize", "¿qué?", "<documento>x</documento>", "easy")
+    assert (
+        message.index(ai_rules.ACTION_INSTRUCTIONS["summarize"])
+        < message.index(ai_rules.LANGUAGE_INSTRUCTIONS["easy"])
+        < message.index("Pregunta:")
+        < message.index("<documento>")
+    )

@@ -39,6 +39,7 @@ async def chat(data: ChatRequest, service: AIServiceDep, provider: LLMProviderDe
         message=data.message,
         document_text=data.document_text,
         selection=data.selection,
+        language=data.language,
     )
     return ChatResponse(
         answer=answer.text, provider=answer.provider, model=answer.model, truncated=answer.truncated

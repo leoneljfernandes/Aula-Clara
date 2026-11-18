@@ -333,3 +333,24 @@ async def test_a_truncated_answer_is_flagged_in_the_response(
     )
     assert chat.json()["truncated"] is True
     assert image.json()["truncated"] is True
+
+
+@pytest.mark.parametrize("action", ["glossary", "visual_outline"])
+async def test_chat_accepts_the_new_actions_and_language(
+    client: AsyncClient, built: list[dict[str, Any]], action: str
+) -> None:
+    response = await client.post(
+        "/api/v1/ai/chat",
+        headers=HEADERS,
+        json={"action": action, "document_text": "texto", "language": "easy"},
+    )
+    assert response.status_code == 200
+
+
+async def test_chat_rejects_an_unknown_language(client: AsyncClient, built: list[dict[str, Any]]) -> None:
+    response = await client.post(
+        "/api/v1/ai/chat",
+        headers=HEADERS,
+        json={"action": "summarize", "document_text": "t", "language": "klingon"},
+    )
+    assert response.status_code == 422
