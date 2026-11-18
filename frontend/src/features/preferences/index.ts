@@ -9,7 +9,6 @@ export {
   type Profile,
   RATES,
   readingStyle,
-  type ReadingSettings,
   THEME_ORDER,
   THEMES,
   type ThemeId,
@@ -17,5 +16,14 @@ export {
 export { homeLoader, requireProfile, safeNext } from "./guards";
 export { OnboardingWizard } from "./OnboardingWizard";
 export { PreferencesProvider, ThemeScope, usePreferences } from "./PreferencesProvider";
-export { loadProfileId } from "./storage";
+export {
+  DEFAULT_SETTINGS,
+  LINE_HEIGHT,
+  type ReadingSettings,
+  sanitizePatch,
+  sanitizeSettings,
+  SETTINGS_SCHEMA_VERSION,
+  snakeToCamelKeys,
+} from "./settings";
+export { isOnboarded, loadProfileId, loadSettings, markOnboarded, saveSettings } from "./storage";
 export { ThemeButtons } from "./ThemeButtons";

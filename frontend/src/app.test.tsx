@@ -112,8 +112,7 @@ describe("onboarding", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/biblioteca"));
     expect(JSON.parse(window.localStorage.getItem("aulaclara.profile") ?? "null")).toBe("dislexia");
     expect(JSON.parse(window.localStorage.getItem("aulaclara.settings") ?? "{}")).toMatchObject({
-      font: "dyslexic",
-      theme: "sepia",
+      settings: { font: "dyslexic", theme: "sepia" },
     });
   });
 

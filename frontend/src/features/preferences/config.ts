@@ -1,3 +1,5 @@
+import type { ReadingSettings } from "./settings";
+
 /** Temas, tipografías y perfiles: los mismos valores del prototipo original. */
 export interface ThemeDef {
   label: string;
@@ -96,23 +98,6 @@ export const FONTS = {
 
 export type FontId = keyof typeof FONTS;
 
-export interface ReadingSettings {
-  theme: ThemeId;
-  font: FontId;
-  fontSize: number;
-  lineHeight: number;
-  rate: number;
-  audioFocus: boolean;
-}
-
-export const DEFAULT_SETTINGS: ReadingSettings = {
-  theme: "claro",
-  font: "atkinson",
-  fontSize: 20,
-  lineHeight: 1.7,
-  rate: 1,
-  audioFocus: false,
-};
 export const MIN_FS = 14;
 export const MAX_FS = 40;
 export const RATES = [0.75, 1, 1.5] as const;

@@ -1,8 +1,15 @@
 import { storage } from "@/lib/storage";
 
-import { DEFAULT_SETTINGS, FONTS, PROFILES, type Profile, type ReadingSettings, THEMES } from "./config";
+import { PROFILES, type Profile } from "./config";
+import {
+  DEFAULT_SETTINGS,
+  type ReadingSettings,
+  SETTINGS_SCHEMA_VERSION,
+  sanitizeSettings,
+} from "./settings";
 
 const SETTINGS_KEY = "aulaclara.settings";
+const ONBOARDED_KEY = "aulaclara.onboarded";
 const PROFILE_KEY = "aulaclara.profile";
 
 export function loadProfileId(): Profile["id"] | null {
@@ -10,21 +17,34 @@ export function loadProfileId(): Profile["id"] | null {
   return PROFILES.find((p) => p.id === id)?.id ?? null;
 }
 
-/** Lo guardado puede venir de una versión vieja o estar corrupto: se valida campo a campo. */
+/**
+ * Acepta el sobre `{ schemaVersion: 2, settings }` y el objeto plano de la versión 1.
+ * Lo guardado puede venir de una versión vieja o estar corrupto: se valida campo a campo.
+ */
 export function loadSettings(): ReadingSettings {
-  const saved = storage.get<Partial<ReadingSettings>>(SETTINGS_KEY) ?? {};
-  return {
-    theme: saved.theme && saved.theme in THEMES ? saved.theme : DEFAULT_SETTINGS.theme,
-    font: saved.font && saved.font in FONTS ? saved.font : DEFAULT_SETTINGS.font,
-    fontSize: typeof saved.fontSize === "number" ? saved.fontSize : DEFAULT_SETTINGS.fontSize,
-    lineHeight: typeof saved.lineHeight === "number" ? saved.lineHeight : DEFAULT_SETTINGS.lineHeight,
-    rate: typeof saved.rate === "number" ? saved.rate : DEFAULT_SETTINGS.rate,
-    audioFocus: typeof saved.audioFocus === "boolean" ? saved.audioFocus : DEFAULT_SETTINGS.audioFocus,
-  };
+  const saved = storage.get<unknown>(SETTINGS_KEY);
+  if (saved === null) return { ...DEFAULT_SETTINGS };
+  const isEnvelope =
+    typeof saved === "object" && !Array.isArray(saved) && "schemaVersion" in saved && "settings" in saved;
+  return sanitizeSettings(isEnvelope ? saved.settings : saved);
 }
 
 export function saveSettings(settings: ReadingSettings): void {
-  storage.set(SETTINGS_KEY, settings);
+  storage.set(SETTINGS_KEY, { schemaVersion: SETTINGS_SCHEMA_VERSION, settings });
+}
+
+/** Quien tiene el perfil de la versión 1 ya hizo el onboarding: se migra a la marca nueva y la clave vieja se borra. */
+export function isOnboarded(): boolean {
+  if (storage.get<unknown>(PROFILE_KEY) !== null) {
+    markOnboarded();
+    storage.remove(PROFILE_KEY);
+    return true;
+  }
+  return storage.get<boolean>(ONBOARDED_KEY) === true;
+}
+
+export function markOnboarded(): void {
+  storage.set(ONBOARDED_KEY, true);
 }
 
 export function saveProfileId(id: Profile["id"]): void {

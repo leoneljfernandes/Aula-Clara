@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 
-import { DEFAULT_SETTINGS, type Profile, type ReadingSettings, THEMES } from "./config";
+import { type Profile, THEMES } from "./config";
+import { DEFAULT_SETTINGS, type ReadingSettings } from "./settings";
 import { loadProfileId, loadSettings, saveProfileId, saveSettings } from "./storage";
 
 interface Preferences {
