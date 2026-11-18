@@ -49,11 +49,15 @@ function toPreset(raw: unknown): Preset | null {
   };
 }
 
+/** Los elementos válidos, sin ids repetidos: de cada id queda el primero (el id es la `key` de cada tarjeta). */
 function toPresets(raw: unknown): Preset[] {
   if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
   return raw.flatMap((item) => {
     const preset = toPreset(item);
-    return preset ? [preset] : [];
+    if (!preset || seen.has(preset.id)) return [];
+    seen.add(preset.id);
+    return [preset];
   });
 }
 

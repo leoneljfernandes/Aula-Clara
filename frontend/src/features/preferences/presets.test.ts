@@ -41,6 +41,11 @@ describe("loadPresetCatalog", () => {
       { id: "roto" },
     ]);
   });
+  it("un id repetido se descarta: queda el primero", async () => {
+    request.mockResolvedValue([DTO, { ...DTO, title: "Repetido" }]);
+    const catalog = await loadPresetCatalog();
+    expect(catalog.presets.map((p) => [p.id, p.title])).toEqual([["dislexia", "Dislexia"]]);
+  });
   it("si el backend falla, usa la caché", async () => {
     window.localStorage.setItem(
       "aulaclara.presets",

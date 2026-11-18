@@ -23,3 +23,7 @@ it.each(seed.map((p) => [p.id, p] as const))(
 it("los ids son únicos", () => {
   expect(new Set(seed.map((p) => p.id)).size).toBe(seed.length);
 });
+
+it("ningún preset usa el id reservado «custom» (es la opción «Personalizado» del wizard)", () => {
+  expect(seed.map((p) => p.id)).not.toContain("custom");
+});
