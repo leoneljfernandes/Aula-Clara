@@ -36,7 +36,7 @@ Los define `frontend/src/lib/keymap.ts`; el diálogo de atajos y el panel de her
 | Título siguiente | `Alt+H` | `H` |
 | Gráfico siguiente | `Alt+G` | `G` |
 | Micrófono (comandos de voz) | `Alt+M` | `M` |
-| Braille (todavía anuncia «El Braille todavía no está disponible», por teclado y por voz) | `Alt+B` | `B` |
+| Braille (abre el diálogo con «Herramientas de Braille» encendido; apagado anuncia «El Braille todavía no está disponible») | `Alt+B` | `B` |
 | Resumir · Conceptos · Preguntas · Explicar el bloque actual más simple | — | `1` · `2` · `3` · `4` |
 | Silenciar la voz | `Esc` (siempre, dentro del lector) | — |
 
@@ -90,3 +90,7 @@ Reglas: `Espacio` se ignora sobre botones, enlaces, casillas y otros controles q
 - [ ] Recorrer **«Configurar IA»** con una key ya sellada con lector de pantalla: el aviso «guardada de forma segura y no se puede ver», el botón «Ver los modelos de mi key guardada», la casilla «Recordar» deshabilitada y el aviso que queda al guardar en el modo de respaldo (botón «Listo»).
 - [ ] Leer la **guía de API keys** (`/ayuda/ia`) con lector de pantalla: la tabla comparativa, los pasos numerados y los enlaces que abren otra pestaña.
 - [ ] Correr una herramienta automática (axe DevTools o Lighthouse) sobre las 3 vistas.
+- [ ] **Braille, descarga:** abrir el `.BRF` con un programa de Braille (Duxbury, BrailleBlaster) o mandarlo a una impresora Braille, y comprobar que el texto, las páginas y los títulos salen bien.
+- [ ] **Braille, relieve:** en la vista previa de impresión de Chrome, A4 al 100 %, medir 6 mm entre celdas y 10 mm entre líneas (o exportar a PDF y medir); después imprimir sobre papel microcápsula y confirmar las medidas con la institución.
+- [ ] **Braille, lector de pantalla:** abrir el diálogo «Braille» con NVDA, JAWS o VoiceOver y comprobar que se oyen la explicación y los botones, y no «puntos braille 1 2 4…».
+- [ ] **Braille, revisión de la norma:** comparar la signografía implementada con la versión vigente de B 2 (hay una versión 4, mayo de 2025) y decidir los casos que B 2 no define («PDFs», «3.141»).

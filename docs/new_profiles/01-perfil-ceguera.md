@@ -1,6 +1,6 @@
 # 01 · Perfil Ceguera (`id: "ceguera"`)
 
-> **Estado:** documento de propuesta inicial, actualizado en §2.1, §2.2, §3 (pasos 1, 4 y 5) y §4 con lo que el [plan 02](./2026-11-18-perfiles-02-teclado-y-voz.md) dejó construido: teclado, voz y preset. El Braille (§2.3 y pasos 2 y 3 de §3) sigue sin construir: es el plan 03. Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+> **Estado:** documento de propuesta inicial, actualizado con lo que dejaron construido el [plan 02](./2026-11-18-perfiles-02-teclado-y-voz.md) (teclado, voz y preset; §2.1, §2.2 y §3 pasos 1, 4 y 5) y el [plan 03](./2026-11-18-perfiles-03-braille.md) (Braille: §2.3 y §3 pasos 2, 3 y 5). Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
 
 ## 1. Motivos y objetivos del perfil
 
@@ -64,7 +64,7 @@ Reglas de los atajos de una sola tecla (`singleKeyShortcuts`, apagado por defect
 - Solo cuentan sin `Ctrl`, `Meta`, `Alt` ni `Shift`, y con el foco **fuera de un campo de escritura** (`input` de texto, `textarea`, `select`, `[contenteditable]`, `role="textbox"` o `role="combobox"`). Escribir «j», «1» o un espacio en el chat no dispara nada.
 - `Espacio` se ignora si el foco está en un control que ya se activa con Espacio (botón, enlace, casilla, `summary`, roles `button`, `link`, `checkbox`, `radio`, `switch`, `menuitem`, `option`, `tab`).
 - `Alt+↑` y `Alt+↓` se ignoran en campos de escritura, porque abren el desplegable del `select`.
-- `Alt+B` (y `B`) hoy solo avisa «El Braille todavía no está disponible», tanto por teclado como por voz («braille»): ambos caminos llaman a la misma función `openBraille()` de `ReaderScreen`, que el plan 03 reemplaza. El atajo no aparece en la ayuda hasta que exista.
+- `Alt+B` (y `B`) y el comando de voz «braille» abren el diálogo de Braille (§2.3) cuando el ajuste `brailleTools` está encendido, que es lo que hace el preset Ceguera. Con el ajuste apagado solo avisan «El Braille todavía no está disponible». Ambos caminos llaman a la misma función `openBraille()` de `ReaderScreen`.
 - `4` («Explicar el bloque») pide a la IA que explique con palabras más simples el bloque donde está el cursor, con el mismo texto que el botón «Explicar con palabras más simples». Necesita un párrafo elegido: con el cursor sin mover o sobre un gráfico anuncia «Elegí un párrafo primero (Alt+↓ o J).» y no manda nada.
 - `Alt+M` (y `M`) alterna solo los **comandos** de voz, y solo si `voiceCommands` no está en `off` y el navegador sabe reconocer voz. El dictado tiene su propio botón «Dictar pregunta».
 - **La lectura arranca desde el cursor.** Con la lectura detenida y el cursor en un bloque de texto, `Alt+P` / `Espacio` y el comando de voz «leer», «reproducir» o «continuar» empiezan en ese bloque (`audio.playFrom`); con el cursor sin mover o sobre un gráfico, desde el principio. En pausa se reanuda donde quedó. Decir «continuar» con la lectura en marcha no hace nada (no reinicia el párrafo).
@@ -110,67 +110,65 @@ Reglas de los atajos de una sola tecla (`singleKeyShortcuts`, apagado por defect
 | Conceptos clave | «conceptos clave» |
 | Preguntas de repaso | «preguntas», «preguntas de repaso» |
 | Describir la figura | «describir imagen», «interpretar gráfico» |
-| Braille | «braille», «traducir a braille» (hoy anuncia «El Braille todavía no está disponible») |
+| Braille | «braille», «traducir a braille» (abre el diálogo de Braille; con `brailleTools` apagado anuncia «El Braille todavía no está disponible») |
 | Pregunta libre | «preguntar …» o «asistente …»: el resto de la frase va al asistente |
 
 **Regla del modo continuo.** En manos libres el micrófono está siempre abierto y puede oír voces ajenas (un titular, un video, otra persona). Por eso las acciones que **gastan cuota de la IA** (resumir, conceptos clave, preguntas, describir imagen y preguntar) exigen decir antes el prefijo **«asistente»** («asistente resumí»), y la pregunta libre además necesita **al menos 3 palabras** después del prefijo. En cambio la navegación y la lectura van sin prefijo y no gastan cuota: **«para», «lee» o «baja» sueltos sí disparan detener, leer y bloque siguiente** en manos libres. En modo `push` todo va sin prefijo.
 
-### 2.3. Traducción a Braille, vista en pantalla e impresión física
+### 2.3. Traducción a Braille, vista en pantalla e impresión física (hecho, plan 03)
 
-#### A. Signografía Braille en Español (Grado 1 / Integral)
-En hispanoamérica (normativa de la Comisión Braille Española y la Unión Latinoamericana de Ciegos - ULAC), el estándar para textos académicos es el **Braille integral de 6 puntos (Grado 1)**, donde cada carácter se representa en un cajetín de 6 puntos numerados:
+El ajuste `brailleTools` (apagado por defecto, encendido en el preset Ceguera) agrega el botón «⠿ Braille» al encabezado del lector. Abre el diálogo «Braille» (`features/reader/braille/BrailleDialog.tsx`), que también abren `Alt+B`, `B` y el comando de voz «braille».
 
-```text
-1 • • 4
-2 • • 5
-3 • • 6
-```
+#### A. Signografía Braille en español (grado 1)
 
-En Unicode, el bloque **Braille Patterns (`U+2800` a `U+28FF`)** codifica cualquier combinación de puntos sumando a `0x2800` una máscara de bits:
-$$\text{codepoint} = \text{0x2800} + b_1 \cdot 1 + b_2 \cdot 2 + b_3 \cdot 4 + b_4 \cdot 8 + b_5 \cdot 16 + b_6 \cdot 32$$
+El motor es puro y está en `frontend/src/lib/braille/` (`table.ts`, `translate.ts`, `layout.ts`, `brf.ts`). Sigue el *Documento técnico B 2: Signografía básica de las lenguas cooficiales españolas*, **versión 3, junio de 2023**, de la Comisión Braille Española (CBE). Cada celda es un carácter Unicode `U+2800 + Σ 2^(punto−1)`.
 
-**Reglas específicas del Braille español que implementará `lib/braille/spanishTable.ts`:**
-1. **Letras básicas (`a`–`z`):** mapeo estándar internacional.
-2. **Letras propias del español y vocales acentuadas:**
-   - `ñ` → puntos `1-2-4-5-6` (`⠻`, `U+283B`)
-   - `á` → puntos `1-2-3-5-6` (`⠷`, `U+2837`)
-   - `é` → puntos `2-3-4-6` (`⠮`, `U+282E`)
-   - `í` → puntos `3-4` (`⠌`, `U+280C`)
-   - `ó` → puntos `3-4-6` (`⠬`, `U+282C`)
-   - `ú` → puntos `2-3-4-5-6` (`⠾`, `U+283E`)
-   - `ü` → puntos `1-2-5-6` (`⠳`, `U+2833`)
-3. **Mayúsculas:**
-   - En Braille español no existe un alfabeto distinto para mayúsculas: se antepone el **prefijo de mayúscula** (puntos `4-6`, `⠨`, `U+2828`) antes de una letra mayúscula (`Aula` → `⠨⠁⠥⠇⠁`).
-   - Si una palabra entera de 2 o más letras está en mayúsculas (`PDF`), se antepone **doble signo de mayúscula** (`⠨⠨⠏⠙⠋`).
-4. **Números:**
-   - Se antepone el **signo generador de número** (puntos `3-4-5-6`, `⠼`, `U+283C`) al inicio de una secuencia numérica, y los dígitos `1`–`9`, `0` usan las letras `a`–`j` (`2026` → `⠼⠃⠚⠃⠋`).
-5. **Signos de puntuación:**
-   - `.` (`⠲`, punto 3), `,` (`⠂`, punto 2), `;` (`⠆`, puntos 2-3), `:` (`⠒`, puntos 2-5), `¿` / `?` (`⠢`, puntos 2-6), `¡` / `!` (`⠖`, puntos 2-3-5), `-` (`⠤`, puntos 3-6), `«` / `"` (`⠦`, puntos 2-3-6), `(` (`⠷`, puntos 1-2-3-5-6), `)` (`⠾`, puntos 2-3-4-5-6).
+| Signo | Braille | Puntos |
+|---|---|---|
+| Letras `a`–`z` | las del Braille internacional (`w` = `⠺`) | |
+| `á` `é` `í` `ó` `ú` `ü` `ñ` | `⠷` `⠮` `⠌` `⠬` `⠾` `⠳` `⠻` | 1-2-3-5-6 · 2-3-4-6 · 3-4 · 3-4-6 · 2-3-4-5-6 · 1-2-5-6 · 1-2-4-5-6 |
+| Mayúscula | `⠨` | 4-6 |
+| Número | `⠼` | 3-4-5-6 |
+| Dígitos `1`–`9`, `0` | letras `a`–`j` | |
+| `.` `,` `;` `:` | `⠄` `⠂` `⠆` `⠒` | 3 · 2 · 2-3 · 2-5 |
+| `¿` `?` · `¡` `!` | `⠢` · `⠖` | 2-6 · 2-3-5 |
+| `(` `)` `-` | `⠣` `⠜` `⠤` | 1-2-6 · 3-4-5 · 3-6 |
+| `"` `«` `»` | `⠦` | 2-3-6 |
+| Espacio | `⠀` (`U+2800`) | celda vacía |
 
-#### B. Visualización en pantalla («Cómo sería el texto en Braille»)
-El diálogo/vista **`BrailleModal.tsx`** ofrecerá tres modos de visualización en pantalla:
-1. **Modo Espejo Interlineado (Didáctico / Revisión):**
-   Muestra cada palabra o línea con los puntos Braille Unicode grandes arriba (`28 px`) y el texto original en tinta justo debajo alineado palabra por palabra. Ideal para docentes, familiares o personas con resto visual que están aprendiendo Braille.
-2. **Modo Plancha Braille ($40 \times 25$ celdas):**
-   Simula exactamente la hoja física de una impresora Braille estándar: líneas de **40 cajetines** y **25 líneas por página**, mostrando los puntos vacíos tenues (`⠀`) y los puntos activos resaltados (`⠿`), con selector de página.
-3. **Integración de figuras:**
-   Si una figura del documento ya fue descrita con IA, se inserta en el flujo Braille precedida por `[Gráfico N: <descripción>]` para que el apunte en Braille esté completo.
+El punto es `⠄` (punto 3). El `⠲` que traía la propuesta inicial es el punto del Braille inglés. Las reglas que la hoja de ruta dejaba por confirmar quedaron así (los tests citan la sección):
 
-#### C. Cómo imprimir para quien cuenta con la impresora adecuada
-Las impresoras Braille reales (*embossers* como **Index Braille Basic-D / Everest-D**, **ViewPlus**, **Romeo/Juliet**, **Braillo**) trabajan de dos maneras, y Aula Clara dará soporte a **ambas**:
+1. **Siglas (§7.1, recurso 2).** Una palabra de 2 o más letras toda en mayúsculas lleva dos signos de mayúscula antes de la primera letra: `IA` → `⠨⠨⠊⠁`. El documento también admite un `⠨` antes de cada letra.
+2. **Mayúsculas parciales** (`PDFs`). B 2 no las define. Se usa un `⠨` por cada mayúscula (§7.1, recurso 1): `⠨⠏⠨⠙⠨⠋⠎`. Es un criterio propio.
+3. **Decimales y miles (§8.1).** El separador decimal es el punto 2 (`⠂`), venga como `,`, `.` o `’` en el original, y los grupos de tres cifras se separan con el punto 3 (`⠄`), sin repetir `⠼`: `3,5` → `⠼⠉⠂⠑`, `26.653` → `⠼⠃⠋⠄⠋⠑⠉`. Criterio propio: un `.` entre cifras es punto de miles solo si lo siguen exactamente tres cifras; si no, es decimal.
+4. **Letra `a`–`j` después de un número (§8.2).** Lleva el prefijo de latina minúscula (punto 5, `⠐`): `8b` → `⠼⠓⠐⠃`.
 
-1. **Descarga de archivo `.BRF` (Braille Ready Format) — *Estándar universal de impresoras Braille*:**
-   - Todas las impresoras Braille y programas de impresión (Duxbury DBT, BrailleBlaster, Index Direct Braille, comando `lp` / utilidad USB de la impresora) reciben archivos `.brf`.
-   - Un archivo `.brf` es texto plano ASCII codificado en **Braille ASCII (North American Braille Computer Code)** donde cada carácter ASCII (`A-Z`, `0-9`, símbolos entre `0x20` y `0x5F`) corresponde biunívocamente a una combinación de los 6 puntos del cajetín (por ejemplo, `⠨` puntos 4-6 es `.` en BRF; `⠼` puntos 3-4-5-6 es `#`), formateado con:
-     - **Ancho de línea configurable:** `40` caracteres por defecto (ajustable a `32` o `42` según el ancho del carro de la impresora y papel tractor).
-     - **Largo de página configurable:** `25` líneas por página (ajustable a `28`), separadas por el carácter de salto de página `Form Feed` (`\x0C`, `^L`).
-     - **Corte de palabras inteligente (*word-wrap*):** nunca corta una palabra a mitad sin guion Braille (`-`, puntos 3-6), y nunca deja un título (`h2`) huérfano en la última línea de una página.
-2. **Impresión directa desde el navegador (`window.print()`) — *Para embossers con driver gráfico o Papel Microcápsula (Horno Fuser)*:**
-   - Muchas instituciones usan impresoras **ViewPlus** (que actúan como impresoras del sistema en Windows/macOS convirtiendo fuentes Braille o puntos negros en relieve) o **papel microcápsula (Swell Paper)** impreso en láser negro y pasado por horno fusor térmico.
-   - Al pulsar **«Imprimir plancha Braille»**, se activa un contenedor `#braille-print-sheet` visible únicamente en `@media print`:
-     - Oculta toda la interfaz (`header`, `aside`, diálogos).
-     - Fija `@page { size: A4 portrait; margin: 15mm; }`.
-     - Renderiza las páginas de $40 \times 25$ celdas en **negro puro (`#000000`) sobre blanco (`#FFFFFF`)**, tamaño `24pt` monoespaciado (`line-height: 10mm`, `letter-spacing: 1.5mm`), con `break-after: page` en cada página de 25 líneas.
+La ONCE ya publica la **versión 4** de B 2 (mayo de 2025). Lo construido sigue la versión 3: conviene revisar si la 4 cambia alguno de estos signos.
+
+**Lo que no está en la tabla** (matemática, química, emoji, `@`, `%`…) no se transcribe. Nunca se inventa un signo: el diálogo lista los símbolos omitidos («No se transcribieron estos símbolos: …») y el `.BRF` se genera igual.
+
+#### B. Vista en pantalla
+
+Es para quien ve la pantalla: va dentro de un contenedor `aria-hidden="true"` y, antes, hay un texto solo para lectores de pantalla que explica que para leer en Braille se descarga el `.BRF` o se usa la línea Braille con el lector.
+
+1. **Espejo (tinta y Braille):** cada palabra con su Braille de 28 px arriba y la tinta abajo. Muestra los primeros 40 párrafos; el `.BRF` tiene el documento completo.
+2. **Plancha:** cada página como una grilla de celdas por línea × líneas por página, con «Página N de M» y los botones «Anterior» y «Siguiente».
+3. **Formato de la impresora:** «Celdas por línea» (28 a 42) y «Líneas por página» (20 a 30), por defecto 40 × 25, guardado en `aulaclara.braille` = `{ "cols": n, "rows": n }`.
+4. **Figuras:** se transcriben como un párrafo «Gráfico N: descripción.» o «Gráfico N: sin descripción.». Las descripciones hechas con IA se guardan en el documento (campo `alt` del bloque `figure`, en IndexedDB) y no se vuelven a pedir; si quedan figuras sin describir, el diálogo ofrece «Describir N gráficos con IA» (una consulta de la cuota por gráfico, una por una; un error corta la serie).
+
+#### C. Archivo `.BRF` (impresoras Braille)
+
+Texto plano en Braille ASCII norteamericano (NABCC): solo caracteres `0x20`–`0x5F`, líneas separadas por `\r\n` y páginas por `\f`. El índice de la tabla es `codepoint − 0x2800`. MIME `text/plain;charset=us-ascii`; el nombre es `slugify(título).brf` (minúsculas, sin tildes, guiones, 60 caracteres como máximo). Las palabras no se cortan en medio de una línea: una más larga que la línea (una URL) se parte con `⠤`, y un título nunca queda como última línea de una página.
+
+#### D. Impresión en relieve (papel microcápsula)
+
+«Imprimir en relieve» arma una hoja A4 en milímetros (`#braille-print-sheet`, un `<svg>` por página con un círculo por punto, negro sobre blanco), oculta el resto de la interfaz con `@media print` y llama a `window.print()`; al terminar (`afterprint`) la quita. Medidas: A4 de 210 × 297 mm, margen de 15 mm, 2,5 mm entre puntos, 6,0 mm entre celdas, 10,0 mm entre líneas y puntos de 1,5 mm de diámetro. Eso da **30 celdas × 27 líneas** por página, que no es el formato del `.BRF`. Son los valores usuales (Marburg Medium) y hay que confirmarlos con el papel o la impresora de la institución. Junto al botón: «Imprimí al 100 % (sin «Ajustar a la página») para que los puntos tengan la medida correcta.»
+
+La verificación en una vista previa de impresión real (6 mm entre celdas, 10 mm entre líneas) sigue pendiente: ver [`docs/accesibilidad.md`](../accesibilidad.md).
+
+#### E. Fuera de alcance
+
+La signografía matemática y química, el Braille de grado 2 (abreviado) y la edición del Braille en pantalla.
 
 ---
 
@@ -185,7 +183,7 @@ Las impresoras Braille reales (*embossers* como **Index Braille Basic-D / Everes
     "title": "Ceguera",
     "icon": "⠿",
     "description": "Navegación por teclado y por voz, y lectura en voz alta del documento y de las respuestas.",
-    "tags": ["Teclado y voz", "Lectura en voz alta", "Guía por voz opcional"],
+    "tags": ["Teclado y voz", "Lectura en voz alta", "Braille (.BRF e impresión)"],
     "settings": {
       "font": "atkinson",
       "font_size": 24,
@@ -194,29 +192,20 @@ Las impresoras Braille reales (*embossers* como **Index Braille Basic-D / Everes
       "audio_focus": true,
       "voice_guide": false,
       "voice_commands": "push",
-      "single_key_shortcuts": false
+      "single_key_shortcuts": false,
+      "braille_tools": true
     }
   }
   ```
-- **Diferencias con la propuesta inicial:** `voice_guide` y `single_key_shortcuts` vienen en `false` (se prenden a propósito: la guía pisaría a un lector de pantalla y las teclas sueltas chocan con las del lector), `voice_commands` es un modo (`"push"`) y no un booleano, y no hay `braille_enabled`: el Braille es del plan 03.
+- **Diferencias con la propuesta inicial:** `voice_guide` y `single_key_shortcuts` vienen en `false` (se prenden a propósito: la guía pisaría a un lector de pantalla y las teclas sueltas chocan con las del lector), `voice_commands` es un modo (`"push"`) y no un booleano, y el Braille se prende con `braille_tools` (en `true`, plan 03), no con `braille_enabled`.
 
-### Paso 2: Motor de traducción Braille y exportador `.BRF` (`frontend/src/lib/braille/`)
-- **Archivos nuevos:**
-  1. `frontend/src/lib/braille/spanishTable.ts`: Tabla pura de puntos 1–6 para letras, vocales con tilde, `ñ`, `ü`, dígitos, puntuación y prefijos (`CAPS = 0b101000`, `NUM = 0b111100`).
-  2. `frontend/src/lib/braille/translator.ts`:
-     - `toBrailleUnicode(text: string): string` → convierte cualquier cadena en español a caracteres `U+2800..U+28FF`.
-     - `toBrailleTokens(text: string): Array<{ word: string; braille: string }>` → para la vista espejo alineada palabra por palabra.
-  3. `frontend/src/lib/braille/brfExporter.ts`:
-     - `formatBraillePages(blocks: Block[], cols = 40, rows = 25): string[][]` → divide el documento (incluyendo títulos y descripciones de figuras) en páginas y líneas sin cortar palabras indebidamente.
-     - `toBrfFile(pages: string[][]): string` → convierte cada celda Unicode a su equivalente ASCII Braille estándar y une páginas con `\f` (`\x0C`).
-     - `downloadBrf(filename: string, content: string): void` → dispara descarga de `<titulo>.brf` con MIME `text/plain;charset=us-ascii`.
+### Paso 2: Motor de traducción Braille y exportador `.BRF` (hecho, plan 03)
+- `frontend/src/lib/braille/table.ts` (signos), `translate.ts` (`toBraille`, `toBrailleWords`), `layout.ts` (`wrap`, `paginate`) y `brf.ts` (`toBrfLine`, `toBrfDocument`); además `lib/download.ts` (`downloadText`) y `lib/slugify.ts`. Los nombres de la propuesta inicial (`spanishTable.ts`, `translator.ts`, `brfExporter.ts`) no se usaron.
+- Cada módulo tiene su test al lado, y los de `translate.test.ts` citan la sección de B 2 v3.
 
-### Paso 3: Componente de vista e impresión Braille (`frontend/src/features/reader/BrailleModal.tsx`)
-- Diálogo accesible (usando `Dialog.tsx` con trampa de foco) que se abre desde el panel de herramientas o con `Alt+B`:
-  - Selector de modo: **«Vista espejo (Tinta + Braille)»** vs. **«Plancha Braille ($40 \times 25$)»**.
-  - Configuración de impresora: ancho de línea (`32`, `40`, `42` celdas) y líneas por página (`25`, `28`).
-  - Botón **«⬇ Descargar archivo .BRF (para impresora Braille)»**.
-  - Botón **«🖨 Imprimir en relieve / Papel microcápsula»** (invoca `window.print()` con la hoja `#braille-print-sheet`).
+### Paso 3: Diálogo de Braille e impresión en relieve (hecho, plan 03)
+- `frontend/src/features/reader/braille/`: `articleToBraille.ts` (el documento a párrafos Braille), `format.ts` (formato de la impresora), `BrailleDialog.tsx` (el diálogo; no existe `BrailleModal.tsx`), `printGeometry.ts` y `BraillePrintSheet.tsx` (la hoja en milímetros). El estilo de impresión está en `index.css`.
+- Se abre con el botón «⠿ Braille», `Alt+B`, `B` o el comando de voz «braille».
 
 ### Paso 4: Guía por voz y control por voz (hecho, plan 02)
 - Reconocimiento: `frontend/src/lib/voice/` (`recognizer.ts` envuelve el navegador, `commands.ts` interpreta, `earcons.ts` genera los tonos, `consent.ts` guarda el consentimiento, `micLock.ts` reparte el micrófono). No existe `lib/voiceControl.ts`.
@@ -225,7 +214,7 @@ Las impresoras Braille reales (*embossers* como **Index Braille Basic-D / Everes
 
 ### Paso 5: Navegación por bloques y figuras en el lector (hecho, plan 02)
 - `useReaderNavigation` mantiene el cursor de bloque; `blockNav.ts` calcula el siguiente bloque, título o figura. `J`/`K` o `Alt+↓`/`Alt+↑` mueven por bloques y `H` / `Alt+H` por títulos; `G` / `Alt+G` por gráficos.
-- Pendiente (no se hizo en el plan 02): persistir la descripción de una figura en el documento guardado (`libraryApi.saveFigureDescription`) para que el traductor Braille la incluya. Va con el plan 03.
+- La descripción de una figura se guarda en el documento (`libraryApi.saveFigureAlt`, hecho en el plan 03) y el Braille la incluye; una figura ya descrita no vuelve a gastar cuota.
 
 ---
 
@@ -236,6 +225,7 @@ Lo que hoy cubren los tests (`npm test` y `pytest`):
 2. **`lib/speech.bus.test.ts` y `lib/speech.test.ts`:** un solo hablante a la vez, lectura que queda en pausa y se retoma.
 3. **`lib/voice/commands.test.ts`:** frases, voseo y regla del modo continuo; `recognizer.test.ts`, `consent.test.ts`, `earcons.test.ts` y `micLock.test.ts` con dobles de las APIs del navegador.
 4. **`features/reader/blockNav.test.ts`:** cursor por bloques, títulos y figuras, y los bordes del documento.
-5. **Backend:** `tests/api/test_presets.py` y `tests/unit/test_seed.py` verifican que el catálogo incluye `ceguera`, con `voice_guide` en `false` y `voice_commands` en `"push"`; el contrato del frontend verifica que conoce esos tres ajustes.
+5. **Backend:** `tests/api/test_presets.py` y `tests/unit/test_seed.py` verifican que el catálogo incluye `ceguera`, con `voice_guide` en `false`, `voice_commands` en `"push"` y `braille_tools` en `true`; el contrato del frontend verifica que conoce esos ajustes.
+6. **Braille:** `lib/braille/translate.test.ts`, `layout.test.ts` y `brf.test.ts`, `lib/slugify.test.ts`, `features/reader/braille/*.test.ts(x)` (documento a Braille, formato, diálogo, geometría y hoja de impresión), `features/library/api.test.ts` (descripciones guardadas) y los tests de «Braille» y «lector» en `app.test.tsx`.
 
-La prueba manual con navegador real y lector de pantalla sigue pendiente: ver la lista en [`docs/accesibilidad.md`](../accesibilidad.md). Los tests del Braille (`translator.test.ts`, `brfExporter.test.ts`) son del plan 03.
+La prueba manual con navegador real y lector de pantalla sigue pendiente: ver la lista en [`docs/accesibilidad.md`](../accesibilidad.md). La lista incluye ahora el Braille: probar el `.BRF` en una impresora real y la hoja de relieve sobre el papel de la institución.

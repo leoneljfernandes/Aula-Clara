@@ -16,6 +16,7 @@ async def test_presets_catalog_lists_the_seed_presets(client: AsyncClient) -> No
     assert presets["dislexia"]["tags"] == ["OpenDyslexic", "Interlineado amplio", "Fondo sepia"]
     assert presets["ceguera"]["settings"]["voice_guide"] is False
     assert presets["ceguera"]["settings"]["voice_commands"] == "push"
+    assert presets["ceguera"]["settings"]["braille_tools"] is True
 
 
 async def test_old_profiles_endpoint_is_gone(client: AsyncClient) -> None:
