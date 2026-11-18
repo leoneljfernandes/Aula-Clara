@@ -22,6 +22,9 @@ function decimals(step: number): number {
 /**
  * Ajuste numérico con botones «−» y «+»: cumple WCAG 2.5.7 (no exige arrastrar) y no deja el valor
  * fuera de `min`..`max`. El valor es un `<output>` en vivo para que un lector de pantalla lo anuncie.
+ *
+ * En el extremo el botón queda `aria-disabled` y no hace nada, pero no `disabled`: un botón deshabilitado
+ * pierde el foco (se va a `<body>`) y quien usa el teclado queda perdido justo al llegar al tope.
  */
 export function Stepper({
   id,
@@ -34,7 +37,10 @@ export function Stepper({
   onChange,
 }: StepperProps): ReactNode {
   const digits = decimals(step);
+  const atMin = value <= min;
+  const atMax = value >= max;
   const move = (direction: 1 | -1): void => {
+    if (direction === -1 ? atMin : atMax) return;
     const next = Number((value + direction * step).toFixed(digits));
     onChange(Math.min(max, Math.max(min, next)));
   };
@@ -46,7 +52,7 @@ export function Stepper({
       <div className="flex items-center gap-2">
         <Button
           onClick={() => move(-1)}
-          disabled={value <= min}
+          aria-disabled={atMin}
           aria-label={`Bajar ${label}`}
           className="w-14 text-2xl"
         >
@@ -57,7 +63,7 @@ export function Stepper({
         </output>
         <Button
           onClick={() => move(1)}
-          disabled={value >= max}
+          aria-disabled={atMax}
           aria-label={`Subir ${label}`}
           className="w-14 text-2xl"
         >
