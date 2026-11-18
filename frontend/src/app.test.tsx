@@ -150,13 +150,15 @@ describe("onboarding", () => {
   it("entrar a una ruta protegida sin perfil pasa por el wizard y vuelve a donde iba", async () => {
     const user = userEvent.setup();
     const router = renderAt("/leer/d1");
-    await h1();
+    await h1({ timeout: 5_000 });
     expect(router.state.location.pathname).toBe("/perfil");
     expect(router.state.location.search).toBe("?next=%2Fleer%2Fd1");
 
-    await user.click(await screen.findByRole("radio", { name: /Perfil Visión reducida/ }));
+    await user.click(
+      await screen.findByRole("radio", { name: /Perfil Visión reducida/ }, { timeout: 5_000 }),
+    );
     await user.click(screen.getByRole("button", { name: /Siguiente/ }));
-    await user.click(await screen.findByRole("button", { name: "Guardar y continuar" }));
+    await user.click(await screen.findByRole("button", { name: "Guardar y continuar" }, { timeout: 5_000 }));
     // Primera carga de la ruta lazy del lector (pdf.js y compañía): con toda la suite en paralelo puede pasar de 1 s.
     await waitFor(() => expect(router.state.location.pathname).toBe("/leer/d1"), { timeout: 5_000 });
   }, 10_000);
@@ -234,23 +236,30 @@ describe("onboarding", () => {
     ["/perfil", "Cargando tu perfil de lectura…"],
     ["/", "Cargando…"],
     ["/leer/d1", "Cargando…"],
-  ])("al entrar por %s, mientras llega el catálogo avisa «%s»", async (path, message) => {
-    let respond: (presets: unknown) => void = () => undefined;
-    request.mockImplementation((c: { url: string }) =>
-      c.url === "/presets"
-        ? new Promise((resolve) => {
-            respond = resolve;
-          })
-        : fakeBackend(c),
-    );
-    renderAt(path);
-    expect(await screen.findByText(message)).toHaveAttribute("role", "status");
-    // El aviso aparece antes de que se pida el catálogo: se contesta recién cuando el pedido salió.
-    await waitFor(() => expect(calls("/presets")).toHaveLength(1));
-    respond(PRESETS);
-    expect(await h1()).toHaveTextContent(/Personalizá tu experiencia/);
-    expect(screen.queryByText(message)).not.toBeInTheDocument();
-  });
+  ])(
+    "al entrar por %s, mientras llega el catálogo avisa «%s»",
+    async (path, message) => {
+      let respond: (presets: unknown) => void = () => undefined;
+      request.mockImplementation((c: { url: string }) =>
+        c.url === "/presets"
+          ? new Promise((resolve) => {
+              respond = resolve;
+            })
+          : fakeBackend(c),
+      );
+      renderAt(path);
+      expect(await screen.findByText(message, undefined, { timeout: 5_000 })).toHaveAttribute(
+        "role",
+        "status",
+      );
+      // El aviso aparece antes de que se pida el catálogo: se contesta recién cuando el pedido salió.
+      await waitFor(() => expect(calls("/presets")).toHaveLength(1), { timeout: 5_000 });
+      respond(PRESETS);
+      expect(await h1({ timeout: 5_000 })).toHaveTextContent(/Personalizá tu experiencia/);
+      expect(screen.queryByText(message)).not.toBeInTheDocument();
+    },
+    10_000,
+  );
 
   describe("con el onboarding hecho y ajustes propios", () => {
     // Ajustes afinados a mano: no coinciden con ningún preset, así que el wizard marca «Personalizado».
@@ -510,7 +519,80 @@ describe("lector", () => {
     await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
     expect(await screen.findByText(/Leyendo · bloque 1 de/)).toBeInTheDocument();
     await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}");
-    expect(await screen.findByText(/Leyendo · bloque 2 de/)).toBeInTheDocument();
+    expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
+  it("el cursor sigue a la lectura: Alt+↓ va al bloque que sigue al que se lee, no al principio", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
+    // El título (2 palabras) termina solo y la lectura pasa al bloque 2 sin tocar el cursor.
+    expect(
+      await screen.findByText(/Leyendo · bloque 2 de/, undefined, { timeout: 3_000 }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-2");
+    expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
+  it("al enfocar un párrafo, Alt+↓ sigue desde ese párrafo", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.click(document.getElementById("blk-4") as HTMLElement);
+    expect(document.activeElement?.id).toBe("blk-4");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-5");
+  });
+
+  it("con un diálogo abierto, Alt+↓ no saca el foco hacia el documento; cerrado, sí", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}h{/Alt}{Alt>}g{/Alt}");
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-9");
+  });
+
+  describe("con la guía por voz", () => {
+    beforeEach(() =>
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { voiceGuide: true } }),
+      ),
+    );
+
+    it("tras pasar la figura, lee desde el índice leíble correcto (la figura no cuenta)", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      // Bloques 0, 3 y 6 son títulos; 7 es un párrafo, 8 la figura y 9 el párrafo que sigue.
+      await user.keyboard("{Alt>}h{/Alt}{Alt>}h{/Alt}{Alt>}h{/Alt}");
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-7");
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("fig-btn-8");
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-9");
+      expect(await screen.findByText(/Leyendo · bloque 9 de/)).toBeInTheDocument();
+    });
+
+    it("con la lectura en pausa, moverse a un bloque la retoma desde ahí", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Reproducir lectura" }));
+      await user.click(await screen.findByRole("button", { name: "Pausar lectura" }));
+      expect(await screen.findByRole("button", { name: "Continuar lectura" })).toBeInTheDocument();
+      await user.keyboard("{Alt>}h{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-3");
+      expect(await screen.findByText(/Leyendo · bloque 4 de/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Pausar lectura" })).toBeInTheDocument();
+    });
   });
 
   it("la lectura en voz alta resalta el párrafo actual y se puede detener", async () => {

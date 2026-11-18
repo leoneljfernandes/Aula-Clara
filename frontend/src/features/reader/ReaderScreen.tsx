@@ -51,6 +51,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     blocks: article.blocks,
     audio,
     voiceGuide: settings.voiceGuide,
+    activeBlock,
     announce,
   });
 

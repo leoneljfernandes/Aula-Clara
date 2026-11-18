@@ -109,6 +109,8 @@ export function useReaderHotkeys(deps: HotkeyDeps): void {
     const id = matchShortcut(e, { singleKey: deps.singleKey });
     const run = id ? deps.handlers[id] : undefined;
     if (!id || !run) return;
+    // Con un diálogo modal abierto el documento de atrás no se navega: solo Esc (silenciar) sigue vivo.
+    if (id !== "silence" && document.querySelector('[aria-modal="true"]')) return;
     // Esc silencia la voz, pero también cierra diálogos y desplegables: no se le quita ese uso.
     if (id !== "silence") e.preventDefault();
     run();
