@@ -10,5 +10,10 @@
   {"id": "fatiga", "title": "Fatiga visual", "icon": "☾",
    "description": "Modo oscuro cálido y la lectura en voz alta siempre a mano.",
    "tags": ["Modo oscuro cálido", "Audio destacado", "Verdana"],
-   "settings": {"font": "verdana", "font_size": 20, "line_height": 1.8, "theme": "oscuro", "audio_focus": true}}
+   "settings": {"font": "verdana", "font_size": 20, "line_height": 1.8, "theme": "oscuro", "audio_focus": true}},
+  {"id": "ceguera", "title": "Ceguera", "icon": "⠿",
+   "description": "Navegación por teclado y por voz, y lectura en voz alta del documento y de las respuestas.",
+   "tags": ["Teclado y voz", "Lectura en voz alta", "Guía por voz opcional"],
+   "settings": {"font": "atkinson", "font_size": 24, "line_height": 1.8, "theme": "contraste", "audio_focus": true,
+                "voice_guide": false, "voice_commands": "push", "single_key_shortcuts": false}}
 ]
