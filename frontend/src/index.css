@@ -55,3 +55,23 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Hoja de Braille en relieve: solo se ve al imprimir desde el diálogo de Braille. */
+#braille-print-sheet {
+  display: none;
+}
+@media print {
+  body.printing-braille > :not(#braille-print-sheet) {
+    display: none !important;
+  }
+  body.printing-braille #braille-print-sheet {
+    display: block;
+  }
+  #braille-print-sheet svg {
+    break-after: page;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}

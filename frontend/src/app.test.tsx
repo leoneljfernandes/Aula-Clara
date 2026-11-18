@@ -1866,6 +1866,27 @@ describe("Braille", () => {
     expect(JSON.parse(window.localStorage.getItem("aulaclara.braille")!)).toEqual({ cols: 30, rows: 25 });
   });
 
+  it("«Imprimir en relieve» arma la hoja con medidas reales, imprime y la quita al terminar", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {
+      expect(document.body).toHaveClass("printing-braille");
+      expect(document.getElementById("braille-print-sheet")).not.toBeNull();
+    });
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}b{/Alt}");
+    const dialog = await screen.findByRole("dialog", { name: "Braille" });
+    expect(dialog).toHaveTextContent(
+      "Imprimí al 100 % (sin «Ajustar a la página») para que los puntos tengan la medida correcta.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Imprimir en relieve" }));
+    expect(print).toHaveBeenCalledOnce();
+    act(() => window.dispatchEvent(new Event("afterprint")));
+    expect(document.body).not.toHaveClass("printing-braille");
+    expect(document.getElementById("braille-print-sheet")).toBeNull();
+    print.mockRestore();
+  });
+
   it("las figuras sin describir se ofrecen y se describen una por una, sin repetir las ya hechas", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");

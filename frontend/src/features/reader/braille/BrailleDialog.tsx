@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
@@ -12,7 +12,9 @@ import { slugify } from "@/lib/slugify";
 
 import { figureImageBlob } from "@/lib/figureImage";
 import { articleTexts, articleToParagraphs } from "./articleToBraille";
+import { BraillePrintSheet } from "./BraillePrintSheet";
 import { COLS_RANGE, loadBrailleFormat, ROWS_RANGE, saveBrailleFormat } from "./format";
+import { printGrid } from "./printGeometry";
 
 interface BrailleDialogProps {
   article: Article;
@@ -47,6 +49,8 @@ export function BrailleDialog({
   const [pageIndex, setPageIndex] = useState(0);
   const [describing, setDescribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Las páginas que se están imprimiendo en relieve: mientras no sea null, la hoja está montada.
+  const [printing, setPrinting] = useState<string[][] | null>(null);
 
   const { paragraphs, unsupported, undescribedFigures } = useMemo(
     () => articleToParagraphs(article, figureAlts),
@@ -65,6 +69,22 @@ export function BrailleDialog({
     saveBrailleFormat(next);
     setPageIndex(0);
   };
+
+  // Imprimir: con la hoja ya montada se oculta todo lo demás y se abre la impresión; al terminar se desmonta.
+  useEffect(() => {
+    if (!printing) return;
+    const done = (): void => setPrinting(null);
+    document.body.classList.add("printing-braille");
+    window.addEventListener("afterprint", done);
+    window.print();
+    return () => {
+      window.removeEventListener("afterprint", done);
+      document.body.classList.remove("printing-braille");
+    };
+  }, [printing]);
+
+  /** La hoja se pagina con las medidas del papel, no con el formato de la impresora Braille del .BRF. */
+  const printRaised = (): void => setPrinting(paginate(paragraphs, printGrid()));
 
   const download = (): void =>
     downloadText(
@@ -227,12 +247,19 @@ export function BrailleDialog({
         </div>
       )}
 
+      <p id="braille-print-note" className="mb-2 text-sm text-[var(--muted)]">
+        Imprimí al 100 % (sin «Ajustar a la página») para que los puntos tengan la medida correcta.
+      </p>
       <div className="flex flex-wrap gap-3">
         <Button variant="primary" onClick={download}>
           Descargar archivo .BRF
         </Button>
+        <Button aria-describedby="braille-print-note" onClick={printRaised}>
+          Imprimir en relieve
+        </Button>
         <Button onClick={onClose}>Cerrar</Button>
       </div>
+      {printing && <BraillePrintSheet pages={printing} />}
     </Dialog>
   );
 }
