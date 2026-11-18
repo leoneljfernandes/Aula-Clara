@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_SETTINGS, type ReadingSettings } from "@/features/preferences";
 import { routes } from "@/router";
+import { ReadAloudEngine, speechBus } from "@/lib/speech";
 import { FakeRecognition, installFakeRecognition } from "@/test/fakeSpeechRecognition";
 
 // Sin backend en los tests: el cliente HTTP devuelve respuestas fijas de "Gemini".
@@ -587,6 +588,96 @@ describe("lector", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
     expect(document.activeElement?.id).toBe("blk-9");
+  });
+
+  it("Alt+P arranca la lectura desde el bloque donde está el cursor, no desde el principio", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}");
+    expect(document.activeElement?.id).toBe("blk-2");
+    expect(screen.getByText("Listo para leer.")).toBeInTheDocument();
+    await user.keyboard("{Alt>}p{/Alt}");
+    expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+  });
+
+  it("Alt+P sin cursor lee desde el principio", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}p{/Alt}");
+    expect(await screen.findByText(/Leyendo · bloque 1 de/)).toBeInTheDocument();
+  });
+
+  it("Alt+B anuncia que el Braille todavía no está disponible", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await h1();
+    await user.keyboard("{Alt>}b{/Alt}");
+    expect(
+      await screen.findByText("El Braille todavía no está disponible", { selector: "[role=status]" }),
+    ).toBeInTheDocument();
+  });
+
+  describe("con atajos de una sola tecla", () => {
+    beforeEach(() =>
+      window.localStorage.setItem(
+        "aulaclara.settings",
+        JSON.stringify({ schemaVersion: 2, settings: { singleKeyShortcuts: true } }),
+      ),
+    );
+
+    it("«4» explica con palabras más simples el párrafo donde está el cursor", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      const paragraph = document.getElementById("blk-4") as HTMLElement;
+      await user.click(paragraph);
+      await user.keyboard("4");
+      await waitFor(() => expect(calls("/ai/chat")).toHaveLength(1));
+      const sent = calls("/ai/chat")[0]?.data as { action: string; message?: string; selection: string };
+      expect(sent.action).toBe("simplify");
+      expect(sent.selection).toBe(paragraph.textContent);
+    });
+
+    it("«4» sin un párrafo elegido avisa y no manda nada", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      await user.keyboard("4");
+      expect(
+        await screen.findByText("Elegí un párrafo primero (Alt+↓ o J).", { selector: "[role=status]" }),
+      ).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+
+    it("«4» sobre una figura avisa y no manda nada", async () => {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await h1();
+      await user.keyboard("g");
+      expect(document.activeElement?.id).toMatch(/^fig-btn-/);
+      await user.keyboard("4");
+      expect(
+        await screen.findByText("Elegí un párrafo primero (Alt+↓ o J).", { selector: "[role=status]" }),
+      ).toBeInTheDocument();
+      expect(calls("/ai/chat")).toHaveLength(0);
+    });
+  });
+
+  it("al salir del lector se silencia la voz que quedara hablando", async () => {
+    const user = userEvent.setup();
+    const router = renderAt("/leer/d1");
+    await h1();
+    const silence = vi.spyOn(speechBus, "silence");
+    try {
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+      silence.mockClear();
+      await act(() => router.navigate("/biblioteca"));
+      expect(silence).toHaveBeenCalled();
+    } finally {
+      silence.mockRestore();
+    }
   });
 
   describe("con la guía por voz", () => {
@@ -1210,6 +1301,31 @@ describe("comandos por voz", () => {
     expect(screen.getByText(/"resumir" ✓/)).toBeInTheDocument();
   });
 
+  it("el consentimiento de manos libres suma el aviso del micrófono abierto; el de por botón no", async () => {
+    installFakeRecognition();
+    const aviso = /el micrófono queda abierto: también puede oír a otras personas/;
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+    expect(screen.queryByText(aviso)).not.toBeInTheDocument();
+  });
+
+  it("el consentimiento en manos libres incluye el aviso del micrófono abierto", async () => {
+    installFakeRecognition();
+    window.localStorage.setItem(
+      "aulaclara.settings",
+      JSON.stringify({ schemaVersion: 2, settings: { voiceCommands: "continuous" } }),
+    );
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: /Micrófono/ }));
+    await screen.findByRole("dialog", { name: "Antes de usar el micrófono" });
+    expect(
+      screen.getByText(/el micrófono queda abierto: también puede oír a otras personas/),
+    ).toBeInTheDocument();
+  });
+
   it("sin soporte del navegador lo explica y no muestra el micrófono", async () => {
     renderAt("/leer/d1");
     expect(await screen.findByText(/Tu navegador no permite comandos por voz/)).toBeInTheDocument();
@@ -1393,6 +1509,12 @@ describe("micrófono: un solo reconocedor a la vez y avisos honestos", () => {
       JSON.stringify({ schemaVersion: 2, settings: { voiceCommands } }),
     );
 
+  /** La región anunciada de la barra de comandos: solo resultados y errores, nunca el estado del micrófono. */
+  const voiceStatus = (): HTMLElement =>
+    screen
+      .getByText(/Micrófono apagado|Escuchando…/)
+      .parentElement!.querySelector<HTMLElement>('[role="status"]')!;
+
   it("dictar en manos libres frena los comandos, escribe lo dicho sin ejecutarlo y los retoma", async () => {
     withMode("continuous");
     const user = userEvent.setup();
@@ -1485,10 +1607,101 @@ describe("micrófono: un solo reconocedor a la vez y avisos honestos", () => {
     await user.click(await screen.findByRole("button", { name: "Micrófono" }));
     const rec = FakeRecognition.instances[0]!;
     act(() => rec.emitFinal("Resumen"));
-    expect(screen.getByText(/"Resumen" ✗ No entendí ese comando/)).toBeInTheDocument();
     expect(calls("/ai/chat")).toHaveLength(0);
     act(() => rec.emitFinal("asistente resumir"));
     await waitFor(() => expect(calls("/ai/chat")[0]?.data).toMatchObject({ action: "summarize" }));
+  });
+
+  it("manos libres: una frase que no es un comando nunca se escribe en la región anunciada", async () => {
+    withMode("continuous");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    const rec = FakeRecognition.instances[0]!;
+    act(() => rec.emitFinal("hola mundo esto lo dice otra persona"));
+    act(() => rec.emitFinal("Resumen"));
+    expect(screen.queryByText(/hola mundo/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No entendí/)).not.toBeInTheDocument();
+    expect(voiceStatus()).toBeEmptyDOMElement();
+    // Lo entendido sí se anuncia.
+    act(() => rec.emitFinal("siguiente"));
+    expect(voiceStatus()).toHaveTextContent('"siguiente" ✓');
+  });
+
+  it("modo por botón: lo no entendido sí se muestra", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("hola mundo"));
+    expect(voiceStatus()).toHaveTextContent('"hola mundo" ✗ No entendí ese comando');
+  });
+
+  it("«Escuchando…» y «Micrófono apagado» son solo visuales: no están en la región anunciada", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    const mic = await screen.findByRole("button", { name: "Micrófono" });
+    const off = screen.getByText("Micrófono apagado");
+    expect(off.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(voiceStatus()).not.toHaveTextContent(/Micrófono apagado/);
+    await user.click(mic);
+    const on = screen.getByText("Escuchando…");
+    expect(on.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(voiceStatus()).not.toHaveTextContent(/Escuchando/);
+  });
+
+  it("el dictado anuncia lo escrito para quien no ve la pantalla", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Dictar pregunta" }));
+    act(() => FakeRecognition.instances[0]!.emitFinal("qué dice la ley"));
+    expect(
+      await screen.findByText("Escribiste: qué dice la ley", { selector: "[role=status]" }),
+    ).toBeInTheDocument();
+  });
+
+  it("con un diálogo abierto, «siguiente» por voz no saca el foco del diálogo", async () => {
+    withMode("push");
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+    await user.click(await screen.findByRole("button", { name: /Interpretar con IA/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Interpretación de la imagen" });
+    const rec = FakeRecognition.instances[0]!;
+    act(() => rec.emitFinal("siguiente"));
+    act(() => rec.emitFinal("siguiente sección"));
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(voiceStatus()).toHaveTextContent('"siguiente sección" ✗');
+    // «detener» sigue valiendo con un diálogo abierto.
+    act(() => rec.emitFinal("detener"));
+    expect(voiceStatus()).toHaveTextContent('"detener" ✓');
+  });
+
+  it("«leer» y «continuar» arrancan desde el cursor; con la lectura en marcha no la reinician", async () => {
+    withMode("push");
+    const playFrom = vi.spyOn(ReadAloudEngine.prototype, "playFrom");
+    const play = vi.spyOn(ReadAloudEngine.prototype, "play");
+    try {
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Micrófono" }));
+      await user.keyboard("{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}");
+      expect(document.activeElement?.id).toBe("blk-2");
+      const rec = FakeRecognition.instances[0]!;
+      act(() => rec.emitFinal("continuar"));
+      expect(await screen.findByText(/Leyendo · bloque 3 de/)).toBeInTheDocument();
+      expect(playFrom).toHaveBeenCalledTimes(1);
+      expect(playFrom).toHaveBeenCalledWith(2);
+      // Ya está leyendo: otro «continuar» no vuelve a empezar el párrafo.
+      act(() => rec.emitFinal("continuar"));
+      expect(playFrom).toHaveBeenCalledTimes(1);
+      expect(play).not.toHaveBeenCalled();
+    } finally {
+      playFrom.mockRestore();
+      play.mockRestore();
+    }
   });
 
   it("la barra no cambia su texto anunciado cuando la app empieza o termina de hablar", async () => {
@@ -1496,7 +1709,7 @@ describe("micrófono: un solo reconocedor a la vez y avisos honestos", () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");
     await user.click(await screen.findByRole("button", { name: "Micrófono" }));
-    const live = screen.getByText("Escuchando…").closest('[role="status"]')!;
+    const live = voiceStatus();
     const before = live.textContent;
     const bus = await busOf();
     const owner = { onInterrupted: () => {} };

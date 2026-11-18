@@ -84,7 +84,12 @@ export function useVoiceCommands({ mode, onCommand }: Options): VoiceCommands {
         },
         onFinal: (text) => {
           const command = parseCommand(text, { continuous: mode === "continuous" });
-          if (!command) return setHeard({ text, understood: false });
+          if (!command) {
+            // En manos libres el micrófono oye voces ajenas (o a un lector de pantalla): se las calla en vez de
+            // escribirlas en la región anunciada, donde la voz de la app las repetiría ante el micrófono abierto.
+            if (mode !== "continuous") setHeard({ text, understood: false });
+            return;
+          }
           const note = handler.current(command);
           setHeard(note ? { text, understood: false, note } : { text, understood: true });
         },

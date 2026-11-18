@@ -7,4 +7,4 @@ export { describeApiError, ImageUnavailableError, needsAISetup } from "./errors"
 export { useAICredentials } from "./credentials";
 export { ProviderBadge } from "./ProviderBadge";
 export { type Chat, useChat } from "./useChat";
-export { quickActionLabel } from "./quickActions";
+export { explainPrompt, quickActionLabel } from "./quickActions";

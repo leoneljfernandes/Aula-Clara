@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import { Button } from "@/components/Button";
 import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
+import { useAnnounce } from "@/lib/announcer";
 import { hasTTS, speakOnce, withNotice } from "@/lib/speech";
 
 import { AISettingsDialog } from "./AISettingsDialog";
@@ -10,7 +11,7 @@ import { useAICredentials } from "./credentials";
 import { LIMITS } from "./errors";
 import { providerLabel } from "./providers";
 import { ProviderBadge } from "./ProviderBadge";
-import { QUICK_ACTIONS } from "./quickActions";
+import { explainPrompt, QUICK_ACTIONS } from "./quickActions";
 import type { Chat } from "./useChat";
 import { useDictation } from "./useDictation";
 
@@ -25,6 +26,8 @@ interface AssistantPanelProps {
   autoSpeak: boolean;
   /** Con los comandos por voz activos, se ofrece dictar la pregunta (si el navegador sabe reconocer voz). */
   dictation: boolean;
+  /** Los comandos por voz están en manos libres: el aviso de consentimiento suma que el micrófono queda abierto. */
+  handsFree?: boolean;
 }
 
 export function AssistantPanel({
@@ -34,11 +37,13 @@ export function AssistantPanel({
   rate,
   autoSpeak,
   dictation,
+  handsFree = false,
 }: AssistantPanelProps): ReactNode {
   const [draft, setDraft] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const credentials = useAICredentials();
   const logRef = useRef<HTMLDivElement>(null);
+  const announce = useAnnounce();
   const { messages, typing, send } = chat;
 
   const submit = (): void => {
@@ -48,7 +53,11 @@ export function AssistantPanel({
     setDraft("");
   };
   const dictate = useDictation({
-    onText: (text) => setDraft((d) => (d.trim() ? `${d.trim()} ${text}` : text)),
+    onText: (text) => {
+      setDraft((d) => (d.trim() ? `${d.trim()} ${text}` : text));
+      // Quien no ve la pantalla se entera de qué quedó escrito.
+      announce(`Escribiste: ${text}`);
+    },
     onSend: submit,
   });
 
@@ -71,8 +80,7 @@ export function AssistantPanel({
     }
   }, [messages, autoSpeak, rate]);
 
-  const explain = (): void =>
-    void send(`Explicame este párrafo con palabras más simples: «${selection}»`, "simplify", { selection });
+  const explain = (): void => void send(explainPrompt(selection), "simplify", { selection });
 
   return (
     <section aria-labelledby="asist-title" className="flex h-full min-h-[560px] flex-col lg:min-h-0">
@@ -238,6 +246,7 @@ export function AssistantPanel({
         {dictate.consentOpen && (
           <VoiceConsentDialog
             kind="commands"
+            continuous={handsFree}
             onAccept={dictate.acceptConsent}
             onCancel={dictate.cancelConsent}
           />

@@ -23,3 +23,13 @@ it("para la transcripción suma el aviso sobre transcribir a otras personas", ()
   expect(screen.getByText(/Pedile permiso al docente y avisá a tus compañeros/)).toBeInTheDocument();
   expect(screen.getByText(/se borra al salir del lector/)).toBeInTheDocument();
 });
+
+it("en manos libres avisa que el micrófono abierto puede oír a otras personas, y solo ahí", () => {
+  const aviso = /En modo manos libres el micrófono queda abierto: también puede oír a otras personas/;
+  const { rerender } = render(
+    <VoiceConsentDialog kind="commands" continuous onAccept={vi.fn()} onCancel={vi.fn()} />,
+  );
+  expect(screen.getByText(aviso)).toBeInTheDocument();
+  rerender(<VoiceConsentDialog kind="commands" onAccept={vi.fn()} onCancel={vi.fn()} />);
+  expect(screen.queryByText(aviso)).not.toBeInTheDocument();
+});

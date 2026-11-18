@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
 import { VoiceConsentDialog } from "@/components/VoiceConsentDialog";
-import { AssistantPanel, quickActionLabel, useChat } from "@/features/assistant";
+import { AssistantPanel, explainPrompt, quickActionLabel, useChat } from "@/features/assistant";
 import { type Article, libraryApi, type LibraryDocument } from "@/features/library";
 import {
   clamp,
@@ -21,7 +21,7 @@ import { speechBus } from "@/lib/speech";
 import { useReadAloud } from "@/lib/useReadAloud";
 import type { VoiceCommand } from "@/lib/voice/commands";
 
-import { findBlock } from "./blockNav";
+import { findBlock, readableIndex } from "./blockNav";
 import { DocumentView } from "./DocumentView";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
 import { useReaderNavigation } from "./useReaderNavigation";
@@ -61,7 +61,44 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     announce,
   });
 
+  // Salir del lector no deja una voz pendiente hablando en otra pantalla.
+  useEffect(() => () => speechBus.silence(), []);
+
+  // Leer: desde el bloque del cursor si la lectura está detenida; en pausa se reanuda donde quedó.
+  const startReading = (): void => {
+    if (audio.status === "stopped") {
+      const from = readableIndex(article.blocks, nav.cursor);
+      if (from !== null) return audio.playFrom(from);
+    }
+    audio.play();
+  };
+
+  // Un único punto de entrada para el Braille (teclado y voz): el plan 03 reemplaza su cuerpo.
+  const openBraille = (): string => {
+    const notice = "El Braille todavía no está disponible";
+    announce(notice);
+    return notice;
+  };
+
+  // Explica más simple el bloque del cursor (el plan 04 lo extiende a un bloque elegido).
+  const simplifyBlock = (): void => {
+    const block = article.blocks[nav.cursor];
+    if (block === undefined || block.type === "figure") {
+      announce("Elegí un párrafo primero (Alt+↓ o J).");
+      return;
+    }
+    void chat.send(explainPrompt(block.text), "simplify", { selection: block.text });
+  };
+
   const runVoiceCommand = (command: VoiceCommand): string | void => {
+    // Con un diálogo abierto el documento de atrás no se navega: solo se puede cortar la voz.
+    if (
+      document.querySelector('[aria-modal="true"]') &&
+      command.kind !== "stop" &&
+      command.kind !== "pause"
+    ) {
+      return "Hay un diálogo abierto";
+    }
     // Una consulta a la IA con otra en curso se descartaría: se avisa en vez de marcarla como hecha.
     const askAI = (...args: Parameters<typeof chat.send>): string | void => {
       if (chat.typing) return "Esperá a que termine la respuesta";
@@ -69,7 +106,9 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     };
     switch (command.kind) {
       case "play":
-        return audio.play();
+        // Ya leyendo no se reinicia el párrafo.
+        if (audio.status !== "playing") startReading();
+        return;
       case "pause":
         return audio.pause();
       case "stop":
@@ -112,9 +151,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       case "ask":
         return askAI(command.question, "free");
       case "openBraille":
-        // El lector Braille llega con el plan 03, que reemplaza este aviso.
-        announce("El Braille todavía no está disponible");
-        return "El Braille todavía no está disponible";
+        return openBraille();
     }
   };
   const voiceOn = settings.voiceCommands !== "off";
@@ -122,7 +159,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   useReaderHotkeys({
     singleKey: settings.singleKeyShortcuts,
     handlers: {
-      playPause: () => (audio.status === "playing" ? audio.pause() : audio.play()),
+      playPause: () => (audio.status === "playing" ? audio.pause() : startReading()),
       stop: audio.stop,
       fontUp: () => updateSettings({ fontSize: clamp(settings.fontSize + 2, MIN_FS, MAX_FS) }),
       fontDown: () => updateSettings({ fontSize: clamp(settings.fontSize - 2, MIN_FS, MAX_FS) }),
@@ -135,6 +172,8 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       summarize: () => void chat.send(quickActionLabel("summarize"), "summarize"),
       keyConcepts: () => void chat.send(quickActionLabel("key_concepts"), "key_concepts"),
       quiz: () => void chat.send(quickActionLabel("quiz"), "quiz"),
+      simplifyBlock,
+      openBraille: () => void openBraille(),
       silence: () => speechBus.silence(),
       ...(voiceOn && voice.available ? { toggleMic: voice.toggle } : {}),
       nextBlock: () => nav.move("any", 1),
@@ -153,9 +192,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
 
   const explainSelection = (): void => {
     hidePopover();
-    void chat.send(`Explicame este párrafo con palabras más simples: «${selection}»`, "simplify", {
-      selection,
-    });
+    void chat.send(explainPrompt(selection), "simplify", { selection });
   };
 
   return (
@@ -205,7 +242,12 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
       </header>
       {voiceOn && <VoiceCommandBar {...voice} />}
       {voice.consentOpen && (
-        <VoiceConsentDialog kind="commands" onAccept={voice.acceptConsent} onCancel={voice.cancelConsent} />
+        <VoiceConsentDialog
+          kind="commands"
+          continuous={settings.voiceCommands === "continuous"}
+          onAccept={voice.acceptConsent}
+          onCancel={voice.cancelConsent}
+        />
       )}
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[290px_minmax(0,1fr)_390px]">
@@ -244,6 +286,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
             rate={settings.rate}
             autoSpeak={settings.voiceGuide}
             dictation={voiceOn}
+            handsFree={settings.voiceCommands === "continuous"}
           />
         </aside>
       </div>
