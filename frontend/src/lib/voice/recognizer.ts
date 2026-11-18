@@ -2,7 +2,8 @@ import { speechBus } from "@/lib/speech";
 
 import { playEarcon } from "./earcons";
 
-export type RecognitionErrorKind = "not-allowed" | "no-speech" | "network" | "language" | "other";
+export type RecognitionErrorKind =
+  "not-allowed" | "no-speech" | "network" | "language" | "no-microphone" | "other";
 
 export interface RecognizerOptions {
   continuous: boolean;
@@ -45,7 +46,10 @@ interface BrowserRecognitionCtor {
 
 const LANG = "es-AR";
 const RESTART_MS = 300;
+const MAX_RESTART_MS = 5_000;
 const MAX_START_RETRIES = 5;
+/** Errores de red seguidos (en modo continuo) tras los cuales se deja de insistir. */
+const MAX_NETWORK_ERRORS = 5;
 
 function recognitionCtor(): BrowserRecognitionCtor | undefined {
   if (typeof window === "undefined") return undefined;
@@ -68,6 +72,8 @@ function mapError(error: string): RecognitionErrorKind {
       return "not-allowed";
     case "language-not-supported":
       return "language";
+    case "audio-capture":
+      return "no-microphone";
     case "no-speech":
     case "network":
       return error;
@@ -104,7 +110,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   let wanted = false; // la persona lo quiere encendido
   let running = false; // hay una sesión del navegador entre start() y end
   let listening = false; // lo último que se avisó
-  let fatal = false; // un error que no se arregla reintentando
+  let networkErrors = 0; // errores de red seguidos, sin ningún resultado en el medio
   let paused = false; // en pausa porque la app habla (solo modo continuo)
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -143,9 +149,13 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
     }
   }
 
+  /** 300 ms entre reinicios normales; con errores de red seguidos la espera se duplica, hasta 5 s. */
+  const restartDelay = (): number =>
+    Math.min(RESTART_MS * 2 ** Math.max(0, networkErrors - 1), MAX_RESTART_MS);
+
   const scheduleRestart = (): void => {
     clearTimeout(timer);
-    timer = setTimeout(() => beginSession(), RESTART_MS);
+    timer = setTimeout(() => beginSession(), restartDelay());
   };
 
   const onSpeakingChange = (speaking: boolean): void => {
@@ -171,6 +181,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
       const result = e.results[i];
       const text = result?.[0]?.transcript.trim();
       if (!result || !text) continue;
+      networkErrors = 0;
       if (result.isFinal) opts.onFinal(text);
       else if (opts.interim) opts.onInterim?.(text);
     }
@@ -179,14 +190,23 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
   rec.onerror = (e) => {
     if (e.error === "aborted") return; // lo causamos nosotros al callarnos o apagar
     const kind = mapError(e.error);
-    if (kind === "not-allowed" || kind === "language") fatal = true;
+    // Sin voz es normal en modo continuo (cada ciclo sin hablar termina así): se reinicia sin avisar.
+    if (kind === "no-speech" && opts.continuous) return;
+    let fatal = kind === "not-allowed" || kind === "language" || kind === "no-microphone";
+    if (kind === "network" && opts.continuous) {
+      networkErrors++;
+      if (networkErrors < MAX_NETWORK_ERRORS) return; // se reintenta con espera creciente, sin molestar
+      fatal = true;
+    }
     opts.onError(kind);
+    // Se apaga acá, sin esperar el `end`: algunos navegadores no lo mandan. El `end` tardío ya no hace nada.
+    if (fatal) finish();
   };
 
   rec.onend = () => {
     running = false;
     if (paused) return; // nos callamos por la voz de la app: se reanuda cuando termine
-    if (wanted && opts.continuous && !fatal) {
+    if (wanted && opts.continuous) {
       scheduleRestart(); // reinicio automático: sin tonos ni cambio de estado
       return;
     }
@@ -197,7 +217,7 @@ export function createRecognizer(opts: RecognizerOptions): Recognizer | null {
     start() {
       if (disposed || wanted) return;
       wanted = true;
-      fatal = false;
+      networkErrors = 0;
       paused = false;
       unsubscribe = speechBus.subscribe(onSpeakingChange);
       setListening(true);
