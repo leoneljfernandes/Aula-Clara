@@ -1,4 +1,10 @@
+<p align="center">
+  <img src="frontend/src/assets/logo.png" alt="Logo de Aula Clara" width="120" height="120" />
+</p>
+
 # Aula Clara
+
+> *«Inclusión que transforma el aprendizaje. Diferentes formas de aprender, las mismas oportunidades.»*
 
 Plataforma de accesibilidad educativa para estudiantes universitarios con **discapacidad visual, dislexia o fatiga visual**.
 
@@ -17,6 +23,25 @@ Que cualquier estudiante pueda acceder al material de su carrera sin depender de
 ## Por qué se hizo
 
 Mucho material universitario llega en PDF y Word pensados para una sola forma de leer: texto chico, imágenes sin descripción, sin opciones para quien se cansa la vista o tiene dislexia. Aula Clara nació como un MVP académico para mostrar que se puede resolver con herramientas gratuitas y abiertas.
+
+### Nuestros pilares y lemas
+
+El proyecto se guía por tres ejes que resumen por qué existe y qué busca lograr:
+
+- **Enfoque en inclusión:** que ningún formato de archivo deje afuera a un estudiante.
+  - *«Aprender sin barreras».*
+  - *«La educación, al alcance de todos».*
+  - *«Un mundo de aprendizaje para todos».*
+  - *«Inclusión que transforma el aprendizaje».*
+- **Enfoque en personalización:** que el material se adapte a la persona, y no la persona al material.
+  - *«Cada forma de aprender importa».*
+  - *«Aprender a tu manera, sin límites».*
+  - *«Un aprendizaje para cada persona».*
+  - *«Diferentes formas de aprender, las mismas oportunidades».*
+- **Enfoque en tecnología e innovación:** poner la inteligencia artificial y las herramientas abiertas al servicio de la accesibilidad real.
+  - *«La tecnología que hace la educación más accesible».*
+  - *«Inteligencia que incluye, educación que transforma».*
+  - *«Innovación para aprender sin límites».*
 
 ## Open source
 
