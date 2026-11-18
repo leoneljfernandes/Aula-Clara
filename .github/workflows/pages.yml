@@ -42,7 +42,7 @@ jobs:
           npm run build
           # Pages no sabe de rutas del router: un 404 sirve la app para que /leer/d1 funcione al recargar.
           cp dist/index.html dist/404.html
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: frontend/dist
       - id: deployment
