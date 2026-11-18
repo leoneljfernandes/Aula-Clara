@@ -1,15 +1,6 @@
 from httpx import AsyncClient
 
 
-async def test_profiles_are_the_four_predefined_ones(client: AsyncClient) -> None:
-    response = await client.get("/api/v1/profiles")
-    assert response.status_code == 200
-    profiles = {p["id"]: p for p in response.json()}
-    assert set(profiles) == {"dislexia", "vision", "fatiga", "custom"}
-    assert profiles["vision"]["preset"]["font_size"] == 28
-    assert profiles["custom"]["preset"] is None
-
-
 async def test_documents_list_is_paginated(client: AsyncClient) -> None:
     body = (await client.get("/api/v1/documents?limit=2")).json()
     assert len(body["items"]) == 2

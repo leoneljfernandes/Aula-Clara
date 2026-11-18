@@ -18,9 +18,9 @@ from app.config import SettingsDep, get_settings
 from app.crud.answer_cache import AnswerCache
 from app.crud.base import Repository
 from app.crud.memory import InMemoryRepository
-from app.crud.seed import load_documents, load_profiles
+from app.crud.seed import load_documents, load_presets
 from app.errors import AICredentialsRequiredError, AIKeyInvalidError, ForbiddenError
-from app.models import AIProviderName, Document, Profile
+from app.models import AIProviderName, Document, Preset
 from app.observability.redaction import remember_key
 from app.providers.llm.base import LLMProvider
 from app.providers.llm.factory import build_provider
@@ -28,7 +28,7 @@ from app.rate_limit import RateLimiter
 from app.services.ai import AIService
 from app.services.document import DocumentService
 from app.services.key_sealing import KeySealer, OpenedKey, SealedKeyError
-from app.services.profile import ProfileService
+from app.services.preset import PresetService
 
 PROVIDERS: tuple[str, ...] = get_args(AIProviderName)
 # `__Host-` obliga a Secure, Path=/ y sin Domain: ningún subdominio puede pisar la cookie.
@@ -38,8 +38,8 @@ _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$")
 
 
 @lru_cache
-def _profiles_repo() -> Repository[Profile]:
-    return InMemoryRepository(load_profiles())
+def _presets_repo() -> Repository[Preset]:
+    return InMemoryRepository(load_presets())
 
 
 @lru_cache
@@ -161,8 +161,8 @@ def get_rate_limiter() -> RateLimiter:
     return RateLimiter(get_settings().RATE_LIMIT_PER_MIN)
 
 
-def get_profile_service() -> ProfileService:
-    return ProfileService(_profiles_repo())
+def get_preset_service() -> PresetService:
+    return PresetService(_presets_repo())
 
 
 def get_document_service() -> DocumentService:
@@ -181,7 +181,7 @@ def enforce_rate_limit(request: Request, limiter: Annotated[RateLimiter, Depends
     limiter.check(client_ip(request))
 
 
-ProfileServiceDep = Annotated[ProfileService, Depends(get_profile_service)]
+PresetServiceDep = Annotated[PresetService, Depends(get_preset_service)]
 DocumentServiceDep = Annotated[DocumentService, Depends(get_document_service)]
 AIServiceDep = Annotated[AIService, Depends(get_ai_service)]
 LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider)]
