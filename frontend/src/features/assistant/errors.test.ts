@@ -159,4 +159,27 @@ describe("mensajes de error de la IA", () => {
       "más de una hora",
     ]);
   });
+
+  it("sin saldo en un proveedor de pago, manda a cargar crédito y no a «un modelo gratuito»", () => {
+    for (const provider of ["openai", "anthropic"]) {
+      const text = describeApiError(api("ai_quota_exceeded", { reason: "credit", provider }, 429));
+      expect(text).toContain("no tiene saldo");
+      expect(text).toContain("Cargá saldo");
+      expect(text).not.toContain("Elegí uno gratuito");
+    }
+  });
+
+  it("sin saldo en un proveedor con uso gratuito, sigue ofreciendo un modelo gratuito", () => {
+    const text = describeApiError(
+      api("ai_quota_exceeded", { reason: "credit", provider: "openrouter" }, 429),
+    );
+    expect(text).toContain("Elegí uno gratuito");
+  });
+
+  it("nombra a OpenAI y a Anthropic con el nombre que reconoce la gente", () => {
+    expect(describeApiError(api("ai_content_blocked", { provider: "openai" }))).toContain("OpenAI (ChatGPT)");
+    expect(describeApiError(api("ai_content_blocked", { provider: "anthropic" }))).toContain(
+      "Anthropic (Claude)",
+    );
+  });
 });

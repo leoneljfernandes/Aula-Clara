@@ -165,8 +165,9 @@ export function AISettingsDialog({ onClose }: { onClose: () => void }): ReactNod
   return (
     <Dialog title="Configurar IA" onClose={onClose} labelId={`${id}-title`}>
       <p className="mb-5 text-lg">
-        El asistente usa <strong>tu propia API key</strong>. Todos estos proveedores tienen un uso gratuito y
-        ninguno pide tarjeta para empezar.{" "}
+        El asistente usa <strong>tu propia API key</strong>. Gemini, Groq, OpenRouter, Mistral y NVIDIA tienen
+        un uso gratuito y no piden tarjeta para empezar;{" "}
+        <strong>OpenAI (ChatGPT) y Anthropic (Claude) se pagan por uso</strong>.{" "}
         <Link to="/ayuda/ia" target="_blank" className="font-bold underline">
           Guía: cómo conseguir tu key, paso a paso{" "}
           <span className="sr-only">(se abre en una pestaña nueva)</span>
@@ -223,7 +224,8 @@ export function AISettingsDialog({ onClose }: { onClose: () => void }): ReactNod
               ¿No tenés una? Cómo conseguir tu key de {info.label}, paso a paso
             </summary>
             <p className="mt-2">
-              <strong>Necesitás:</strong> {info.needs} <strong>Uso gratuito:</strong> {info.free}
+              <strong>Necesitás:</strong> {info.needs}{" "}
+              <strong>{info.paid ? "Costo" : "Uso gratuito"}:</strong> {info.free}
             </p>
             <ol className="mt-2 list-decimal space-y-1 pl-6">
               {info.steps.map((step) => (
@@ -334,8 +336,18 @@ export function AISettingsDialog({ onClose }: { onClose: () => void }): ReactNod
         </div>
 
         <p className="rounded-xl border-2 border-[var(--border)] p-3 text-base">
-          <strong>Consejo:</strong> usá una key solo para Aula Clara y sin tarjeta ni saldo asociados, así que
-          si se perdiera, lo máximo que podrían gastar es tu cuota gratuita.{" "}
+          {info.paid ? (
+            <>
+              <strong>Esta API se paga por uso.</strong> Poné un límite de gasto mensual bajo en la consola de{" "}
+              {info.label} y usá una key solo para Aula Clara: si se perdiera, lo máximo que podrían gastar es
+              ese límite.
+            </>
+          ) : (
+            <>
+              <strong>Consejo:</strong> usá una key solo para Aula Clara y sin tarjeta ni saldo asociados, así
+              que si se perdiera, lo máximo que podrían gastar es tu cuota gratuita.
+            </>
+          )}{" "}
           <Link to="/ayuda/ia#cuida-tu-key" target="_blank" className="font-bold underline">
             Cómo cuidar tu key <span className="sr-only">(se abre en una pestaña nueva)</span>
           </Link>

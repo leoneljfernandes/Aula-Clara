@@ -1241,6 +1241,54 @@ describe("IA con la key de cada persona", () => {
     expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeEnabled();
   });
 
+  it.each([
+    ["openai", "OpenAI (ChatGPT)", "sk-prueba-abc-123", "gpt-4o", "GPT 4o"],
+    ["anthropic", "Anthropic (Claude)", "sk-ant-prueba-123", "claude-sonnet-4-5", "Claude Sonnet 4.5"],
+  ])(
+    "%s: es de pago, se avisa, y se prueba la key y se elige un modelo",
+    async (provider, label, key, modelId, modelName) => {
+      request.mockImplementation(({ url }: { url: string }) =>
+        url === "/ai/models"
+          ? Promise.resolve({
+              provider,
+              key_verified: true,
+              models: [{ id: modelId, name: modelName, supports_images: true, free: null }],
+            })
+          : Promise.reject(new Error("no esperado")),
+      );
+      const user = userEvent.setup();
+      renderAt("/leer/d1");
+      await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+      const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+      await user.click(
+        within(dialog).getByRole("radio", { name: new RegExp(label.replace(/[()]/g, "\\$&")) }),
+      );
+      // Se dice antes de pegar nada: esta API cobra, y cómo limitar el gasto.
+      expect(dialog).toHaveTextContent("Esta API se paga por uso");
+      expect(dialog).not.toHaveTextContent("lo máximo que podrían gastar es tu cuota gratuita");
+      await user.type(
+        within(dialog).getByLabelText(new RegExp(`Tu API key de ${label.replace(/[()]/g, "\\$&")}`)),
+        key,
+      );
+      await user.click(within(dialog).getByRole("button", { name: "Probar key y ver modelos" }));
+      await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent("✓ Key válida"));
+      expect(within(dialog).getByRole("option", { name: new RegExp(modelName) })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeEnabled();
+      // Dos APIs de pago no tienen modelos «gratuitos»: no se ofrece ese filtro.
+      expect(within(dialog).queryByLabelText(/solo modelos gratuitos/)).not.toBeInTheDocument();
+    },
+  );
+
+  it("con un proveedor gratuito, el consejo sigue hablando de la cuota gratuita", async () => {
+    const user = userEvent.setup();
+    renderAt("/leer/d1");
+    await user.click(await screen.findByRole("button", { name: "Configurar IA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configurar IA" });
+    await user.click(within(dialog).getByRole("radio", { name: /Groq/ }));
+    expect(dialog).toHaveTextContent("lo máximo que podrían gastar es tu cuota gratuita");
+    expect(dialog).not.toHaveTextContent("Esta API se paga por uso");
+  });
+
   it("el diálogo explica paso a paso cómo conseguir la key del proveedor elegido y enlaza la guía", async () => {
     const user = userEvent.setup();
     renderAt("/leer/d1");
@@ -1553,8 +1601,16 @@ describe("errores y avisos de la IA en pantalla", () => {
 describe("guía de API keys", () => {
   it("es pública y explica cada proveedor con su paso a paso", async () => {
     renderAt("/ayuda/ia");
-    expect(await h1()).toHaveTextContent("Cómo conseguir tu API key gratuita");
-    for (const name of ["Google Gemini", "Groq", "OpenRouter", "Mistral AI", "NVIDIA Build"]) {
+    expect(await h1()).toHaveTextContent("Cómo conseguir tu API key");
+    for (const name of [
+      "Google Gemini",
+      "Anthropic (Claude)",
+      "OpenAI (ChatGPT)",
+      "Groq",
+      "OpenRouter",
+      "Mistral AI",
+      "NVIDIA Build",
+    ]) {
       expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
     }
     expect(screen.getByRole("table", { name: "Comparación de proveedores de IA" })).toBeInTheDocument();
@@ -1568,7 +1624,17 @@ describe("guía de API keys", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "Google Gemini" }).closest("section"),
     ).toHaveTextContent("No actives la facturación");
-    expect(screen.getAllByRole("link", { name: /Ir a crear la key/ })).toHaveLength(5);
+    expect(screen.getAllByRole("link", { name: /Ir a crear la key/ })).toHaveLength(7);
+    // Las dos APIs de pago lo dicen de entrada, antes de los pasos.
+    for (const name of ["OpenAI (ChatGPT)", "Anthropic (Claude)"]) {
+      const section = screen.getByRole("heading", { level: 2, name }).closest("section");
+      expect(section).toHaveTextContent("No tiene nivel gratuito");
+      expect(section).toHaveTextContent("límite de gasto");
+    }
+    expect(screen.getByRole("link", { name: /Ir a crear la key de OpenAI/ })).toHaveAttribute(
+      "href",
+      "https://platform.openai.com/api-keys",
+    );
     expect(screen.getByRole("link", { name: /Ir a crear la key de NVIDIA Build/ })).toHaveAttribute(
       "href",
       "https://build.nvidia.com/settings/api-keys",

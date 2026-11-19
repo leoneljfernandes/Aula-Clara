@@ -110,7 +110,8 @@ export function AssistantPanel({
         ) : (
           <div className="mt-3 rounded-xl border-2 border-[var(--accent)] p-3">
             <p className="mb-2 text-base">
-              Para usar el asistente, cargá tu API key gratuita de Gemini, Groq, OpenRouter, Mistral o NVIDIA.{" "}
+              Para usar el asistente, cargá tu propia API key: gratuita (Gemini, Groq, OpenRouter, Mistral o
+              NVIDIA) o de pago (Claude o ChatGPT).{" "}
               <Link to="/ayuda/ia" target="_blank" className="font-bold underline">
                 ¿Cómo consigo una? <span className="sr-only">(se abre en una pestaña nueva)</span>
               </Link>

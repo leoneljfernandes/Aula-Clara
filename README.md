@@ -85,13 +85,15 @@ cd backend && uv run python -c "from cryptography.fernet import Fernet; print(Fe
 
 En producción va como variable de entorno del servidor, nunca en el repositorio. Si no la definís, todo funciona igual pero la key queda en el navegador (menos protegida). Detalle y límites en el [ADR 0003](docs/adr/0003-key-sellada-en-cookie.md).
 
-### 2. Usar la IA con tu propia API key (gratis)
+### 2. Usar la IA con tu propia API key (gratis o de pago)
 
-Aula Clara **no trae una key de IA propia**: cada persona usa la suya, de alguno de estos cinco proveedores. Todos tienen uso gratuito y ninguno pide tarjeta para empezar.
+Aula Clara **no trae una key de IA propia**: cada persona usa la suya, de alguno de estos siete proveedores. Cinco tienen uso gratuito y ninguno de ellos pide tarjeta para empezar. **OpenAI (ChatGPT) y Anthropic (Claude) no tienen uso gratuito**: se pagan por uso, con saldo prepago, y conviene poner un límite de gasto mensual bajo en su consola.
 
 | Proveedor | Qué necesitás para registrarte | Uso gratuito | Lee imágenes |
 |---|---|---|---|
 | **Google Gemini** | Cuenta de Google | Límites diarios por modelo | Sí (modelos `gemini-*`) |
+| **Anthropic (Claude)** | Email o Google, más una tarjeta para comprar crédito | **No tiene**: se paga por uso | Sí (todos los modelos) |
+| **OpenAI (ChatGPT)** | Email o Google, más una tarjeta para cargar saldo | **No tiene**: se paga por uso | Sí (los `gpt-4o`, `gpt-4.1`, `gpt-5`…) |
 | **Groq** | Email, Google o GitHub | Límites por minuto y por día | Algunos modelos |
 | **OpenRouter** | Email, Google o GitHub | Los modelos marcados «gratis», con límite diario | Según el modelo |
 | **Mistral AI** | Email o Google, más un teléfono para verificar | Plan «Experiment» | Algunos modelos |
@@ -178,7 +180,7 @@ cd backend  && uv export --no-dev --no-hashes --no-emit-project | uvx pip-audit 
 |---|---|
 | Lenguaje y framework | Python 3.14, FastAPI, Pydantic v2, pydantic-settings |
 | Gestor de dependencias | uv |
-| IA | google-genai (Gemini); httpx para Groq, OpenRouter, Mistral y NVIDIA Build (API compatible con OpenAI) |
+| IA | google-genai (Gemini); httpx para Claude (API Messages de Anthropic) y para OpenAI, Groq, OpenRouter, Mistral y NVIDIA Build (API compatible con OpenAI) |
 | Estrategia de IA | La key y el modelo de cada persona viajan en headers (`X-AI-*`); modelos listados en vivo desde el proveedor; un reintento ante errores transitorios; caché separada por key; límite por IP |
 | Errores | `application/problem+json` (RFC 9457) |
 | Observabilidad | Logs JSON, trazas mínimas con opentelemetry-api |
@@ -213,7 +215,7 @@ Aula-Clara/
 │  │  ├─ api/          routers y composición de dependencias
 │  │  ├─ services/     reglas de negocio e IA
 │  │  ├─ crud/         repositorios (en memoria) y caché
-│  │  ├─ providers/    Gemini y compatibles con OpenAI (Groq, OpenRouter, Mistral, NVIDIA)
+│  │  ├─ providers/    Gemini, Claude y compatibles con OpenAI (OpenAI, Groq, OpenRouter, Mistral, NVIDIA)
 │  │  ├─ models/       entidades
 │  │  ├─ schemas/      DTOs de la API
 │  │  ├─ prompts/      instrucciones del asistente (Markdown)
@@ -239,4 +241,4 @@ Más detalle de las decisiones en [docs/arquitectura.md](docs/arquitectura.md), 
 - **Imágenes de PDF:** se muestran al final de su página. En Word quedan en su lugar.
 - **Sin sincronización:** borrar los datos del sitio borra la biblioteca.
 - **El asistente** recibe el texto del documento recortado a `MAX_INPUT_CHARS`, no la sección que se está viendo. La búsqueda en todo el documento (RAG) está planificada en [docs/mejoras-pendientes.md](docs/mejoras-pendientes.md).
-- **Sin key no hay asistente:** cada persona necesita su propia API key gratuita de Gemini, Groq, OpenRouter, Mistral o NVIDIA Build.
+- **Sin key no hay asistente:** cada persona necesita su propia API key: gratuita (Gemini, Groq, OpenRouter, Mistral o NVIDIA Build) o de pago (Claude de Anthropic o ChatGPT de OpenAI).

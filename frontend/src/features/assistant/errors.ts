@@ -1,6 +1,6 @@
 import { type ApiError, isApiRequestError, type ProblemDetails } from "@/lib/http";
 
-import { providerLabel } from "./providers";
+import { providerInfo, providerLabel } from "./providers";
 
 /** No hay key configurada: no se llega a llamar a la API. */
 export class MissingCredentialsError extends Error {
@@ -103,7 +103,9 @@ function describeProblem(problem: ProblemDetails, retryAfterMs: number | null): 
     case "ai_quota_exceeded":
       text =
         reason === "credit"
-          ? `Tu cuenta de ${name} no tiene saldo para este modelo. Elegí uno gratuito en ${SETUP} o cargá crédito en el proveedor.`
+          ? providerInfo(provider ?? "")?.paid
+            ? `Tu cuenta de ${name} no tiene saldo. Cargá saldo en la consola del proveedor y volvé a probar: esta API no tiene uso gratuito.`
+            : `Tu cuenta de ${name} no tiene saldo para este modelo. Elegí uno gratuito en ${SETUP} o cargá crédito en el proveedor.`
           : reason === "daily"
             ? `Llegaste al límite diario de ${name}.${wait || " Probá mañana"} O elegí otro modelo o proveedor en ${SETUP}.`
             : `Superaste el límite de consultas por minuto de ${name}.${wait || " Esperá un momento y probá de nuevo."}`;

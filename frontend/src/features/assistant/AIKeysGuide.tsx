@@ -18,7 +18,7 @@ const TROUBLESHOOTING: ReadonlyArray<readonly [string, string]> = [
   ],
   [
     "«Tu cuenta no tiene saldo para este modelo»",
-    "En OpenRouter, solo los modelos marcados como gratuitos no cobran. Elegí uno de esos, o cargá crédito en el proveedor.",
+    "OpenAI y Anthropic no tienen uso gratuito: hace falta cargar saldo en la consola del proveedor. En OpenRouter, solo los modelos marcados como gratuitos no cobran: elegí uno de esos, o cargá crédito.",
   ],
   [
     "«Lo que mandaste es demasiado grande para este modelo»",
@@ -54,7 +54,7 @@ const TROUBLESHOOTING: ReadonlyArray<readonly [string, string]> = [
   ],
 ];
 
-/** Guía paso a paso para conseguir una API key gratuita en cada proveedor. */
+/** Guía paso a paso para conseguir una API key en cada proveedor (casi todos con uso gratuito). */
 export function AIKeysGuide(): ReactNode {
   const { hash } = useLocation();
 
@@ -73,7 +73,7 @@ export function AIKeysGuide(): ReactNode {
           Volver a mi biblioteca
         </Link>
       </p>
-      <h1 className="mb-4 text-3xl font-bold">Cómo conseguir tu API key gratuita</h1>
+      <h1 className="mb-4 text-3xl font-bold">Cómo conseguir tu API key</h1>
 
       <section aria-labelledby="que-es" className="mb-8 space-y-3">
         <h2 id="que-es" className="text-2xl font-bold">
@@ -85,9 +85,11 @@ export function AIKeysGuide(): ReactNode {
           así el servicio no depende de la cuota de nadie y cada persona usa la suya.
         </p>
         <p>
-          Los cinco proveedores de esta guía tienen un <strong>uso gratuito</strong> y ninguno pide tarjeta
-          para empezar. Solo hace falta crear una cuenta, generar la key y pegarla en «Configurar IA», en el
-          panel del asistente.
+          Cinco de los proveedores de esta guía (Gemini, Groq, OpenRouter, Mistral y NVIDIA) tienen un{" "}
+          <strong>uso gratuito</strong> y ninguno pide tarjeta para empezar. Los otros dos,{" "}
+          <strong>OpenAI (ChatGPT) y Anthropic (Claude), se pagan por uso</strong>: necesitan una tarjeta y
+          saldo cargado. En todos los casos hace falta crear una cuenta, generar la key y pegarla en
+          «Configurar IA», en el panel del asistente.
         </p>
         <p>
           Tu key viaja a nuestro servidor solo para hacer cada consulta, y no la guardamos ni la registramos.
@@ -110,6 +112,11 @@ export function AIKeysGuide(): ReactNode {
           <li>
             <strong>Quedate en el plan gratuito, sin tarjeta ni saldo.</strong> Con eso, lo máximo que alguien
             podría hacer con tu key es gastar tu cuota gratuita. Cada proveedor de abajo indica qué cuidar.
+          </li>
+          <li>
+            <strong>Si usás OpenAI o Anthropic, poné un límite de gasto mensual bajo.</strong> Esas APIs se
+            pagan por uso: si la key se pierde, cualquiera podría gastar tu saldo hasta ese límite. Cargá solo
+            el saldo que vayas a usar.
           </li>
           <li>
             <strong>Borrala en el proveedor si ya no la usás</strong>, si la compartiste sin querer o si ves

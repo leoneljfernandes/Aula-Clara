@@ -34,3 +34,14 @@ Hasta ahora el backend usaba una sola key de Gemini (y una de Groq como respaldo
 - El límite por IP sigue: protege el tiempo de función de Vercel, no la cuota de los proveedores.
 - Con «Interpretar con IA» hay que elegir un modelo que lea imágenes; si no, el proveedor rechaza el pedido y la app lo explica.
 - GitHub Pages sigue necesitando `VITE_API_URL`. Los headers `X-AI-*` están permitidos en CORS.
+
+## Actualización: Claude y ChatGPT
+
+Se sumaron **Anthropic (Claude)** y **OpenAI (ChatGPT)**, con la misma regla: la persona trae su key y el servidor no guarda ninguna. Lo que cambia respecto de los cinco anteriores:
+
+- **No tienen uso gratuito.** Son APIs de pago por uso con saldo prepago (la suscripción a claude.ai o a ChatGPT es otra cuenta de cobro y no sirve). La interfaz lo dice antes de que la persona pegue nada, y recomienda poner un **límite de gasto mensual bajo** en la consola del proveedor. Eso cambia el riesgo de una key perdida: ya no se acota a «una cuota gratuita» sino al límite de gasto que la persona haya puesto. El límite por IP del servidor sigue sin proteger el saldo de nadie.
+- **Claude usa otra API** (Messages), no la compatible con OpenAI: tiene su propia clase (`AnthropicProvider`) sobre `httpx`, sin dependencias nuevas. La URL base sigue cerrada (`api.anthropic.com`).
+- **OpenAI es un proveedor más de `OpenAICompatibleProvider`**, con las diferencias en `SPECS`: manda `max_completion_tokens` y no `temperature` (los modelos de razonamiento rechazan `max_tokens` y una temperatura distinta de la de fábrica) y filtra de su lista los modelos que no son de chat (audio, imágenes, embeddings, `-pro`…).
+- **La falta de saldo de Anthropic llega como un 400**, no como un 402 o un 429: `http_errors.classify` lo reconoce por el texto («credit balance») y lo informa como «sin saldo».
+- **Los modelos de razonamiento** (o3, o4, gpt-5) pueden gastar todo el límite de salida «pensando»: ya había un error propio para eso («el modelo gastó todo su límite de respuesta»), y la guía lo menciona.
+

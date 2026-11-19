@@ -247,12 +247,14 @@ Cada persona elige proveedor y modelo y usa su propia key ([ADR 0002](adr/0002-a
 | Proveedor | Cliente | Lista de modelos | Imágenes |
 |---|---|---|---|
 | **Gemini** | SDK `google-genai` | `models.list`, filtrando los que soportan `generateContent` y descartando los de imagen, audio, embeddings y agentes | los `gemini-*` sí; de Gemma no hay dato |
+| **Anthropic (Claude)** | `httpx`, API Messages (`AnthropicProvider`; **no** es compatible con OpenAI: la key va en `x-api-key`, el prompt de sistema en `system` y la imagen es un bloque `base64`) | `GET /v1/models?limit=1000` (exige key: la valida). Todos los modelos vigentes leen imágenes. Sin `temperature`: los modelos nuevos fijan la suya | todos |
+| **OpenAI (ChatGPT)** | `httpx`, API compatible con OpenAI | `GET /v1/models` (exige key: la valida; sin modalidades): se eligen por prefijo (`gpt-`, `chatgpt-`, `o1`, `o3`, `o4`) y se descartan audio, realtime, imágenes, transcripción, `instruct`, búsqueda y los `-pro`/`codex`, que solo responden por la API Responses. Manda `max_completion_tokens` (4096) y no `temperature`: los modelos de razonamiento rechazan `max_tokens` y una temperatura distinta de la de fábrica | por prefijo (`gpt-4o`, `gpt-4.1`, `gpt-5`, `o4-mini`…); de los demás no se sabe |
 | **Groq** | `httpx`, API compatible con OpenAI | `GET /openai/v1/models`: solo entrada y salida de texto, activos y sin modelos de moderación (`guard`) | según `input_modalities` |
 | **OpenRouter** | `httpx`, API compatible con OpenAI | `GET /api/v1/models` (público: la key se valida antes con `GET /key`), marcando los gratuitos (precio 0); la interfaz los muestra primero | según `architecture.input_modalities` |
 | **Mistral AI** | `httpx`, API compatible con OpenAI | `GET /v1/models`, con `capabilities.completion_chat` | según `capabilities.vision`; la imagen va como texto en `image_url` |
 | **NVIDIA Build** | `httpx`, API compatible con OpenAI | `GET /v1/models` (público y sin modalidades): se descartan por nombre embeddings, moderación, rerankers y detectores. **No valida la key** (`key_verified: false`) | por nombre (`-vl`, `vision`, `omni`); si no, sin dato |
 
-- **Diferencias entre proveedores:** viven en `SPECS` (`openai_compatible.py`): URL base, cómo se valida la key, si informa modelos gratuitos y el formato de imagen.
+- **Diferencias entre proveedores:** viven en `SPECS` (`openai_compatible.py`): URL base, cómo se valida la key, si informa modelos gratuitos, el formato de imagen, el parámetro de límite de salida y la temperatura, y qué modelos de la lista son de chat. Claude no entra en `SPECS` porque su API es otra: tiene su propia clase (`anthropic.py`) y `factory.py` elige entre las tres.
 - **Guía para conseguir la key:** la ruta pública `/ayuda/ia` (`AIKeysGuide.tsx`) explica, para cada proveedor, cómo registrarse, iniciar sesión y crear la key. Los textos están en `providers.ts`, junto a la ficha de cada proveedor.
 - **URL base cerrada:** la persona elige un proveedor, nunca una URL. Así el backend no puede usarse para pedir otras direcciones (SSRF).
 - **Límites del free tier:** cada proveedor los muestra en la cuenta de la persona ([AI Studio](https://aistudio.google.com/rate-limit), Groq, OpenRouter). El límite por IP y la caché siguen, porque cada consulta también gasta tiempo de función en Vercel.
@@ -279,7 +281,7 @@ uv export --no-dev --no-hashes --no-emit-project | uvx pip-audit -r /dev/stdin  
 3. **El texto extraído va en IndexedDB.** Las preferencias y los metadatos siguen en `localStorage`.
 4. **URLs limpias en GitHub Pages**, con `createBrowserRouter` y una copia de `index.html` como `404.html`.
 5. **Toda configuración de entorno va en `.env`**, con `.env.example` como referencia versionada. Desde la decisión 6, el servidor no tiene secretos de IA.
-6. **Cada persona usa su propia API key y elige el modelo** (Gemini, Groq, OpenRouter, Mistral o NVIDIA Build). Se retiraron las keys y los modelos del `.env`. Ver [ADR 0002](adr/0002-api-key-por-usuario.md).
+6. **Cada persona usa su propia API key y elige el modelo** (Gemini, Claude, ChatGPT, Groq, OpenRouter, Mistral o NVIDIA Build). Se retiraron las keys y los modelos del `.env`. Ver [ADR 0002](adr/0002-api-key-por-usuario.md).
 7. **La key va sellada en una cookie `HttpOnly`** (2026-11-18), con el modo de headers como respaldo. Ver [ADR 0003](adr/0003-key-sellada-en-cookie.md) y [docs/seguridad.md](seguridad.md).
 
 ## 11. Qué cambió respecto del plan inicial

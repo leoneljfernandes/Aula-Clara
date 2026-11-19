@@ -1,5 +1,5 @@
-/** Proveedores de IA que el backend admite. Cada persona usa su propia key (nivel gratuito). */
-export type ProviderId = "gemini" | "groq" | "openrouter" | "mistral" | "nvidia";
+/** Proveedores de IA que el backend admite. Cada persona usa su propia key: casi todos tienen un uso gratuito. */
+export type ProviderId = "gemini" | "anthropic" | "openai" | "groq" | "openrouter" | "mistral" | "nvidia";
 
 export interface ProviderInfo {
   id: ProviderId;
@@ -10,7 +10,9 @@ export interface ProviderInfo {
   signupUrl: string;
   /** Una línea para elegir entre proveedores. */
   note: string;
-  /** Qué incluye el uso gratuito, en palabras simples. */
+  /** `true` si no tiene uso gratuito: la API se paga por uso y la key necesita saldo. */
+  paid: boolean;
+  /** Qué incluye el uso gratuito, en palabras simples (o que no lo tiene). */
   free: string;
   /** Lo que hace falta para registrarse. */
   needs: string;
@@ -32,6 +34,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     keyUrl: "https://aistudio.google.com/apikey",
     signupUrl: "https://aistudio.google.com",
     note: "Lee texto e imágenes. Nivel gratuito con un límite de consultas por día.",
+    paid: false,
     free: "Gratis con límites diarios por modelo. No pide tarjeta.",
     needs: "Una cuenta de Google (la de Gmail sirve).",
     keyHint: "Empieza con «AIza».",
@@ -50,11 +53,63 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     ],
   },
   {
+    id: "anthropic",
+    label: "Anthropic (Claude)",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    signupUrl: "https://console.anthropic.com",
+    note: "Los modelos Claude. Leen texto e imágenes. Se paga por uso: no tiene nivel gratuito.",
+    paid: true,
+    free: "No tiene nivel gratuito: la API se paga por uso con crédito prepago. La suscripción a Claude (claude.ai) es otra cosa y no sirve para esto.",
+    needs: "Una cuenta de Anthropic (email o Google) y una tarjeta para comprar crédito.",
+    keyHint: "Empieza con «sk-ant-».",
+    steps: [
+      "Entrá a console.anthropic.com (no a claude.ai: es otro servicio) y creá tu cuenta con email o con Google.",
+      "Verificá tu email y, si te lo pide, tu número de teléfono.",
+      "Abrí «Plans & Billing» (Planes y facturación) y comprá crédito: el mínimo suele ser de unos 5 dólares. Sin crédito, la key no funciona.",
+      "En «Limits» (Límites), poné un límite de gasto mensual bajo, por ejemplo de 5 dólares.",
+      "Abrí «API Keys» o andá directo a console.anthropic.com/settings/keys, y tocá «Create Key».",
+      "Poné un nombre que te ayude a recordarla (por ejemplo, «Aula Clara») y copiá la key: se muestra una sola vez.",
+      PASTE_STEP,
+    ],
+    warnings: [
+      "Cada consulta cuesta. Los modelos «Haiku» son los más baratos; los «Opus» son los más caros.",
+      "Poné siempre un límite de gasto mensual bajo: si la key se pierde, cualquiera podría gastar tu crédito hasta ese límite.",
+      "Si ves consumo que no reconocés, borrá la key en console.anthropic.com/settings/keys.",
+      "Pagar Claude (claude.ai) no da crédito de API: son cuentas de cobro separadas.",
+    ],
+  },
+  {
+    id: "openai",
+    label: "OpenAI (ChatGPT)",
+    keyUrl: "https://platform.openai.com/api-keys",
+    signupUrl: "https://platform.openai.com",
+    note: "Los modelos de ChatGPT. Leen texto e imágenes. Se paga por uso: no tiene nivel gratuito.",
+    paid: true,
+    free: "No tiene nivel gratuito: la API se paga por uso con saldo prepago. La suscripción a ChatGPT (chatgpt.com) es otra cosa y no sirve para esto.",
+    needs: "Una cuenta de OpenAI (email o Google) y una tarjeta para cargar saldo.",
+    keyHint: "Empieza con «sk-».",
+    steps: [
+      "Entrá a platform.openai.com (no a chatgpt.com: es otro servicio) e iniciá sesión, o creá tu cuenta con email o con Google.",
+      "Abrí «Billing» (Facturación) y cargá saldo prepago: el mínimo suele ser de unos 5 dólares. Sin saldo, la key no funciona.",
+      "En «Limits» (Límites), poné un límite de gasto mensual bajo, por ejemplo de 5 dólares, y activá el aviso por email.",
+      "Abrí «API keys» o andá directo a platform.openai.com/api-keys, y tocá «Create new secret key».",
+      "Poné un nombre que te ayude a recordarla (por ejemplo, «Aula Clara») y copiá la key: se muestra una sola vez.",
+      PASTE_STEP,
+    ],
+    warnings: [
+      "Cada consulta cuesta. Los modelos «mini» son los más baratos.",
+      "Poné siempre un límite de gasto mensual bajo: si la key se pierde, cualquiera podría gastar tu saldo hasta ese límite.",
+      "Los modelos de razonamiento (o3, o4, gpt-5) a veces gastan toda la respuesta «pensando»: si pasa, elegí uno «mini» o «4o».",
+      "Pagar ChatGPT Plus o Pro no da saldo de API: son cuentas de cobro separadas.",
+    ],
+  },
+  {
     id: "groq",
     label: "Groq",
     keyUrl: "https://console.groq.com/keys",
     signupUrl: "https://console.groq.com",
     note: "Responde muy rápido. Nivel gratuito por cuenta; la mayoría de sus modelos solo leen texto.",
+    paid: false,
     free: "Gratis con límites por minuto y por día. No pide tarjeta.",
     needs: "Un email, o una cuenta de Google o GitHub.",
     keyHint: "Empieza con «gsk_».",
@@ -77,6 +132,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     keyUrl: "https://openrouter.ai/settings/keys",
     signupUrl: "https://openrouter.ai",
     note: "Reúne modelos de muchas empresas. Los gratuitos se indican en la lista.",
+    paid: false,
     free: "Los modelos marcados como gratuitos («free») no cuestan nada, con un límite diario de consultas.",
     needs: "Un email, o una cuenta de Google o GitHub.",
     keyHint: "Empieza con «sk-or-».",
@@ -100,6 +156,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     keyUrl: "https://console.mistral.ai/api-keys",
     signupUrl: "https://console.mistral.ai",
     note: "Empresa europea con buenos modelos en español; algunos leen imágenes. Plan gratuito «Experiment».",
+    paid: false,
     free: "El plan «Experiment» es gratuito, con límites de uso. No pide tarjeta.",
     needs: "Un email (o cuenta de Google) y un número de teléfono para verificar la cuenta.",
     keyHint: "Una cadena larga de letras y números, sin prefijo fijo.",
@@ -123,6 +180,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     keyUrl: "https://build.nvidia.com/settings/api-keys",
     signupUrl: "https://build.nvidia.com",
     note: "Catálogo de modelos abiertos alojados por NVIDIA. Créditos gratuitos limitados.",
+    paid: false,
     free: "Al registrarte recibís créditos gratuitos para probar, con un límite de consultas por minuto. No pide tarjeta.",
     needs: "Un email para crear una cuenta de NVIDIA (se suma gratis al NVIDIA Developer Program).",
     keyHint: "Empieza con «nvapi-».",

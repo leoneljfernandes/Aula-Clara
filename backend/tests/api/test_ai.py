@@ -374,3 +374,20 @@ async def test_describe_image_without_color_guide_uses_the_plain_prompt(
         "/api/v1/ai/describe-image", headers=HEADERS, files={"image": ("a.png", PNG, "image/png")}
     )
     assert "180 palabras" not in built[0]["provider"].image_systems[-1]
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "key"),
+    [
+        ("anthropic", "claude-sonnet-4-5-20250929", "sk-ant-api03-" + "x" * 40),
+        ("openai", "gpt-4o-mini", "sk-proj-" + "y" * 40),
+    ],
+)
+async def test_chat_works_with_claude_and_chatgpt_credentials(
+    client: AsyncClient, built: list[dict[str, Any]], provider: str, model: str, key: str
+) -> None:
+    headers = {"X-AI-Provider": provider, "X-AI-Key": key, "X-AI-Model": model}
+    response = await client.post("/api/v1/ai/chat", json=CHAT, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["provider"] == provider
+    assert (built[0]["name"], built[0]["model"], built[0]["api_key"]) == (provider, model, key)
