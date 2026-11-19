@@ -1,1 +1,1 @@
-"""Proveedores de LLM (Gemini y compatibles con OpenAI: Groq, OpenRouter) detrás de una interfaz común."""
+"""Proveedores de LLM (Gemini, Claude y los compatibles con OpenAI) detrás de una interfaz común."""

@@ -83,7 +83,7 @@ def credential_scope(provider: str, model: str, api_key: str) -> str:
 
 
 class LLMProvider(Protocol):
-    name: str  # "gemini" | "groq" | "openrouter" | "mistral" | "nvidia": se devuelve como `provider`
+    name: str  # un `AIProviderName` ("gemini", "anthropic", "openai", "groq"…): se devuelve como `provider`
     model: str  # vacío cuando el proveedor se crea solo para listar modelos
     scope: str
     # False si el proveedor no permite comprobar la key sin gastar una consulta (NVIDIA): la lista de

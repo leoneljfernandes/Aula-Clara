@@ -354,3 +354,81 @@ async def test_nvidia_lists_chat_models_but_cannot_verify_the_key() -> None:
     assert models["nvidia/nemotron-3.5-super-vl-120b-a12b"].supports_images is True
     assert models["openai/gpt-oss-20b"].supports_images is None
     assert provider.verifies_key is False
+
+
+# --- OpenAI (ChatGPT) ---------------------------------------------------------------------------------
+
+
+async def test_openai_uses_its_url_and_the_parameters_current_models_accept() -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["auth"] = request.headers["authorization"]
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "hola"}}]})
+
+    await _provider(httpx.MockTransport(handler), name="openai", model="gpt-4o").chat("s", MESSAGES)
+    assert seen["url"] == "https://api.openai.com/v1/chat/completions"
+    assert seen["auth"] == "Bearer k-secret"
+    body = seen["body"]
+    assert isinstance(body, dict)
+    # Los modelos de razonamiento rechazan `max_tokens` y una temperatura distinta de la de fábrica.
+    assert body["max_completion_tokens"] == 4096
+    assert "max_tokens" not in body
+    assert "temperature" not in body
+
+
+async def test_the_other_providers_keep_sending_max_tokens_and_temperature() -> None:
+    body: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    await _provider(httpx.MockTransport(handler), name="groq").chat("s", MESSAGES)
+    assert body["max_tokens"] == 2048
+    assert body["temperature"] == 0.3
+    assert "max_completion_tokens" not in body
+
+
+async def test_openai_model_list_keeps_only_chat_models_and_marks_the_ones_that_read_images() -> None:
+    ids = [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-3.5-turbo",
+        "gpt-5",
+        "chatgpt-4o-latest",
+        "o3-mini",
+        "text-embedding-3-small",
+        "whisper-1",
+        "tts-1",
+        "dall-e-3",
+        "gpt-4o-audio-preview",
+        "gpt-4o-realtime-preview",
+        "gpt-4o-mini-transcribe",
+        "gpt-image-1",
+        "omni-moderation-latest",
+        "davinci-002",
+        "gpt-3.5-turbo-instruct",
+        "o1-pro",
+        "gpt-4o-search-preview",
+    ]
+    transport = httpx.MockTransport(
+        lambda _r: httpx.Response(200, json={"data": [{"id": i, "object": "model"} for i in ids]})
+    )
+    models = await _provider(transport, name="openai").list_models()
+    by_id = {m.id: m for m in models}
+    assert set(by_id) == {"gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "gpt-5", "chatgpt-4o-latest", "o3-mini"}
+    assert by_id["gpt-4o"].supports_images is True
+    assert by_id["gpt-5"].supports_images is True
+    assert by_id["gpt-3.5-turbo"].supports_images is None  # no se sabe: no se promete nada
+    assert all(m.free is None for m in models)
+    assert _provider(transport, name="openai").verifies_key is True
+
+
+async def test_openai_without_balance_is_a_credit_error() -> None:
+    body = {"error": {"message": "You exceeded your current quota", "code": "insufficient_quota"}}
+    with pytest.raises(ProviderQuotaError) as caught:
+        await _provider(_fails_with(429, body), name="openai").chat("s", MESSAGES)
+    assert caught.value.reason == "credit"

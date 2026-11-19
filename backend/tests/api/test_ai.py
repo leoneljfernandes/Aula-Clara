@@ -95,7 +95,7 @@ async def test_payload_too_large_for_the_provider_is_413(client: AsyncClient, mo
     [
         ({}, "ai_credentials_required"),
         ({"X-AI-Provider": "gemini", "X-AI-Model": "m"}, "ai_credentials_required"),  # sin key
-        ({**HEADERS, "X-AI-Provider": "openai"}, "ai_credentials_required"),  # proveedor no admitido
+        ({**HEADERS, "X-AI-Provider": "cohere"}, "ai_credentials_required"),  # proveedor no admitido
         ({**HEADERS, "X-AI-Model": ""}, "ai_credentials_required"),
         ({**HEADERS, "X-AI-Model": "../../etc"}, "ai_credentials_required"),
         ({**HEADERS, "X-AI-Key": "corta"}, "ai_key_invalid"),
@@ -131,7 +131,7 @@ async def test_models_lists_what_the_user_key_can_use(
     assert built[0]["model"] == ""
 
 
-@pytest.mark.parametrize("provider", ["mistral", "nvidia"])
+@pytest.mark.parametrize("provider", ["mistral", "nvidia", "openai", "anthropic"])
 async def test_new_providers_are_accepted(
     client: AsyncClient, built: list[dict[str, Any]], provider: str
 ) -> None:

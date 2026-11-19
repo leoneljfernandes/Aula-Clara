@@ -56,6 +56,15 @@ def _classify(status: int, message: str | None = None, **kw: object) -> Provider
         (429, "Quota exceeded for this API key", ProviderQuotaError, "rate"),
         (429, "Insufficient credits. Add more credits to continue.", ProviderQuotaError, "credit"),
         (402, "Payment Required", ProviderQuotaError, "credit"),
+        (
+            400,
+            (
+                "Your credit balance is too low to access the Anthropic API. "
+                "Please go to Plans & Billing to upgrade or purchase credits."
+            ),
+            ProviderQuotaError,
+            "credit",
+        ),
         # --- tamaño: el 413 y la ventana de contexto
         (413, None, ProviderPayloadTooLarge, "size"),
         (

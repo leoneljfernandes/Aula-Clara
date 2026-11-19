@@ -1,4 +1,4 @@
-"""Proveedores con API compatible con OpenAI (Groq, OpenRouter, Mistral, NVIDIA Build).
+"""Proveedores con API compatible con OpenAI (OpenAI, Groq, OpenRouter, Mistral, NVIDIA Build).
 
 Las URL base son una lista cerrada: el usuario elige un proveedor, nunca una URL (evita SSRF).
 Cada proveedor difiere en detalles (cómo se valida la key, cómo informa capacidades, formato de imagen):
@@ -42,9 +42,42 @@ class ProviderSpec:
     key_check_path: str = ""
     reports_free: bool = False  # solo OpenRouter publica precios que distinguen modelos gratuitos
     image_url_as_string: bool = False  # Mistral documenta `image_url` como texto, no como objeto
+    # Los modelos de razonamiento de OpenAI rechazan `max_tokens` (piden `max_completion_tokens`) y una
+    # temperatura distinta de la de fábrica (`None` = no se manda). Hay que dejar espacio para «pensar».
+    token_param: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"
+    temperature: float | None = 0.3
+    max_output_tokens: int = 2048
+    # OpenAI lista todo (audio, imágenes, embeddings…) y no informa modalidades: se eligen los modelos
+    # de chat por prefijo y se descartan por palabra los que no sirven para un asistente de texto.
+    model_prefixes: tuple[str, ...] = ()
+    not_chat: tuple[str, ...] = ()
+    vision_prefixes: tuple[str, ...] = ()  # modelos de los que se sabe con certeza que leen imágenes
 
 
 SPECS: Mapping[str, ProviderSpec] = {
+    "openai": ProviderSpec(
+        "https://api.openai.com/v1",
+        key_check="models",
+        token_param="max_completion_tokens",
+        temperature=None,
+        max_output_tokens=4096,
+        model_prefixes=("gpt-", "chatgpt-", "o1", "o3", "o4"),
+        # `-pro`, `codex` y `deep-research` solo responden por la API Responses, no por chat/completions.
+        not_chat=(
+            "audio",
+            "realtime",
+            "transcribe",
+            "tts",
+            "image",
+            "instruct",
+            "search",
+            "codex",
+            "computer-use",
+            "deep-research",
+            "-pro",
+        ),
+        vision_prefixes=("gpt-4o", "gpt-4.1", "gpt-4-turbo", "gpt-5", "chatgpt-4o", "o4-mini"),
+    ),
     "groq": ProviderSpec("https://api.groq.com/openai/v1", key_check="models"),
     "openrouter": ProviderSpec(
         "https://openrouter.ai/api/v1", key_check="endpoint", key_check_path="/key", reports_free=True
@@ -69,7 +102,6 @@ _NOT_FOR_CHAT = (
 )
 # NVIDIA no informa modalidades: estos nombres indican modelos que leen imágenes.
 _VISION_HINTS = ("-vl", "vlm", "vision", "omni")
-_MAX_TOKENS = 2048
 
 
 def _body_of(response: httpx.Response) -> Any:
@@ -98,11 +130,15 @@ def _is_free(item: Mapping[str, Any]) -> bool | None:
         return None
 
 
-def _supports_images(model_id: str, inputs: list[str] | None, capabilities: object) -> bool | None:
+def _supports_images(
+    model_id: str, inputs: list[str] | None, capabilities: object, vision_prefixes: tuple[str, ...] = ()
+) -> bool | None:
     if inputs is not None:
         return "image" in inputs
     if isinstance(capabilities, Mapping) and "vision" in capabilities:
         return bool(capabilities["vision"])
+    if vision_prefixes and model_id.lower().startswith(vision_prefixes):
+        return True
     return True if any(hint in model_id.lower() for hint in _VISION_HINTS) else None
 
 
@@ -171,7 +207,10 @@ class OpenAICompatibleProvider:
         )
 
     async def _complete(self, messages: list[dict[str, Any]], operation: Operation) -> Completion:
-        payload = {"model": self.model, "temperature": 0.3, "max_tokens": _MAX_TOKENS, "messages": messages}
+        payload: dict[str, Any] = {"model": self.model, "messages": messages}
+        if self._spec.temperature is not None:
+            payload["temperature"] = self._spec.temperature
+        payload[self._spec.token_param] = self._spec.max_output_tokens
         body = await self._request("POST", "/chat/completions", payload, operation)
         if isinstance(body, Mapping) and body.get("error") and not body.get("choices"):
             # OpenRouter a veces responde 200 con el error en el cuerpo: el código real va adentro.
@@ -249,7 +288,12 @@ class OpenAICompatibleProvider:
                 continue
             model_id: str = item["id"]
             inputs, outputs = _modalities(item, "input_modalities"), _modalities(item, "output_modalities")
-            if item.get("active") is False or any(word in model_id.lower() for word in _NOT_FOR_CHAT):
+            lowered = model_id.lower()
+            if item.get("active") is False or any(word in lowered for word in _NOT_FOR_CHAT):
+                continue
+            if self._spec.model_prefixes and not lowered.startswith(self._spec.model_prefixes):
+                continue
+            if any(word in lowered for word in self._spec.not_chat):
                 continue
             if (inputs is not None and "text" not in inputs) or (outputs is not None and outputs != ["text"]):
                 continue
@@ -260,7 +304,9 @@ class OpenAICompatibleProvider:
                 ModelInfo(
                     id=model_id,
                     name=str(item.get("name") or model_id),
-                    supports_images=_supports_images(model_id, inputs, capabilities),
+                    supports_images=_supports_images(
+                        model_id, inputs, capabilities, self._spec.vision_prefixes
+                    ),
                     free=_is_free(item) if self._spec.reports_free else None,
                 )
             )

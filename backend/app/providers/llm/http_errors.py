@@ -47,6 +47,8 @@ _REGION = re.compile(
     re.I,
 )
 _CREDIT = re.compile(r"insufficient|out of credits|no credits|credit balance|add (more )?credits", re.I)
+# Anthropic avisa la falta de saldo con un 400 (y no con un 402 o un 429).
+_CREDIT_BALANCE = re.compile(r"credit balance|purchase credits|plans (&|and) billing", re.I)
 _DAILY = re.compile(r"per[ _-]?day|daily|\brpd\b|\btpd\b", re.I)
 _MODEL_MISSING = re.compile(
     r"(model|function).{0,60}(not found|does not exist|doesn't exist|decommission|deprecat|not available)|"
@@ -71,7 +73,7 @@ def sanitize_message(text: str | None, api_key: str) -> str | None:
 
 def parse_error_body(body: Any) -> tuple[str | None, str | None]:
     """(mensaje, código) de los formatos de error conocidos: OpenAI/Groq/OpenRouter (`error.message`),
-    Mistral (`message`), NVIDIA/FastAPI (`detail`) y texto plano."""
+    Mistral (`message`), NVIDIA/FastAPI (`detail`), Anthropic (`error.message`) y texto plano."""
     if isinstance(body, str):
         return body.strip() or None, None
     if not isinstance(body, Mapping):
@@ -127,7 +129,11 @@ def classify(
 
     if status == 401:
         return ProviderAuthError(name, status=status, retry_after=retry_after)  # sin mensaje: ya se explica
-    if status == 402 or (status == 429 and _CREDIT.search(probe)):
+    if (
+        status == 402
+        or (status == 429 and _CREDIT.search(probe))
+        or (status == 400 and _CREDIT_BALANCE.search(probe))
+    ):
         return ProviderQuotaError(name, reason="credit", **extra)
     if status == 429:
         return ProviderQuotaError(name, reason="daily" if _DAILY.search(probe) else "rate", **extra)

@@ -103,7 +103,7 @@ async def test_the_key_is_validated_before_sealing(client: AsyncClient) -> None:
     for bad in (
         {"api_key": "corta"},
         {"api_key": "con espacios adentro"},
-        {"provider": "openai"},
+        {"provider": "cohere"},
         {"extra": 1},
     ):
         response = await client.post("/api/v1/ai/session", json={**BODY, **bad}, headers=MARK)
