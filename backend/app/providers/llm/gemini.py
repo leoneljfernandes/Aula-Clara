@@ -100,7 +100,7 @@ class GeminiProvider:
 
     async def _generate(self, contents: list[types.Content], system: str, operation: Operation) -> Completion:
         config = types.GenerateContentConfig(
-            system_instruction=system, temperature=0.3, max_output_tokens=_MAX_OUTPUT_TOKENS
+            system_instruction=system, temperature=0.0, max_output_tokens=_MAX_OUTPUT_TOKENS
         )
         try:
             response = await self._client.aio.models.generate_content(

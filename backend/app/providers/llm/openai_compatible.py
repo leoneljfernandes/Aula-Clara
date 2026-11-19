@@ -45,7 +45,7 @@ class ProviderSpec:
     # Los modelos de razonamiento de OpenAI rechazan `max_tokens` (piden `max_completion_tokens`) y una
     # temperatura distinta de la de fábrica (`None` = no se manda). Hay que dejar espacio para «pensar».
     token_param: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"
-    temperature: float | None = 0.3
+    temperature: float | None = 0.0
     max_output_tokens: int = 2048
     # OpenAI lista todo (audio, imágenes, embeddings…) y no informa modalidades: se eligen los modelos
     # de chat por prefijo y se descartan por palabra los que no sirven para un asistente de texto.

@@ -16,14 +16,17 @@ def test_trim_text_cuts_on_a_word_boundary_and_marks_the_cut() -> None:
 
 
 def test_build_context_never_sends_a_huge_document_whole() -> None:
-    context = ai_rules.build_context("palabra " * 10_000, None, max_chars=500)
+    context = ai_rules.build_context("palabra " * 10_000, None, max_chars=500, nonce="deadbeef")
     assert len(context) < 700
-    assert "<documento>" in context
+    assert "<documento_deadbeef>" in context
+    assert "</documento_deadbeef>" in context
 
 
 def test_build_context_puts_selection_first() -> None:
-    context = ai_rules.build_context("texto del documento", "fragmento elegido", max_chars=1_000)
-    assert context.index("<seleccion>") < context.index("<documento>")
+    context = ai_rules.build_context(
+        "texto del documento", "fragmento elegido", max_chars=1_000, nonce="deadbeef"
+    )
+    assert context.index("<seleccion_deadbeef>") < context.index("<documento_deadbeef>")
 
 
 @pytest.mark.parametrize(
@@ -56,10 +59,13 @@ def test_glossary_and_outline_have_their_own_instructions() -> None:
 
 
 def test_language_instruction_goes_after_the_action_and_before_the_context() -> None:
-    message = ai_rules.build_user_message("summarize", "¿qué?", "<documento>x</documento>", "easy")
+    message = ai_rules.build_user_message(
+        "summarize", "¿qué?", "<documento_abc12345>x</documento_abc12345>", "easy", nonce="abc12345"
+    )
     assert (
         message.index(ai_rules.ACTION_INSTRUCTIONS["summarize"])
         < message.index(ai_rules.LANGUAGE_INSTRUCTIONS["easy"])
-        < message.index("Pregunta:")
-        < message.index("<documento>")
+        < message.index("<pregunta_abc12345>")
+        < message.index("<documento_abc12345>")
+        < message.index("Recordatorio obligatorio:")
     )

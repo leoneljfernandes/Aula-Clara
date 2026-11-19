@@ -388,7 +388,7 @@ async def test_the_other_providers_keep_sending_max_tokens_and_temperature() -> 
 
     await _provider(httpx.MockTransport(handler), name="groq").chat("s", MESSAGES)
     assert body["max_tokens"] == 2048
-    assert body["temperature"] == 0.3
+    assert body["temperature"] == 0.0
     assert "max_completion_tokens" not in body
 
 

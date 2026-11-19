@@ -51,7 +51,9 @@ def _documents_repo() -> Repository[Document]:
 def get_ai_service() -> AIService:
     settings = get_settings()
     return AIService(
-        cache=AnswerCache(settings.AI_CACHE_TTL_SECONDS), max_input_chars=settings.MAX_INPUT_CHARS
+        cache=AnswerCache(settings.AI_CACHE_TTL_SECONDS),
+        max_input_chars=settings.MAX_INPUT_CHARS,
+        strict_verifier=settings.AI_STRICT_VERIFIER_ENABLED,
     )
 
 

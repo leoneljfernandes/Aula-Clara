@@ -69,6 +69,8 @@ class Settings(BaseSettings):
     MAX_IMAGE_BYTES: int = Field(default=4 * 1024 * 1024, ge=1024, le=20 * 1024 * 1024)
     RATE_LIMIT_PER_MIN: int = Field(default=10, ge=1, le=1_000)
     AI_CACHE_TTL_SECONDS: int = Field(default=3_600, ge=0)
+    # Verificador opcional de 2ª pasada (entailment): duplica el uso de cuota y suma latencia.
+    AI_STRICT_VERIFIER_ENABLED: bool = False
 
     @property
     def sealing_enabled(self) -> bool:
