@@ -10,7 +10,7 @@ export function ThemeButtons({ compact = false }: { compact?: boolean }): ReactN
   const announce = useAnnounce();
   return (
     <div
-      className={`grid ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"} gap-2`}
+      className={`grid gap-2 ${compact ? "grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-1" : "grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3"}`}
       role="group"
       aria-label="Tema de color"
     >
@@ -26,7 +26,7 @@ export function ThemeButtons({ compact = false }: { compact?: boolean }): ReactN
               updateSettings({ theme: id });
               announce(`Tema ${theme.label}`);
             }}
-            className={`flex min-h-[52px] items-center gap-2 rounded-xl border-2 text-left font-bold ${compact ? "px-2 text-[15px]" : "px-3 text-[16px]"} ${active ? "border-[var(--accent)] bg-[var(--soft)]" : "border-[var(--border)] hover:bg-[var(--soft)]"}`}
+            className={`flex min-h-[52px] min-w-0 items-center gap-2 rounded-xl border-2 py-1 text-left font-bold ${compact ? "px-2 text-[15px]" : "px-3 text-[16px]"} ${active ? "border-[var(--accent)] bg-[var(--soft)]" : "border-[var(--border)] hover:bg-[var(--soft)]"}`}
             style={active ? { boxShadow: "inset 0 0 0 2px var(--accent)" } : undefined}
           >
             <span
@@ -36,7 +36,7 @@ export function ThemeButtons({ compact = false }: { compact?: boolean }): ReactN
             >
               Aa
             </span>
-            <span className="min-w-0 leading-tight">{theme.label}</span>
+            <span className="min-w-0 leading-tight break-words">{theme.label}</span>
           </button>
         );
       })}

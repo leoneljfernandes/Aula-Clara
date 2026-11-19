@@ -49,7 +49,7 @@ export function Dialog({ title, onClose, children, labelId }: DialogProps): Reac
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-2 sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -59,10 +59,10 @@ export function Dialog({ title, onClose, children, labelId }: DialogProps): Reac
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelId}
-        className="max-h-[90vh] w-full max-w-xl overflow-auto rounded-3xl border-4 border-[var(--accent)] bg-[var(--bg)] p-7 text-[var(--fg)] shadow-2xl"
+        className="max-h-[94dvh] w-full max-w-xl overflow-auto rounded-3xl border-4 border-[var(--accent)] bg-[var(--bg)] p-4 text-[var(--fg)] shadow-2xl sm:max-h-[90dvh] sm:p-7"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 id={labelId} className="text-2xl font-bold">
+          <h2 id={labelId} className="min-w-0 text-xl font-bold break-words sm:text-2xl">
             {title}
           </h2>
           <Button onClick={onClose} aria-label="Cerrar">

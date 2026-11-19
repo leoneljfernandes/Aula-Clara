@@ -34,7 +34,7 @@ import { findBlock, readableIndex } from "./blockNav";
 import { BrailleDialog } from "./braille/BrailleDialog";
 import { ColorFilterDefs } from "./ColorFilterDefs";
 import { DocumentView } from "./DocumentView";
-import { ReaderBottomBar } from "./ReaderBottomBar";
+import { BAR_SPACE, ReaderBottomBar } from "./ReaderBottomBar";
 import { prefersReducedMotion, useReaderHotkeys, useReadingProgress, useTextSelection } from "./hooks";
 import { useReaderNavigation } from "./useReaderNavigation";
 import { ToolsPanel } from "./ToolsPanel";
@@ -259,7 +259,10 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
   const assistantSelection = selectedText || selection;
   const readFrom = selectedBlock === null ? null : readableIndex(article.blocks, selectedBlock);
 
-  const barVisible = simplified || (settings.clickToSelect && assistantSelection !== "");
+  const blockBar = settings.clickToSelect && assistantSelection !== "";
+  const barVisible = simplified || blockBar;
+  // Con la fila de acciones del párrafo la barra es más alta: se reserva más lugar abajo.
+  const barSpace = !barVisible ? "" : blockBar ? BAR_SPACE.withBlock : BAR_SPACE.nav;
 
   /** Una selección de hasta 3 palabras es un término: se ofrece definirlo en vez de explicar un párrafo. */
   const isTerm = selection.split(/\s+/).filter(Boolean).length <= 3;
@@ -273,52 +276,63 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
     <div className="flex flex-col lg:h-screen">
       <title>{`${doc.title} · Aula Clara`}</title>
       {enhancement && <ColorFilterDefs kind={enhancement} />}
-      <header className="flex flex-wrap items-center gap-3 border-b-2 border-[var(--border)] bg-[var(--panel)] px-4 py-3 lg:px-5">
-        <Link
-          to="/biblioteca"
-          onClick={audio.stop}
-          className="inline-flex min-h-12 items-center rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] px-4 font-bold hover:bg-[var(--soft)]"
-        >
-          ← Mi biblioteca
-        </Link>
-        <div className="min-w-[180px] flex-1">
-          <p className="truncate text-lg leading-tight font-bold">{doc.title}</p>
-          <div className="max-w-xs">
-            <ProgressBar value={progress} label="Progreso de lectura" />
+      {/* Mobile primero: el título y el volver arriba, y los botones en una grilla que se acomoda al ancho.
+          En escritorio (`lg`), todo en una sola fila (`lg:contents` hace que los hijos sean de la fila). */}
+      <header className="grid gap-3 border-b-2 border-[var(--border)] bg-[var(--panel)] px-4 py-3 lg:flex lg:flex-wrap lg:items-center lg:px-5">
+        <div className="flex items-start gap-3 lg:contents">
+          <Link
+            to="/biblioteca"
+            onClick={audio.stop}
+            className="inline-flex min-h-12 shrink-0 items-center rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] px-4 font-bold hover:bg-[var(--soft)]"
+          >
+            ← Mi biblioteca
+          </Link>
+          <div className="min-w-0 flex-1 lg:min-w-[180px]">
+            <p className="line-clamp-2 text-base leading-tight font-bold break-words lg:truncate lg:text-lg">
+              {doc.title}
+            </p>
+            <div className="mt-1 max-w-xs">
+              <ProgressBar value={progress} label="Progreso de lectura" />
+            </div>
           </div>
         </div>
-        <Button
-          className={simplified ? "" : "lg:hidden"}
-          aria-expanded={toolsOpen}
-          aria-controls="herramientas"
-          onClick={setToolsOpen}
-        >
-          ⚙ Herramientas
-        </Button>
-        <Button className="lg:hidden" onClick={() => document.getElementById("asistente")?.scrollIntoView()}>
-          ✦ Asistente
-        </Button>
-        {voiceOn && voice.available && (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2 large-ui:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] lg:contents">
           <Button
-            aria-pressed={voice.listening}
-            onClick={voice.toggle}
-            className="aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
+            className={simplified ? "" : "lg:hidden"}
+            aria-expanded={toolsOpen}
+            aria-controls="herramientas"
+            onClick={setToolsOpen}
           >
-            <span aria-hidden="true">🎙</span> Micrófono
+            <span aria-hidden="true">⚙</span> Herramientas
           </Button>
-        )}
-        {settings.brailleTools && (
-          <Button onClick={() => void openBraille()}>
-            <span aria-hidden="true">⠿</span> Braille
+          <Button
+            className="lg:hidden"
+            onClick={() => document.getElementById("asistente")?.scrollIntoView()}
+          >
+            <span aria-hidden="true">✦</span> Asistente
           </Button>
-        )}
-        <Link
-          to="/perfil"
-          onClick={audio.stop}
-          className="hidden min-h-12 items-center rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] px-4 font-bold hover:bg-[var(--soft)] lg:inline-flex"
-        >
-          👤 Perfil
-        </Link>
+          {voiceOn && voice.available && (
+            <Button
+              aria-pressed={voice.listening}
+              onClick={voice.toggle}
+              className="aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
+            >
+              <span aria-hidden="true">🎙</span> Micrófono
+            </Button>
+          )}
+          {settings.brailleTools && (
+            <Button onClick={() => void openBraille()}>
+              <span aria-hidden="true">⠿</span> Braille
+            </Button>
+          )}
+          <Link
+            to="/perfil"
+            onClick={audio.stop}
+            className="hidden min-h-12 items-center rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] px-4 font-bold hover:bg-[var(--soft)] lg:inline-flex"
+          >
+            👤 Perfil
+          </Link>
+        </div>
       </header>
       {voiceOn && <VoiceCommandBar {...voice} onHelp={() => setVoiceHelpOpen(true)} />}
       {voice.consentOpen && (
@@ -344,7 +358,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         <main
           id="contenido"
           ref={mainRef}
-          className={`min-w-0 bg-[var(--bg)] lg:overflow-y-auto ${barVisible ? "pb-36 scroll-pb-36" : ""}`}
+          className={`min-w-0 bg-[var(--bg)] lg:overflow-y-auto ${barSpace}`}
         >
           <DocumentView
             article={article}
@@ -369,7 +383,7 @@ export function ReaderScreen({ doc, article }: { doc: LibraryDocument; article: 
         <aside
           id="asistente"
           aria-label="Panel de asistencia IA"
-          className={`flex flex-col border-t-2 border-[var(--border)] bg-[var(--panel)] lg:overflow-hidden lg:border-t-0 lg:border-l-2 ${barVisible ? "pb-36" : ""}`}
+          className={`flex flex-col border-t-2 border-[var(--border)] bg-[var(--panel)] lg:overflow-y-auto lg:border-t-0 lg:border-l-2 ${barVisible ? (blockBar ? "pb-64" : "pb-36") : ""}`}
         >
           {settings.liveCaptions && (
             <LiveCaptions

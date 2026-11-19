@@ -20,11 +20,10 @@ function Control({ spec }: { spec: ControlSpec }): ReactNode {
   if (spec.kind === "toggle") {
     return (
       <div>
-        <label className="flex min-h-12 cursor-pointer items-start gap-3 text-lg font-bold">
+        <label className="flex cursor-pointer items-start gap-3 py-2 text-lg font-bold">
           <input
             type="checkbox"
-            className="mt-1 h-6 w-6 shrink-0"
-            style={{ accentColor: "var(--accent)" }}
+            className="mt-0.5 shrink-0"
             checked={settings[spec.key]}
             aria-describedby={describedBy}
             onChange={(e) => updateSettings(sanitizePatch({ [spec.key]: e.target.checked }).patch)}
@@ -40,14 +39,13 @@ function Control({ spec }: { spec: ControlSpec }): ReactNode {
     <fieldset aria-describedby={describedBy}>
       <legend className="mb-2 text-lg font-bold">{spec.label}</legend>
       {help("mb-2")}
-      <div className="flex flex-wrap gap-3">
+      {/* Una opción por fila: con textos de largos distintos, una fila que envuelve queda desordenada. */}
+      <div className="grid gap-1">
         {spec.options.map((o) => (
-          <label key={o.value} className="flex min-h-12 cursor-pointer items-center gap-2 text-lg font-bold">
+          <label key={o.value} className="flex min-h-11 cursor-pointer items-center gap-3 text-lg font-bold">
             <input
               type="radio"
               name={`ctl-${spec.key}`}
-              className="h-6 w-6"
-              style={{ accentColor: "var(--accent)" }}
               value={o.value}
               checked={settings[spec.key] === o.value}
               onChange={() => updateSettings(sanitizePatch({ [spec.key]: o.value }).patch)}

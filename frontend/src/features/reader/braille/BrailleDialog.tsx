@@ -148,10 +148,13 @@ export function BrailleDialog({
       >
         {view === "mirror" ? (
           mirror.map((item, i) => (
-            <p key={i} className={`mb-3 flex flex-wrap gap-x-3 gap-y-1 ${item.heading ? "font-bold" : ""}`}>
+            <p
+              key={i}
+              className={`mb-3 flex min-w-0 flex-wrap gap-x-3 gap-y-1 ${item.heading ? "font-bold" : ""}`}
+            >
               {toBrailleWords(item.text).map((word, w) => (
-                <span key={w} className="inline-flex flex-col items-start">
-                  <span style={{ fontSize: 28, lineHeight: 1.1 }}>{word.braille}</span>
+                <span key={w} className="inline-flex max-w-full min-w-0 flex-col items-start">
+                  <span className="text-[22px] leading-[1.1] break-all sm:text-[28px]">{word.braille}</span>
                   <span className="text-sm">{word.ink}</span>
                 </span>
               ))}

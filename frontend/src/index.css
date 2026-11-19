@@ -22,6 +22,18 @@ body {
   margin: 0;
 }
 
+/* Base táctil: casillas y radios de 24 px como mínimo (WCAG 2.5.8) y con el color de acento del tema.
+   En la capa base para que cualquier utilidad de Tailwind pueda agrandarlos. */
+@layer base {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--fg);

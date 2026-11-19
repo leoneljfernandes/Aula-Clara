@@ -87,7 +87,7 @@ export function AssistantPanel({
   const explain = (): void => void send(explainPrompt(selection), "simplify", { selection });
 
   return (
-    <section aria-labelledby="asist-title" className="flex h-full min-h-[560px] flex-col lg:min-h-0">
+    <section aria-labelledby="asist-title" className="flex h-full min-h-[560px] flex-col lg:min-h-[30rem]">
       <div className="border-b-2 border-[var(--border)] px-5 pt-5 pb-3">
         <h2 id="asist-title" className="flex items-center gap-2 text-xl font-bold">
           <span aria-hidden="true">✦</span> Asistente inteligente
@@ -130,7 +130,7 @@ export function AssistantPanel({
         aria-live="polite"
         aria-label="Conversación con el asistente"
         tabIndex={0}
-        className="flex-1 space-y-4 overflow-y-auto p-5"
+        className="min-h-40 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5"
       >
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -220,12 +220,12 @@ export function AssistantPanel({
             autoComplete="off"
             maxLength={LIMITS.message}
             placeholder="Escribí tu pregunta y presioná Enter"
-            className="min-h-[52px] min-w-0 flex-1 rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] px-4 text-[var(--fg)] placeholder:text-[var(--muted)]"
+            className="min-h-[52px] w-full basis-full rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] px-4 text-[var(--fg)] placeholder:text-[var(--muted)]"
           />
           <Button
             type="submit"
             variant="primary"
-            className="min-h-[52px]"
+            className="min-h-[52px] flex-1"
             disabled={!draft.trim() || typing}
             aria-label="Enviar pregunta"
           >
@@ -234,7 +234,7 @@ export function AssistantPanel({
           {dictation && dictate.available && (
             <Button
               type="button"
-              className="min-h-[52px] aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
+              className="min-h-[52px] flex-[2] aria-pressed:border-[var(--accent)] aria-pressed:bg-[var(--accent)] aria-pressed:text-[var(--onAccent)]"
               aria-pressed={dictate.listening}
               onClick={dictate.listening ? dictate.stop : dictate.start}
             >

@@ -21,36 +21,40 @@ export function LiveCaptions({
   return (
     <section
       aria-labelledby="live-captions-title"
-      className="shrink-0 space-y-3 border-b-2 border-[var(--border)] p-4 lg:max-h-[45vh] lg:overflow-y-auto"
+      className="shrink-0 space-y-3 border-b-2 border-[var(--border)] p-4 lg:max-h-[40vh] lg:overflow-y-auto"
     >
-      <h2 id="live-captions-title" className="text-xl font-bold">
-        <span aria-hidden="true">💬</span> Subtítulos en vivo (clase)
-      </h2>
       {captions.available ? (
         <>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={captions.active ? captions.stop : captions.start}>
+          {/* Una sola fila hasta que haya subtítulos: el chat conserva el alto que necesita. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <h2 id="live-captions-title" className="text-lg font-bold">
+              <span aria-hidden="true">💬</span> Subtítulos en vivo (clase)
+            </h2>
+            <Button
+              variant="primary"
+              className="min-h-11 grow sm:grow-0"
+              onClick={captions.active ? captions.stop : captions.start}
+            >
               {captions.active ? "Detener subtítulos" : "Empezar subtítulos"}
-            </Button>
-            <Button onClick={captions.clear} disabled={captions.lines.length === 0 && !captions.interim}>
-              Borrar
             </Button>
           </div>
           {(captions.lines.length > 0 || captions.interim) && (
-            <div style={style} className="max-h-60 space-y-2 overflow-y-auto">
-              {captions.lines.map((line, i) => (
-                <p key={i}>{line}</p>
-              ))}
-              {captions.interim && <p className="text-[var(--muted)]">{captions.interim}</p>}
-            </div>
+            <>
+              <div style={style} className="max-h-48 space-y-2 overflow-y-auto">
+                {captions.lines.map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
+                {captions.interim && <p className="text-[var(--muted)]">{captions.interim}</p>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button className="grow" onClick={() => onExplain(captions.lastText(EXPLAIN_CHARS))}>
+                  <span aria-hidden="true">✦</span> Explicar en lenguaje claro lo último
+                </Button>
+                <Button onClick={captions.clear}>Borrar</Button>
+              </div>
+            </>
           )}
-          <Button
-            disabled={captions.lines.length === 0}
-            onClick={() => onExplain(captions.lastText(EXPLAIN_CHARS))}
-          >
-            <span aria-hidden="true">✦</span> Explicar en lenguaje claro lo último
-          </Button>
-          <p role="status" className="text-base">
+          <p role="status" className="text-base empty:hidden">
             {captions.error}
           </p>
           {captions.consented && !captions.active && (
@@ -58,10 +62,15 @@ export function LiveCaptions({
           )}
         </>
       ) : (
-        <p>
-          Tu navegador no permite subtítulos en vivo. Probá Chrome o Edge, o usá los subtítulos del sistema
-          (Transcripción Instantánea en Android, subtítulos en vivo de Windows 11).
-        </p>
+        <>
+          <h2 id="live-captions-title" className="text-lg font-bold">
+            <span aria-hidden="true">💬</span> Subtítulos en vivo (clase)
+          </h2>
+          <p>
+            Tu navegador no permite subtítulos en vivo. Probá Chrome o Edge, o usá los subtítulos del sistema
+            (Transcripción Instantánea en Android, subtítulos en vivo de Windows 11).
+          </p>
+        </>
       )}
       {captions.consentOpen && (
         <VoiceConsentDialog
