@@ -156,4 +156,14 @@ Los vectores se guardan en IndexedDB (`Float32Array`), junto con **el nombre del
 - **Guía por voz:** el texto de ayuda sugiere que lee solo el bloque al que te movés, pero sigue leyendo los siguientes.
 - **`Esc` silencia la lectura aunque se use para cerrar un desplegable**, y con atajos de una tecla, `Espacio` sobre un registro con `tabindex=0` reemplaza el desplazamiento.
 - **Verificaciones manuales en navegador real:** ver la lista en [accesibilidad.md](accesibilidad.md).
-- Lo que quedó asignado a un plan concreto está al final de [Braille](new_profiles/2026-11-18-perfiles-03-braille.md), [motriz](new_profiles/2026-11-18-perfiles-04-motriz.md) y [sordera](new_profiles/2026-11-18-perfiles-05-sordera.md).
+- **Lo que los planes de los perfiles dejaron sin hacer** (los planes se borraron; ver [new_profiles/README.md](new_profiles/README.md)):
+  - El consentimiento del micrófono y su bloqueo (`micLock`) viven en cada hook (`useVoiceCommands`, `useDictation`, `useLiveCaptions`) y no en `createRecognizer`: quien use el reconocedor directamente podría saltearlos.
+  - El permiso de «subtítulos» se puede revocar desde la interfaz; el de «comandos de voz» solo borrando `aulaclara.voiceConsent` del navegador.
+  - `FakeRecognition` (dobles de prueba) emite un solo resultado y no tiene `SpeechRecognition.available()`.
+  - `KeysDialog` muestra atajos de funciones apagadas (`Alt+B`, `Alt+V`, los de lectura con el audio oculto); `ToolsPanel` sí filtra.
+  - Al terminar la lectura, el cursor de bloque queda en el último bloque leído y `Alt+P` vuelve a leer solo ese.
+  - Las descripciones de figuras hechas desde el diálogo de Braille no piden la guía de color, aunque haya un tipo de daltonismo elegido.
+  - La vista espejo del Braille muestra solo los primeros 40 párrafos.
+  - Revisar el Braille contra la **versión 4** (mayo de 2025) del documento técnico B 2 de la CBE: se implementó la versión 3.
+  - La matriz de simulación de tritanopía es una aproximación.
+  - Con subtítulos en vivo activos, el panel del asistente se acomoda con un contenedor que no se probó en un navegador (jsdom no calcula la maquetación).

@@ -1,19 +1,17 @@
 # Nuevos perfiles de accesibilidad · Hoja de ruta
 
-Índice de los seis planes de implementación de los perfiles **Ceguera**, **Discapacidad motriz**, **Sordera e hipoacusia** y **Daltonismo**, con el catálogo de presets servido por el backend.
+Decisiones, restricciones y correcciones de los seis planes que construyeron los perfiles **Ceguera**, **Discapacidad motriz**, **Sordera e hipoacusia** y **Daltonismo**, con el catálogo de presets servido por el backend. **Los seis se ejecutaron** y los planes paso a paso se borraron de esta carpeta: siguen en el historial de git (ver el [README](README.md#los-planes-paso-a-paso)). Esta página conserva lo que no queda claro leyendo solo el código.
 
-Cada plan produce software que funciona y se prueba por sí solo. Se ejecutan en orden, en una rama por plan (`feat/perfiles-0N-<nombre>`), y cada uno termina con los chequeos de [arquitectura.md §9](../arquitectura.md#9-chequeos-obligatorios-antes-de-integrar-no-hay-ci) en verde.
+Cada plan produjo software que funciona y se prueba por sí solo, en una rama por plan, y terminó con los chequeos de [arquitectura.md §9](../arquitectura.md#9-chequeos-obligatorios-antes-de-integrar-no-hay-ci) en verde.
 
-| Plan | Qué entrega | Depende de |
+| Plan | Qué entregó | Documento del perfil |
 |---|---|---|
-| [01 · Catálogo y preferencias](2026-11-18-perfiles-01-catalogo-y-preferencias.md) | `GET /api/v1/presets`, onboarding dinámico, ajustes versionados, registro de controles, `Stepper` | — |
-| [02 · Teclado y voz](2026-11-18-perfiles-02-teclado-y-voz.md) | Atajos únicos, árbitro de voz, navegación por bloques, guía por voz, comandos por voz, preset **Ceguera** | 01 |
-| [03 · Braille](2026-11-18-perfiles-03-braille.md) | Traductor Braille español, `.BRF`, vista en pantalla, impresión en relieve, descripciones de figuras guardadas | 02 |
-| [04 · Motriz](2026-11-18-perfiles-04-motriz.md) | Interfaz grande, filtro de doble clic, selección de párrafo con un clic, barra simplificada, preset **Motriz** | 02 |
-| [05 · Sordera](2026-11-18-perfiles-05-sordera.md) | Lenguaje claro, glosario, esquema visual, interfaz sin audio, avisos visuales, subtítulos en vivo, preset **Sordera** | 02 (reconocimiento de voz) |
-| [06 · Daltonismo](2026-11-18-perfiles-06-daltonismo.md) | Colores con nombre, simulación y realce, inspector de colores, IA con guía de color, preset **Daltonismo** | 01 |
-
-Los planes 03, 04 y 05 se pueden ejecutar en cualquier orden después del 02. El 06 se puede ejecutar en cualquier momento después del 01.
+| 01 · Catálogo y preferencias | `GET /api/v1/presets`, onboarding dinámico, ajustes versionados, registro de controles, `Stepper` | [ADR 0004](../adr/0004-catalogo-de-presets.md) |
+| 02 · Teclado y voz | Atajos únicos, árbitro de voz, navegación por bloques, guía por voz, comandos por voz, preset **Ceguera** | [01 · Ceguera](01-perfil-ceguera.md) |
+| 03 · Braille | Traductor Braille español, `.BRF`, vista en pantalla, impresión en relieve, descripciones de figuras guardadas | [01 · Ceguera](01-perfil-ceguera.md) §2.3 |
+| 04 · Motriz | Interfaz grande, filtro de doble clic, selección de párrafo con un clic, barra simplificada, preset **Motriz** | [02 · Motriz](02-perfil-discapacidad-motriz.md) |
+| 05 · Sordera | Lenguaje claro, glosario, esquema visual, interfaz sin audio, avisos visuales, subtítulos en vivo, preset **Sordera** | [03 · Sordera](03-perfil-sordera.md) |
+| 06 · Daltonismo | Colores con nombre, simulación y realce, inspector de colores, IA con guía de color, preset **Daltonismo** | [04 · Daltonismo](04-perfil-daltonismo.md) |
 
 ---
 
@@ -98,7 +96,7 @@ La define `frontend/src/lib/keymap.ts` (plan 02). El diálogo de atajos y el pan
 - **Textos de la interfaz en español rioplatense** (voseo), como el resto de la app.
 - **WCAG 2.2 nivel AA** como piso. Los criterios citados en los planes son: 1.4.1, 1.4.13, 2.1.1, 2.1.4, 2.2.1, 2.4.11, 2.5.5 (AAA), 2.5.7 y 2.5.8.
 - **Después de modificar código, `graphify update .`** (lo pide `CLAUDE.md`).
-- Al terminar cada plan, actualizar el documento de `docs/new_profiles/` correspondiente para que describa lo construido, no lo propuesto.
+- Al terminar cada cambio de un perfil, actualizar el documento de `docs/new_profiles/` correspondiente para que describa lo construido, no lo propuesto.
 
 ## 7. Correcciones a `docs/new_profiles/` que los planes ya aplican
 
@@ -118,7 +116,7 @@ La define `frontend/src/lib/keymap.ts` (plan 02). El diálogo de atajos y el pan
 | 03 Sordera | «Español Claro / Lectura Fácil» como una sola cosa | Tres niveles: estándar, lenguaje claro (ISO 24495-1) y Lectura Fácil. |
 | 03 Sordera | Oculta controles de audio | También el botón «Escuchar descripción» de las figuras, que el plan omitía. |
 | 04 Daltonismo | Okabe-Ito «validada para acromatopsia» | No lo está. La acromatopsia se trata con redundancia sin color y el perfil Visión reducida. |
-| 04 Daltonismo | Tema `okabe` | Los temas actuales ya evitan rojo/verde. Se verifican bajo simulación y el tema `okabe` queda como tarea opcional (plan 06, tarea 8). |
+| 04 Daltonismo | Tema `okabe` | Los temas actuales ya evitan rojo/verde y se verificaron bajo simulación sin cambiar ningún color. El tema `okabe` («Daltonismo · Okabe-Ito») se agregó igual, como quinto tema y el del preset. |
 | 04 Daltonismo | «24 colores» | Una tabla de 18 nombres, con distancia CIEDE2000. |
 | 04 Daltonismo | Inspector de color al pasar el mouse | También con teclado (criterios 2.1.1 y 1.4.13). |
 | README | `cvdSimulation.ts` y `daltonize.ts` | Un solo `lib/color/cvd.ts`. |

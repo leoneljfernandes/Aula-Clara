@@ -1,6 +1,6 @@
 # 04 · Perfil Daltonismo (`id: "daltonismo"`)
 
-> **Estado:** construido por el [plan 06](./2026-11-18-perfiles-06-daltonismo.md) (nombres de color, inspector, realce, temas verificados, descripciones con guía de color, indicadores sin color y preset). Las secciones 3 y 4 describen lo construido; la 2 es la investigación original. Donde este documento contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+> **Estado:** **implementado** (nombres de color, inspector, realce, temas verificados, descripciones con guía de color, indicadores sin color, tema Okabe-Ito y preset). Las secciones 1 y 2 son la investigación y la intención original; las secciones 3 y 4 describen lo construido. Las correcciones a la primera propuesta están en la [hoja de ruta §7](2026-11-18-perfiles-00-hoja-de-ruta.md#7-correcciones-a-docsnew_profiles-que-los-planes-ya-aplican); los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
 
 ## 1. Motivos y objetivos del perfil
 

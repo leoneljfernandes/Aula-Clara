@@ -1,6 +1,6 @@
 # 01 · Perfil Ceguera (`id: "ceguera"`)
 
-> **Estado:** documento de propuesta inicial, actualizado con lo que dejaron construido el [plan 02](./2026-11-18-perfiles-02-teclado-y-voz.md) (teclado, voz y preset; §2.1, §2.2 y §3 pasos 1, 4 y 5) y el [plan 03](./2026-11-18-perfiles-03-braille.md) (Braille: §2.3 y §3 pasos 2, 3 y 5). Donde contradice a los planes de implementación (ver [README](./README.md)), manda el plan; los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
+> **Estado:** **implementado** (teclado, voz, preset y Braille). Las secciones 1 y 2 son la investigación y la intención original, ya corregidas donde la implementación las cambió; las secciones 3 y 4 describen lo construido. Las correcciones a la primera propuesta están en la [hoja de ruta §7](2026-11-18-perfiles-00-hoja-de-ruta.md#7-correcciones-a-docsnew_profiles-que-los-planes-ya-aplican); los archivos citados (`profiles.json`, `models/profile.py`, `schemas/profile.py`) hoy son `presets.json`, `models/preset.py` y `schemas/preset.py`.
 
 ## 1. Motivos y objetivos del perfil
 
