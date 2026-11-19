@@ -43,9 +43,9 @@ El proyecto se guía por tres ejes que resumen por qué existe y qué busca logr
   - *«Inteligencia que incluye, educación que transforma».*
   - *«Innovación para aprender sin límites».*
 
-## Open source
+## Open source y licencia
 
-Es una herramienta **abierta y libre**. Invito a la comunidad a usarla, copiarla, adaptarla y mejorarla para quien la necesite: estudiantes, docentes, instituciones y desarrolladores. Si te sirve, usala; si encontrás un problema o tenés una idea, abrí un issue o un pull request.
+Es una herramienta **abierta y libre**, publicada bajo la licencia **GNU AGPLv3** ([`LICENSE.md`](LICENSE.md)). Invito a la comunidad a usarla, copiarla, forkearla, adaptarla y mejorarla para quien la necesite: estudiantes, docentes, instituciones y desarrolladores. Cualquier versión modificada —incluyendo despliegues web— debe mantenerse abierta bajo la misma licencia, evitando versiones cerradas o privativas. Si te sirve, usala; si encontrás un problema o tenés una idea, abrí un issue o un pull request.
 
 ## Levantarlo en local
 
